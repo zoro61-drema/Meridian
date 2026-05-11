@@ -13,7 +13,7 @@ export async function runPrReview(args: {
   emit: Emitter;
   signal: AbortSignal;
 }): Promise<void> {
-  const { workflowId, input, model, emit } = args;
+  const { workflowId, input, model, emit, signal } = args;
 
   const parsed = PrReviewInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -32,11 +32,11 @@ export async function runPrReview(args: {
     status: "started",
   });
 
-  const graph = buildPrReviewGraph({ emit, workflowId });
+  const graph = buildPrReviewGraph({ emit, workflowId, signal });
   let finalState: Awaited<ReturnType<typeof graph.invoke>> | undefined;
   for await (const update of await graph.stream(
     { input: parsed.data, model },
-    { streamMode: "values" },
+    { streamMode: "values", signal },
   )) {
     finalState = update;
     if (update.mode === "multi_chunk" && update.chunks?.length) {

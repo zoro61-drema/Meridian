@@ -170,17 +170,23 @@ async function streamSynthesis(args: {
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
   node: string;
+  signal?: AbortSignal;
 }): Promise<{
   raw: string;
   usage: { inputTokens: number; outputTokens: number };
 }> {
-  const { model, system, user, emit, workflowId, node } = args;
+  const { model, system, user, emit, workflowId, node, signal } = args;
 
+  // Passing the AbortSignal here makes the underlying fetch abort when the
+  // user presses Stop Review. For HTTP-based providers (Ollama, Anthropic
+  // API, Gemini API) that closes the streaming connection, which the server
+  // detects and uses to cancel in-flight generation rather than continuing
+  // to spend GPU on output the client no longer wants.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stream = (await (model as any).stream([
-    new SystemMessage(system),
-    new HumanMessage(user),
-  ])) as AsyncIterable<AIMessageChunk>;
+  const stream = (await (model as any).stream(
+    [new SystemMessage(system), new HumanMessage(user)],
+    signal ? { signal } : undefined,
+  )) as AsyncIterable<AIMessageChunk>;
 
   let raw = "";
   let accumulated: AIMessageChunk | undefined;
@@ -283,6 +289,7 @@ function prepareNode(state: PrReviewState): Partial<PrReviewState> {
 function makeSinglePassNode(
   emit?: (event: OutboundEvent) => void,
   workflowId?: string,
+  signal?: AbortSignal,
 ) {
   return async function singlePassNode(
     state: PrReviewState,
@@ -303,6 +310,7 @@ function makeSinglePassNode(
       emit,
       workflowId,
       node: "single_pass",
+      signal,
     });
 
     const cleaned = sanitiseBareLineRanges(stripJsonFences(raw));
@@ -325,64 +333,73 @@ function makeSinglePassNode(
   };
 }
 
-async function chunkReviewNode(state: PrReviewState): Promise<Partial<PrReviewState>> {
-  const model = buildModel(state.model);
-  const chunk = state.chunks[state.currentChunk];
-  if (!chunk) {
-    // Defensive — shouldn't happen given the conditional edge, but stay safe.
-    return { currentChunk: state.currentChunk + 1 };
-  }
+function makeChunkReviewNode(signal?: AbortSignal) {
+  return async function chunkReviewNode(
+    state: PrReviewState,
+  ): Promise<Partial<PrReviewState>> {
+    const model = buildModel(state.model);
+    const chunk = state.chunks[state.currentChunk];
+    if (!chunk) {
+      // Defensive — shouldn't happen given the conditional edge, but stay safe.
+      return { currentChunk: state.currentChunk + 1 };
+    }
 
-  const user = `Find all review findings in this diff chunk:\n\n${chunk}`;
+    const user = `Find all review findings in this diff chunk:\n\n${chunk}`;
 
-  // Stream chunk reviews so adapters that surface usage_metadata only via
-  // the streaming path (notably the CLI-delegation adapters, which yield
-  // a single terminal chunk carrying usage_metadata) feed the per-call
-  // token totals back into the workflow's usage accumulator. The chunk's
-  // raw findings JSON isn't surfaced to the UI, but tokens still need to
-  // count toward the run total.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stream = (await (model as any).stream([
-    new SystemMessage(CHUNK_SYSTEM),
-    new HumanMessage(user),
-  ])) as AsyncIterable<AIMessageChunk>;
-  let accumulated: AIMessageChunk | undefined;
-  for await (const part of stream) {
-    accumulated = accumulated ? accumulated.concat(part) : part;
-  }
-  const raw = accumulated ? extractText(accumulated.content) : "";
-  const cleaned = stripJsonFences(raw);
+    // Stream chunk reviews so adapters that surface usage_metadata only via
+    // the streaming path (notably the CLI-delegation adapters, which yield
+    // a single terminal chunk carrying usage_metadata) feed the per-call
+    // token totals back into the workflow's usage accumulator. The chunk's
+    // raw findings JSON isn't surfaced to the UI, but tokens still need to
+    // count toward the run total.
+    //
+    // The signal aborts the underlying fetch when the user presses Stop
+    // Review, closing the streaming connection so the provider (Ollama,
+    // Anthropic, Gemini) cancels in-flight generation.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stream = (await (model as any).stream(
+      [new SystemMessage(CHUNK_SYSTEM), new HumanMessage(user)],
+      signal ? { signal } : undefined,
+    )) as AsyncIterable<AIMessageChunk>;
+    let accumulated: AIMessageChunk | undefined;
+    for await (const part of stream) {
+      accumulated = accumulated ? accumulated.concat(part) : part;
+    }
+    const raw = accumulated ? extractText(accumulated.content) : "";
+    const cleaned = stripJsonFences(raw);
 
-  let chunkFindings: Finding[] = [];
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (Array.isArray(parsed)) {
-      // Validate each finding individually; skip ones the model malformed
-      // rather than failing the whole chunk.
-      for (const item of parsed) {
-        const result = FindingSchema.safeParse(item);
-        if (result.success) {
-          chunkFindings.push(result.data);
+    let chunkFindings: Finding[] = [];
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) {
+        // Validate each finding individually; skip ones the model malformed
+        // rather than failing the whole chunk.
+        for (const item of parsed) {
+          const result = FindingSchema.safeParse(item);
+          if (result.success) {
+            chunkFindings.push(result.data);
+          }
         }
       }
+    } catch (err) {
+      console.error(
+        `[pr-review] chunk ${state.currentChunk + 1}/${state.chunks.length} returned unparsable findings:`,
+        err instanceof Error ? err.message : String(err),
+      );
     }
-  } catch (err) {
-    console.error(
-      `[pr-review] chunk ${state.currentChunk + 1}/${state.chunks.length} returned unparsable findings:`,
-      err instanceof Error ? err.message : String(err),
-    );
-  }
 
-  return {
-    allFindings: chunkFindings,
-    currentChunk: state.currentChunk + 1,
-    usage: tokenUsage(accumulated?.usage_metadata),
+    return {
+      allFindings: chunkFindings,
+      currentChunk: state.currentChunk + 1,
+      usage: tokenUsage(accumulated?.usage_metadata),
+    };
   };
 }
 
 function makeSynthesisNode(
   emit?: (event: OutboundEvent) => void,
   workflowId?: string,
+  signal?: AbortSignal,
 ) {
   return async function synthesisNode(
     state: PrReviewState,
@@ -418,6 +435,7 @@ function makeSynthesisNode(
       emit,
       workflowId,
       node: "synthesis",
+      signal,
     });
 
     const cleaned = sanitiseBareLineRanges(stripJsonFences(raw));
@@ -455,12 +473,13 @@ function routeFromChunk(state: PrReviewState): "chunk_review" | "synthesis" {
 export function buildPrReviewGraph(opts?: {
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
+  signal?: AbortSignal;
 }) {
   return new StateGraph(PrReviewStateAnnotation)
     .addNode("prepare", prepareNode)
-    .addNode("single_pass", makeSinglePassNode(opts?.emit, opts?.workflowId))
-    .addNode("chunk_review", chunkReviewNode)
-    .addNode("synthesis", makeSynthesisNode(opts?.emit, opts?.workflowId))
+    .addNode("single_pass", makeSinglePassNode(opts?.emit, opts?.workflowId, opts?.signal))
+    .addNode("chunk_review", makeChunkReviewNode(opts?.signal))
+    .addNode("synthesis", makeSynthesisNode(opts?.emit, opts?.workflowId, opts?.signal))
     .addEdge(START, "prepare")
     .addConditionalEdges("prepare", routeFromPrepare, {
       single_pass: "single_pass",

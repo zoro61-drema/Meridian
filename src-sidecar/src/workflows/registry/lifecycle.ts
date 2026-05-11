@@ -41,6 +41,14 @@ export async function runWorkflow(msg: WorkflowStart, emit: Emitter): Promise<vo
         }),
     );
   } catch (err) {
+    // A user-initiated cancel propagates as an AbortError from the
+    // underlying fetch (signal wired into model.stream() / graph.stream()).
+    // That's not an error condition for the frontend — the cancel button
+    // is the cause — so suppress the error emit when the controller was
+    // aborted. The frontend already clears its reviewing state on cancel.
+    if (controller.signal.aborted) {
+      return;
+    }
     emit({
       id: msg.id,
       type: "error",

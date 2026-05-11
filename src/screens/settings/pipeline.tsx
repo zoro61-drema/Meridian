@@ -29,8 +29,8 @@ export function PrReviewSettingsSection() {
           <p className="text-xs text-muted-foreground">Loading…</p>
         ) : (
           <NumberPreferenceField
-            label="Default chunk size (cloud models)"
-            helper="Maximum characters per chunk before the workflow splits a large diff into a multi-pass review. Local models stay pinned to 12,000 — the constraint there is the model's context window."
+            label="Default chunk size"
+            helper="Maximum characters per chunk before the workflow splits a large diff into a multi-pass review. Higher values reduce token usage by collapsing more PRs into single-pass mode (one model call instead of multiple), but require enough context window on the model side — for local models that means raising Ollama's num_ctx to match. Each chunk repeats the system prompt and PR header, so fewer chunks ≈ fewer duplicated tokens."
             value={prefs.prReviewDefaultChunkChars}
             defaultValue={APP_PREFERENCE_DEFAULTS.prReviewDefaultChunkChars}
             min={4_000}

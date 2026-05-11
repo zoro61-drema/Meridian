@@ -144,8 +144,14 @@ function buildModelInner(
       // block on recent versions (older versions emit `<think>` tags
       // inside the text content; we treat both shapes in the loop's
       // extractor).
+      // The stored `local_llm_url` is normalised to end with `/v1` for the
+      // OpenAI-compatible model-list and embeddings endpoints. ChatOllama
+      // talks to Ollama's native `/api/chat` and appends that path itself,
+      // so we strip a trailing `/v1` here — otherwise requests land at
+      // `…/v1/api/chat` and 404.
+      const ollamaBaseUrl = credentials.baseUrl.replace(/\/v1\/?$/, "");
       return new ChatOllama({
-        baseUrl: credentials.baseUrl,
+        baseUrl: ollamaBaseUrl,
         model,
         ...(options.thinking != null ? { think: true } : {}),
       });

@@ -1,0 +1,52 @@
+[package]
+name = "meridian"
+version = "0.1.0"
+description = "Meridian — Personal productivity desktop app for engineering teams"
+authors = ["Isaac Harries"]
+license = "Apache-2.0"
+edition = "2021"
+
+[lib]
+name = "meridian_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5", features = [] }
+
+[dependencies]
+tauri = { version = "2.10", features = [] }
+tauri-plugin-opener = "2.5"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json", "multipart", "native-tls", "stream"] }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "net", "time"] }
+futures-util = "0.3"
+base64 = "0.22.1"
+dirs = "6.0.0"
+aes-gcm = "0.10"
+sha2 = "0.10"
+glob = "0.3"
+regex-lite = "0.1"
+cpal = "0.15"
+whisper-rs = { version = "0.13", default-features = false, features = ["metal"] }
+# Speaker diarization for the Transcribe Meeting workflow. `coreml` enables
+# Apple Silicon acceleration; the `online` default feature auto-downloads the
+# pyannote-compatible models from HuggingFace on first use.
+speakrs = { version = "0.4", features = ["coreml"] }
+# Time tracking — minimal core-foundation wrappers so we can read the macOS
+# session dictionary (lock state) and call CGEventSource* (idle time) without
+# hand-rolled FFI boilerplate.
+core-foundation = "0.10"
+# Local SQLite for the cross-meeting search index. `bundled` ships the SQLite
+# source compiled in (FTS5 is enabled by default in the bundled build) so we
+# don't depend on the platform's sqlite version — meetings indexing has to
+# work the same on every macOS the app lands on.
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

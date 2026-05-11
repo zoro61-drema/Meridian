@@ -1,0 +1,147 @@
+import React from "react";
+import { MeridianBg, DuskBg, AuroraBg, ForestBg } from "./meridian";
+import { NebulaBg, CosmosBg, StarfieldBg, DeepSpaceBg } from "./space";
+import {
+  JWSTCarinaRidgesBg, JWSTCosmicCliffsBg, JWSTDeepFieldBg, JWSTDiffractionBg,
+  JWSTGalacticWispsBg, JWSTStellarNurseryBg, JWSTTwilightCliffsBg,
+} from "./jwst";
+import { WatercolorBg, NeonBg, PrismBg, GeometricBg, MeshBg } from "./abstract";
+import { HoneycombBg, WavesBg, CircuitBg, BlueprintBg, TopographicBg } from "./patterns";
+import { DotsBg, NoneBg } from "./minimal";
+
+// ── Storage ────────────────────────────────────────────────────────────────────
+
+const LS_KEY = "meridian_bg";
+const CHANGE_EVENT = "meridian-bg-change";
+
+/** Map removed / renamed background ids to a still-existing slot so a
+ *  user's stored selection doesn't silently fall back to the default
+ *  when their previously-chosen background no longer exists. Add an
+ *  entry whenever a slot is removed or renamed. */
+const BG_ID_MIGRATIONS: Record<string, string> = {
+  supernova: "deep-space",             // removed (was Supernova → briefly Galactic Core)
+  "galactic-core": "deep-space",       // removed slot
+  "jwst-deep-field": "jwst-deep-field", // identity (kept name across redesign)
+  "jwst-eta-carinae": "deep-space",    // removed slot
+  // ── 2026-05 JWST redesign — old hand-authored SVG components retired in
+  //    favour of the deterministic-generator set. Mapping each retired id to
+  //    the closest visual analogue in the new set so users keep something
+  //    similar instead of snapping back to Deep Space.
+  "jwst-carina":        "jwst-cosmic-cliffs",   // Carina cliffs → Cosmic Cliffs
+  "jwst-pillars":       "jwst-cosmic-cliffs",   // no direct analogue → cliffs
+  "jwst-southern-ring": "jwst-deep-field",      // ring nebula not in new set
+  "jwst-phantom":       "jwst-diffraction",     // face-on spiral retired → Diffraction
+  "jwst-tarantula":     "jwst-stellar-nursery", // Tarantula-style → Stellar Nursery
+  "jwst-stephans":      "jwst-deep-field",      // multiple galaxies → Deep Field
+  "jwst-cartwheel":     "jwst-diffraction",     // ring/spiral retired → Diffraction
+  "jwst-spiral":        "jwst-diffraction",     // intermediate name from the redesign import
+};
+
+export function getBackgroundId(): string {
+  const raw = localStorage.getItem(LS_KEY) ?? "deep-space";
+  return BG_ID_MIGRATIONS[raw] ?? raw;
+}
+
+export function setBackgroundId(id: string): void {
+  localStorage.setItem(LS_KEY, id);
+  window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: id }));
+}
+
+export function useBgChangeListener(cb: (id: string) => void) {
+  React.useEffect(() => {
+    const handler = (e: Event) => cb((e as CustomEvent<string>).detail);
+    window.addEventListener(CHANGE_EVENT, handler);
+    return () => window.removeEventListener(CHANGE_EVENT, handler);
+  }, [cb]);
+}
+
+// ── Metadata ───────────────────────────────────────────────────────────────────
+
+export type BgCategory = "meridian" | "space" | "jwst" | "abstract" | "patterns" | "minimal";
+
+export interface BackgroundDef {
+  id: string;
+  name: string;
+  category: BgCategory;
+}
+
+export const CATEGORY_LABELS: Record<BgCategory, string> = {
+  meridian: "Meridian",
+  space: "Space",
+  jwst: "James Webb",
+  abstract: "Abstract",
+  patterns: "Patterns",
+  minimal: "Minimal",
+};
+
+export const BACKGROUNDS: BackgroundDef[] = [
+  // Space — Deep Space is the app default, so it leads the list
+  { id: "deep-space",  name: "Deep Space",  category: "space" },
+  { id: "nebula",      name: "Nebula",      category: "space" },
+  { id: "cosmos",      name: "Cosmos",      category: "space" },
+  { id: "starfield",   name: "Starfield",   category: "space" },
+  // Meridian
+  { id: "meridian",    name: "Meridian",    category: "meridian" },
+  { id: "dusk",        name: "Dusk",        category: "meridian" },
+  { id: "aurora",      name: "Aurora",      category: "meridian" },
+  { id: "forest",      name: "Forest",      category: "meridian" },
+  // James Webb
+  { id: "jwst-cosmic-cliffs",   name: "Cosmic Cliffs",   category: "jwst" },
+  { id: "jwst-deep-field",      name: "Deep Field",      category: "jwst" },
+  { id: "jwst-diffraction",     name: "Diffraction",     category: "jwst" },
+  { id: "jwst-stellar-nursery", name: "Stellar Nursery", category: "jwst" },
+  { id: "jwst-galactic-wisps",  name: "Galactic Wisps",  category: "jwst" },
+  { id: "jwst-twilight-cliffs", name: "Twilight Cliffs", category: "jwst" },
+  { id: "jwst-carina-ridges",   name: "Carina Ridges",   category: "jwst" },
+  // Abstract
+  { id: "watercolor",  name: "Watercolor",  category: "abstract" },
+  { id: "neon",        name: "Neon",        category: "abstract" },
+  { id: "prism",       name: "Prism",       category: "abstract" },
+  { id: "geometric",   name: "Geometric",   category: "abstract" },
+  { id: "mesh",        name: "Mesh",        category: "abstract" },
+  // Patterns
+  { id: "honeycomb",   name: "Honeycomb",   category: "patterns" },
+  { id: "waves",       name: "Waves",       category: "patterns" },
+  { id: "circuit",     name: "Circuit",     category: "patterns" },
+  { id: "blueprint",   name: "Blueprint",   category: "patterns" },
+  { id: "topographic", name: "Topographic", category: "patterns" },
+  // Minimal
+  { id: "dots",        name: "Dots",        category: "minimal" },
+  { id: "none",        name: "None",        category: "minimal" },
+];
+
+// ── Registry ───────────────────────────────────────────────────────────────────
+const COMPONENTS: Record<string, React.FC> = {
+  "meridian":       MeridianBg,
+  "dusk":            DuskBg,
+  "aurora":      AuroraBg,
+  "forest":      ForestBg,
+  "nebula":      NebulaBg,
+  "cosmos":      CosmosBg,
+  "starfield":   StarfieldBg,
+  "deep-space":  DeepSpaceBg,
+  "jwst-cosmic-cliffs":   JWSTCosmicCliffsBg,
+  "jwst-deep-field":      JWSTDeepFieldBg,
+  "jwst-diffraction":     JWSTDiffractionBg,
+  "jwst-stellar-nursery": JWSTStellarNurseryBg,
+  "jwst-galactic-wisps":  JWSTGalacticWispsBg,
+  "jwst-twilight-cliffs": JWSTTwilightCliffsBg,
+  "jwst-carina-ridges":   JWSTCarinaRidgesBg,
+  "watercolor":  WatercolorBg,
+  "neon":        NeonBg,
+  "prism":       PrismBg,
+  "geometric":   GeometricBg,
+  "mesh":        MeshBg,
+  "honeycomb":   HoneycombBg,
+  "waves":       WavesBg,
+  "circuit":     CircuitBg,
+  "blueprint":   BlueprintBg,
+  "topographic": TopographicBg,
+  "dots":        DotsBg,
+  "none":        NoneBg,
+};
+
+export function BackgroundRenderer({ id }: { id: string }) {
+  const Component = COMPONENTS[id] ?? DeepSpaceBg;
+  return <Component />;
+}

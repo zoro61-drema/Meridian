@@ -1,0 +1,42 @@
+{
+  "productName": "Meridian",
+  "version": "0.1.0",
+  "identifier": "com.meridian.desktop",
+  "build": {
+    "beforeDevCommand": "npm run sidecar:bundle && npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run sidecar:bundle && npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Meridian",
+        "width": 1728,
+        "height": 1117,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "maximized": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../src-sidecar/dist/bundle.cjs": "bundle.cjs"
+    },
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

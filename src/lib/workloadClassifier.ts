@@ -1,0 +1,96 @@
+import { type BitbucketPr } from "@/lib/tauri/bitbucket";
+import { type JiraIssue } from "@/lib/tauri/jira";
+
+export type LoadStatus = "overloaded" | "balanced" | "underutilised";
+
+export interface DevWorkload {
+  name: string;
+  remainingTickets: number;
+  totalPts: number;
+  reviewCount: number;
+  loadStatus: LoadStatus;
+}
+
+function isDone(issue: JiraIssue): boolean {
+  return issue.statusCategory === "Done";
+}
+
+function isNeedsReview(issue: JiraIssue): boolean {
+  return issue.status === "Needs Review";
+}
+
+/**
+ * Classify every developer's load status from a flat list of sprint issues
+ * and the current open PRs.
+ *
+ * Rules (identical to WorkloadBalancerScreen.buildWorkloads):
+ * - Average is computed from developers who have at least 1 story point
+ *   assigned (so zero-point-only developers don't skew the baseline).
+ * - "Needs Review" tickets are excluded from the count — work in review is
+ *   waiting on someone else and shouldn't push a dev over capacity.
+ * - Every developer (including zero-point ones) is then classified against
+ *   that average:
+ *     > overloadPct% → overloaded   (default 140; user-tunable in Settings)
+ *     < (100 - (overloadPct - 100))%  → underutilised (mirrors above
+ *       threshold around 100%, only when avg > 0)
+ *     else   → balanced
+ */
+
+/** Cached threshold seeded from preferences at app start. Lets sync
+ *  call sites avoid threading the value through every layer. */
+let runtimeOverloadPct = 140;
+
+export function setRuntimeOverloadPct(value: number): void {
+  runtimeOverloadPct = value;
+}
+
+export function classifyWorkloads(
+  issues: JiraIssue[],
+  openPrs: BitbucketPr[],
+  /** Overload threshold as a percentage of the team average. The
+   *  underutilised threshold is mirrored around 100% (so 140 →
+   *  >140% overloaded, <60% underutilised; 130 → >130% / <70%).
+   *  Defaults to the runtime value seeded from preferences. */
+  overloadPct: number = runtimeOverloadPct,
+): DevWorkload[] {
+  const map = new Map<string, JiraIssue[]>();
+  for (const issue of issues) {
+    const name = issue.assignee?.displayName ?? "Unassigned";
+    if (!map.has(name)) map.set(name, []);
+    map.get(name)!.push(issue);
+  }
+
+  const raw: DevWorkload[] = Array.from(map.entries()).map(([name, devIssues]) => ({
+    name,
+    remainingTickets: devIssues.filter((i) => !isDone(i) && !isNeedsReview(i)).length,
+    totalPts: devIssues.reduce((s, i) => s + (i.storyPoints ?? 0), 0),
+    reviewCount: openPrs.filter((pr) =>
+      pr.reviewers.some((r) => r.user.displayName === name)
+    ).length,
+    loadStatus: "balanced" as LoadStatus,
+  }));
+
+  // Average computed only from developers who have pointed work
+  const withWork = raw.filter((d) => d.totalPts > 0);
+  if (withWork.length > 1) {
+    const avgTickets =
+      withWork.reduce((s, d) => s + d.remainingTickets, 0) / withWork.length;
+    // Mirror the over-threshold around 100% to derive the under-
+    // threshold. Clamp to [1, 99] so a misconfigured value (≤100 or
+    // ≥200) can't invert the classification.
+    const safePct = Math.max(101, Math.min(199, overloadPct));
+    const overFactor = safePct / 100;
+    const underFactor = (200 - safePct) / 100;
+    // Classification applied to ALL developers (including zero-point ones)
+    for (const d of raw) {
+      if (d.remainingTickets > avgTickets * overFactor) {
+        d.loadStatus = "overloaded";
+      } else if (d.remainingTickets < avgTickets * underFactor && avgTickets > 0) {
+        d.loadStatus = "underutilised";
+      }
+    }
+  }
+
+  return raw;
+}
+

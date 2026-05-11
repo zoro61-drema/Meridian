@@ -36,6 +36,16 @@ import {
 // token/sec local model doesn't flood the IPC channel.
 const PARTIAL_FLUSH_MS = 80;
 
+// Thinking budget for every PR-review node. Code review is a reasoning-heavy
+// workload — severity calibration, scope-of-impact reasoning, hunting for
+// subtle logic errors — so bounded native reasoning materially improves
+// finding quality on models that support it. The factory routes this to the
+// correct per-provider knob (Anthropic extended thinking, Gemini
+// thinkingConfig, Ollama `think: true`) and silently ignores it on models
+// that don't have a thinking mode. 4096 tokens is generous enough for
+// per-chunk and synthesis reasoning without dominating the response budget.
+const PR_REVIEW_THINKING = { thinking: { budgetTokens: 4096 } } as const;
+
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
 export const PrReviewInputSchema = z.object({
@@ -294,7 +304,7 @@ function makeSinglePassNode(
   return async function singlePassNode(
     state: PrReviewState,
   ): Promise<Partial<PrReviewState>> {
-    const model: BaseChatModel = buildModel(state.model);
+    const model: BaseChatModel = buildModel(state.model, PR_REVIEW_THINKING);
     const annotated = buildSinglePassReviewText(state.input.reviewText);
     const system = buildSynthesisSystem(state.input.skillsBlock);
     const user =
@@ -337,7 +347,7 @@ function makeChunkReviewNode(signal?: AbortSignal) {
   return async function chunkReviewNode(
     state: PrReviewState,
   ): Promise<Partial<PrReviewState>> {
-    const model = buildModel(state.model);
+    const model = buildModel(state.model, PR_REVIEW_THINKING);
     const chunk = state.chunks[state.currentChunk];
     if (!chunk) {
       // Defensive — shouldn't happen given the conditional edge, but stay safe.
@@ -404,7 +414,7 @@ function makeSynthesisNode(
   return async function synthesisNode(
     state: PrReviewState,
   ): Promise<Partial<PrReviewState>> {
-    const model = buildModel(state.model);
+    const model = buildModel(state.model, PR_REVIEW_THINKING);
     const system = buildSynthesisSystem(state.input.skillsBlock);
 
     const { json: cappedFindings, dropped } = capFindingsBySeverity(

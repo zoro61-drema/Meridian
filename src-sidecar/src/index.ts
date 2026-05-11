@@ -1,7 +1,29 @@
 import * as readline from "node:readline";
+import { Agent, setGlobalDispatcher } from "undici";
 import type { InboundMessage, OutboundEvent } from "./protocol.js";
 import { resolveToolCallback } from "./tools/bridge.js";
 import { cancelWorkflow, runWorkflow } from "./workflows/registry/lifecycle.js";
+
+// Replace Node's default fetch dispatcher with one tuned for slow local-LLM
+// inference. The two timeouts that matter here both default to 5 minutes
+// (300_000 ms) on stock undici:
+//   - headersTimeout: time the client will wait for response headers. Local
+//     models running heavy prompt-eval on Apple Silicon (50k+ input tokens on
+//     a 30B MoE) routinely exceed 5 min before the first byte streams back.
+//   - bodyTimeout: idle time allowed between received body chunks. Same
+//     vulnerability during the prompt-eval phase, before any tokens stream.
+// Either expiring aborts the connection, which Ollama then reports as a 500.
+// We bump both to 60 min and disable the body timeout entirely — workflows
+// have their own AbortSignal (Stop Review) for user-initiated cancellation,
+// so the network timeout is no longer needed as a safety net. Same dispatcher
+// applies to Anthropic/Gemini API calls; both have their own server-side
+// timeouts so the extra headroom is harmless.
+setGlobalDispatcher(
+  new Agent({
+    headersTimeout: 60 * 60_000, // 60 min
+    bodyTimeout: 0, // disabled — rely on the workflow AbortSignal instead
+  }),
+);
 
 // Redirect non-protocol output away from stdout (which carries JSON only).
 console.log = console.error;

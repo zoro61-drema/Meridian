@@ -14,19 +14,26 @@
 use crate::storage::credentials::{get_credential, store_credential};
 
 /// Curated built-in model list. The Copilot CLI accepts model ids passed
-/// verbatim via `--model=…`; what's "valid" depends on the user's GitHub
-/// plan and which models are wired into the CLI on a given version, so
-/// this list errs toward broadly-available choices and the `auto` alias
-/// (CLI picks the best model for the prompt automatically).
+/// verbatim via `--model=…`; what's "valid" depends on the user's plan
+/// and which models are wired into the CLI on a given version. There is
+/// currently no programmatic way to list the user's plan-specific models
+/// (open feature requests: github/copilot-cli#700, #1356), so this list
+/// mirrors the GA model ids from GitHub's "Supported AI models" docs
+/// page. Users can add new ids via the Custom models field in Settings.
 ///
-/// Users can add new ids via the Custom models field in Settings — same
-/// pattern Gemini uses — so a freshly-shipped model id doesn't require
-/// a Meridian release to pick up.
+/// IDs are hyphenated (not dot-separated) — the CLI rejects
+/// `claude-sonnet-4.6` with `Model "…" from --model flag is not
+/// available.` because the literal id is malformed. The display labels
+/// keep version numbers user-friendly (4.6 instead of 4-6).
 pub const COPILOT_BUILTIN_MODELS: &[(&str, &str)] = &[
     ("auto", "Auto (Copilot picks)"),
-    ("claude-sonnet-4.6", "Claude Sonnet 4.6"),
-    ("claude-haiku-4.5", "Claude Haiku 4.5"),
-    ("gpt-5.2", "GPT-5.2"),
+    ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+    ("claude-haiku-4-5", "Claude Haiku 4.5"),
+    ("gpt-5-4", "GPT-5.4"),
+    ("gpt-5-4-mini", "GPT-5.4 Mini"),
+    ("gpt-5-3-codex", "GPT-5.3 Codex"),
+    ("gpt-5-mini", "GPT-5 Mini"),
+    ("grok-code-fast-1", "Grok Code Fast 1"),
 ];
 
 pub const DEFAULT_MODEL: &str = "auto";

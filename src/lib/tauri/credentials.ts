@@ -6,6 +6,9 @@ import { isMockMode, isMockClaudeMode } from "./core";
 export interface CredentialStatus {
   anthropicApiKey: boolean;
   geminiApiKey: boolean;
+  /** True when the user has enabled GitHub Copilot CLI delegation
+   *  (`copilot_auth_method=copilot_cli`). Copilot has no API-key path. */
+  copilotCli: boolean;
   localLlmUrl: boolean;
   jiraBaseUrl: boolean;
   jiraEmail: boolean;
@@ -34,9 +37,13 @@ export function anthropicComplete(s: CredentialStatus) {
   return s.anthropicApiKey;
 }
 
-/** True when at least one AI provider (Anthropic, Gemini, or local LLM) is configured. */
+export function copilotComplete(s: CredentialStatus) {
+  return s.copilotCli;
+}
+
+/** True when at least one AI provider (Anthropic, Gemini, Copilot, or local LLM) is configured. */
 export function aiProviderComplete(s: CredentialStatus) {
-  return s.anthropicApiKey || s.geminiApiKey || s.localLlmUrl;
+  return s.anthropicApiKey || s.geminiApiKey || s.copilotCli || s.localLlmUrl;
 }
 
 /** All three auth credentials are present (board ID not required). */

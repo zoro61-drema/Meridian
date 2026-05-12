@@ -7,6 +7,7 @@ mod _shared;
 mod anthropic;
 mod bitbucket;
 mod cli_setup;
+mod copilot;
 mod gemini;
 mod jira;
 
@@ -16,5 +17,6 @@ pub use anthropic::{
 };
 pub use bitbucket::{test_bitbucket_stored, validate_bitbucket};
 pub use cli_setup::setup_ai_cli;
+pub use copilot::ping_copilot;
 pub use gemini::ping_gemini;
 pub use jira::{debug_jira_endpoints, test_jira_stored, validate_jira};

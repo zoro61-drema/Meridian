@@ -45,6 +45,11 @@ const PROVIDER_META: Record<
     color: "border-purple-400/40 bg-purple-400/10 text-purple-400",
     dot: "bg-purple-400",
   },
+  copilot: {
+    label: "GitHub Copilot",
+    color: "border-emerald-400/40 bg-emerald-400/10 text-emerald-400",
+    dot: "bg-emerald-400",
+  },
 };
 
 /**

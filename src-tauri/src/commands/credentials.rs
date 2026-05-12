@@ -9,6 +9,7 @@ const ALLOWED_KEYS: &[&str] = &[
     "claude_auth_method",
     "gemini_api_key",
     "gemini_auth_method",
+    "copilot_auth_method",
     "local_llm_url",
     "local_llm_api_key",
     "jira_base_url",
@@ -32,6 +33,7 @@ const ALLOWED_KEYS: &[&str] = &[
 const NON_SECRET_KEYS: &[&str] = &[
     "claude_auth_method",
     "gemini_auth_method",
+    "copilot_auth_method",
     "local_llm_url",
     "jira_base_url",
     "jira_email",
@@ -55,6 +57,10 @@ const NON_SECRET_KEYS: &[&str] = &[
 pub struct CredentialStatus {
     pub anthropic_api_key: bool,
     pub gemini_api_key: bool,
+    /// True when the user has enabled GitHub Copilot CLI delegation
+    /// (`copilot_auth_method=copilot_cli`). Copilot has no API-key
+    /// path — this flag is what "Copilot is configured" means.
+    pub copilot_cli: bool,
     pub local_llm_url: bool,
     pub jira_base_url: bool,
     pub jira_email: bool,
@@ -72,6 +78,9 @@ impl CredentialStatus {
     }
     pub fn gemini_complete(&self) -> bool {
         self.gemini_api_key
+    }
+    pub fn copilot_complete(&self) -> bool {
+        self.copilot_cli
     }
     pub fn local_llm_complete(&self) -> bool {
         self.local_llm_url
@@ -95,9 +104,13 @@ pub fn credential_status() -> Result<CredentialStatus, String> {
     use crate::storage::preferences::get_pref;
     let has = |k: &str| credentials::cred_get(k).is_some();
     let has_config = |k: &str| get_pref(k).is_some() || credentials::cred_get(k).is_some();
+    let copilot_method = credentials::cred_get("copilot_auth_method")
+        .map(|m| m.trim().to_string())
+        .unwrap_or_default();
     Ok(CredentialStatus {
         anthropic_api_key: has("anthropic_api_key"),
         gemini_api_key: has("gemini_api_key"),
+        copilot_cli: copilot_method == "copilot_cli",
         local_llm_url: has("local_llm_url"),
         jira_base_url: has("jira_base_url"),
         jira_email: has("jira_email"),

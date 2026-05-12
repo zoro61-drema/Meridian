@@ -131,6 +131,7 @@ pub enum ProviderCredentials {
     Anthropic(AnthropicCreds),
     Google(GoogleCreds),
     Ollama(OllamaCreds),
+    Copilot(CopilotCreds),
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -165,6 +166,16 @@ pub enum GoogleCreds {
 pub struct OllamaCreds {
     #[serde(rename = "baseUrl")]
     pub base_url: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(tag = "mode")]
+pub enum CopilotCreds {
+    /// Delegation to the user's locally-installed GitHub Copilot CLI.
+    /// No credential payload — the CLI handles auth internally (the user
+    /// signs in once via `copilot login` or sets COPILOT_GITHUB_TOKEN).
+    #[serde(rename = "copilot_cli")]
+    CopilotCli,
 }
 
 #[derive(Serialize, Clone, Debug)]

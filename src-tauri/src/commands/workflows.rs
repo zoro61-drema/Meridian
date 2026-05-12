@@ -10,8 +10,8 @@
 use crate::agents::dispatch::{self, AiContext};
 use crate::commands::grooming_templates::read_grooming_template;
 use crate::integrations::sidecar::{
-    AnthropicCreds, GoogleCreds, ModelSelection, OllamaCreds, ProviderCredentials, SidecarState,
-    WorkflowResult,
+    AnthropicCreds, CopilotCreds, GoogleCreds, ModelSelection, OllamaCreds, ProviderCredentials,
+    SidecarState, WorkflowResult,
 };
 use crate::storage::credentials::get_credential;
 
@@ -22,6 +22,7 @@ pub fn to_sidecar_provider(internal: &str) -> Result<&'static str, String> {
         "claude" => Ok("anthropic"),
         "gemini" => Ok("google"),
         "local" => Ok("ollama"),
+        "copilot" => Ok("copilot"),
         other => Err(format!("Unknown internal provider: {other}")),
     }
 }
@@ -77,6 +78,23 @@ pub async fn resolve_credentials(provider: &str) -> Result<ProviderCredentials, 
                 .unwrap_or_else(|| "http://localhost:11434".to_string());
             Ok(ProviderCredentials::Ollama(OllamaCreds { base_url }))
         }
+        "copilot" => {
+            // CLI delegation only. The user signs in via `copilot login`
+            // (or sets COPILOT_GITHUB_TOKEN); Meridian never holds a
+            // credential. The auth-method gate exists so we surface a
+            // useful error when the user picks Copilot in a panel
+            // override but hasn't enabled delegation yet — without it,
+            // we'd silently spawn the CLI and get an opaque
+            // "not authenticated" exit code.
+            let method = get_credential("copilot_auth_method").unwrap_or_default();
+            if method != "copilot_cli" {
+                return Err(
+                    "Copilot CLI delegation is not enabled. Open Settings → GitHub Copilot and switch on Copilot CLI."
+                        .to_string(),
+                );
+            }
+            Ok(ProviderCredentials::Copilot(CopilotCreds::CopilotCli))
+        }
         other => Err(format!("Unsupported provider for sidecar workflows: {other}")),
     }
 }
@@ -119,6 +137,9 @@ fn resolve_max_output_tokens(provider: &'static str) -> Option<u32> {
     let key = match provider {
         "anthropic" => "anthropic_max_output_tokens",
         "google" => "gemini_max_output_tokens",
+        // Copilot CLI has no max-tokens flag (same as Claude Code /
+        // Gemini CLI delegation paths) — return None so the sidecar
+        // adapter's default takes effect.
         _ => return None,
     };
     crate::storage::preferences::get_pref(key)

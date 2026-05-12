@@ -24,10 +24,15 @@
  */
 
 import { getPreferences, setPreference } from "@/lib/preferences";
-import { getClaudeModels, getGeminiModels, getLocalModels } from "@/lib/tauri/providers";
+import {
+  getClaudeModels,
+  getCopilotModels,
+  getGeminiModels,
+  getLocalModels,
+} from "@/lib/tauri/providers";
 import { create } from "zustand";
 
-export type AiProvider = "claude" | "gemini" | "local";
+export type AiProvider = "claude" | "gemini" | "local" | "copilot";
 
 export type PanelId =
   | "implement_ticket"
@@ -78,9 +83,10 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
   claude: "Claude",
   gemini: "Gemini",
   local: "Local LLM",
+  copilot: "GitHub Copilot",
 };
 
-export const ALL_PROVIDERS: AiProvider[] = ["claude", "gemini", "local"];
+export const ALL_PROVIDERS: AiProvider[] = ["claude", "gemini", "local", "copilot"];
 
 const PROVIDER_VALUES = new Set<string>(ALL_PROVIDERS);
 
@@ -234,6 +240,7 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
         claude: prefs.claude_model,
         gemini: prefs.gemini_model,
         local: prefs.local_llm_model,
+        copilot: prefs.copilot_model,
       };
 
       // Legacy `ai_provider` was either "auto" or one of the provider ids.
@@ -318,6 +325,7 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
       if (provider === "claude") list = (await getClaudeModels()).models;
       else if (provider === "gemini") list = (await getGeminiModels()).models;
       else if (provider === "local") list = await getLocalModels();
+      else if (provider === "copilot") list = (await getCopilotModels()).models;
       set((s) => ({
         modelsByProvider: { ...s.modelsByProvider, [provider]: list },
         modelsLoading: { ...s.modelsLoading, [provider]: false },

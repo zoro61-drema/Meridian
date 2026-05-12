@@ -1,13 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { setPreference } from "@/lib/preferences";
 import { getCredentialStatus } from "@/lib/tauri/credentials";
-import { useAiSelectionStore, type AiProvider } from "@/stores/aiSelectionStore";
+import { useAiSelectionStore } from "@/stores/aiSelectionStore";
 import { ArrowRight, ChevronLeft } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
     PROVIDER_ORDER,
     ProviderCard,
     TOTAL_STEPS,
+    type OnboardingProvider,
     type ProviderAuthState,
 } from "./_shared";
 
@@ -20,12 +21,12 @@ export function AiProvidersStep({
   onBack: () => void;
   stepNum: number;
 }) {
-  const [authState, setAuthState] = useState<Record<AiProvider, ProviderAuthState>>({
+  const [authState, setAuthState] = useState<Record<OnboardingProvider, ProviderAuthState>>({
     claude: { authed: false },
     gemini: { authed: false },
     local: { authed: false },
   });
-  const [expanded, setExpanded] = useState<AiProvider | null>("claude");
+  const [expanded, setExpanded] = useState<OnboardingProvider | null>("claude");
 
   // Reflect already-saved credentials so navigating back to this step
   // shows what's done. Same pattern the previous Anthropic step used.
@@ -41,7 +42,7 @@ export function AiProvidersStep({
   }, []);
 
   const onProviderAuthed = useCallback(
-    (provider: AiProvider, suggestedModel?: string) => {
+    (provider: OnboardingProvider, suggestedModel?: string) => {
       setAuthState((prev) => ({
         ...prev,
         [provider]: { authed: true, suggestedModel: suggestedModel ?? prev[provider].suggestedModel },
@@ -50,7 +51,7 @@ export function AiProvidersStep({
     [],
   );
 
-  const onProviderCleared = useCallback((provider: AiProvider) => {
+  const onProviderCleared = useCallback((provider: OnboardingProvider) => {
     setAuthState((prev) => ({
       ...prev,
       [provider]: { authed: false },

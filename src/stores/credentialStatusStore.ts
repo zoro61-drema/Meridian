@@ -41,11 +41,12 @@ export const useCredentialStatusStore = create<State>((set) => ({
  *  and PerPanelAiSection to badge unauthenticated providers. */
 export function authenticatedProviders(
   status: CredentialStatus | null,
-): Set<"claude" | "gemini" | "local"> {
-  const out = new Set<"claude" | "gemini" | "local">();
+): Set<"claude" | "gemini" | "local" | "copilot"> {
+  const out = new Set<"claude" | "gemini" | "local" | "copilot">();
   if (!status) return out;
   if (status.anthropicApiKey) out.add("claude");
   if (status.geminiApiKey) out.add("gemini");
   if (status.localLlmUrl) out.add("local");
+  if (status.copilotCli) out.add("copilot");
   return out;
 }

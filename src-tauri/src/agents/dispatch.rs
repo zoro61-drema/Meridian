@@ -1,4 +1,5 @@
 use crate::llms::claude;
+use crate::llms::copilot;
 use crate::llms::local_llm;
 use crate::storage::credentials::get_credential;
 use reqwest::Client;
@@ -105,7 +106,7 @@ pub fn resolve(ctx: &AiContext) -> ResolvedAi {
     // The sidecar will reject an empty model with a clear error if even
     // this turns up nothing — that's the right surface for "user hasn't
     // finished onboarding".
-    for p in ["claude", "gemini", "local"] {
+    for p in ["claude", "gemini", "local", "copilot"] {
         let model = model_for_provider_default(p);
         if !model.is_empty() {
             return ResolvedAi { provider: p.to_string(), model };
@@ -121,6 +122,7 @@ fn model_for_provider_default(provider: &str) -> String {
             .or_else(|| get_credential("gemini_model"))
             .unwrap_or_default(),
         "local" => local_llm::get_local_llm_model().unwrap_or_default(),
+        "copilot" => copilot::get_active_model(),
         _ => String::new(),
     }
 }

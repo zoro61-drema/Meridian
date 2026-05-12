@@ -37,6 +37,7 @@ pub async fn setup_ai_cli(provider: String) -> Result<(), String> {
     let script_body = match provider.as_str() {
         "anthropic" | "claude" => CLAUDE_CODE_SETUP_SH,
         "google" | "gemini" => GEMINI_CLI_SETUP_SH,
+        "copilot" | "github" => COPILOT_CLI_SETUP_SH,
         other => return Err(format!("Unknown provider for CLI setup: {other}")),
     };
 
@@ -193,4 +194,50 @@ echo "After signing in, type /quit to leave the CLI, close this terminal,"
 echo "then click 'Re-detect CLI' back in Meridian → Settings → Gemini."
 echo ""
 gemini
+"#;
+
+const COPILOT_CLI_SETUP_SH: &str = r#"#!/bin/sh
+clear
+cat <<'BANNER'
+╭───────────────────────────────────────────────────────────╮
+│ Meridian — GitHub Copilot CLI setup                       │
+╰───────────────────────────────────────────────────────────╯
+
+BANNER
+
+if command -v copilot >/dev/null 2>&1; then
+  echo "✓ Copilot CLI already installed at $(command -v copilot)"
+else
+  echo "GitHub Copilot CLI is not installed."
+  echo ""
+  printf "Install via 'npm install -g @github/copilot'? [y/N] "
+  read -r ans
+  case "$ans" in
+    y|Y|yes|YES)
+      echo ""
+      npm install -g @github/copilot
+      if [ $? -ne 0 ]; then
+        echo ""
+        echo "Install failed. Press Enter to close."
+        read -r _
+        exit 1
+      fi
+      ;;
+    *)
+      echo "Aborted. Press Enter to close."
+      read -r _
+      exit 1
+      ;;
+  esac
+fi
+
+echo ""
+echo "Launching 'copilot login' to sign in with your GitHub account."
+echo "(A device-code flow will open in your browser.) Your Copilot subscription"
+echo "(Free, Pro, Business, Enterprise) is read from that account."
+echo ""
+echo "After signing in, close this terminal, then click 'Re-detect CLI'"
+echo "back in Meridian → Settings → GitHub Copilot."
+echo ""
+copilot login
 "#;

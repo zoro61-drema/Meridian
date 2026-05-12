@@ -29,7 +29,7 @@ import { getAppPreferences } from "@/lib/appPreferences";
 import { ContextProgressRing } from "@/components/ContextProgressRing";
 import { getModelContextWindow } from "@/lib/modelContext";
 
-const PROVIDER_OPTIONS: AiProvider[] = ["claude", "gemini", "local"];
+const PROVIDER_OPTIONS: AiProvider[] = ["claude", "gemini", "local", "copilot"];
 
 type Scope = "stage" | "panel";
 

@@ -7,14 +7,15 @@
 
 // ── Provider identity (passed per-request; sidecar never caches) ──────────────
 
-export type Provider = "anthropic" | "google" | "ollama";
+export type Provider = "anthropic" | "google" | "ollama" | "copilot";
 
 export type ProviderCredentials =
   | { provider: "anthropic"; mode: "api_key"; apiKey: string }
   | { provider: "anthropic"; mode: "claude_code" }
   | { provider: "google"; mode: "api_key"; apiKey: string }
   | { provider: "google"; mode: "gemini_cli" }
-  | { provider: "ollama"; baseUrl: string };
+  | { provider: "ollama"; baseUrl: string }
+  | { provider: "copilot"; mode: "copilot_cli" };
 
 export type ModelSelection = {
   provider: Provider;

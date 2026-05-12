@@ -70,6 +70,11 @@ pub use meetings::{
 pub use llms::embeddings::probe_ollama_cmd;
 pub use meetings_search::{get_meeting_segment, search_meetings};
 pub use llms::claude::{cancel_review, get_claude_models};
+pub use llms::copilot::{
+    add_custom_copilot_model, detect_copilot_cli, enable_copilot_cli_delegation,
+    get_copilot_models, get_custom_copilot_models, remove_custom_copilot_model,
+    test_copilot_stored,
+};
 pub use llms::gemini::{
     add_custom_gemini_model, detect_gemini_cli, enable_gemini_cli_delegation,
     get_custom_gemini_models, get_gemini_models, remove_custom_gemini_model, test_gemini_stored,
@@ -115,6 +120,6 @@ pub use workflows::{
 };
 pub use validate::{
     debug_jira_endpoints, detect_claude_code_cli, enable_claude_code_delegation, ping_anthropic,
-    ping_gemini, setup_ai_cli, test_anthropic_stored, test_bitbucket_stored, test_jira_stored,
-    validate_anthropic, validate_bitbucket, validate_jira,
+    ping_copilot, ping_gemini, setup_ai_cli, test_anthropic_stored, test_bitbucket_stored,
+    test_jira_stored, validate_anthropic, validate_bitbucket, validate_jira,
 };

@@ -5,6 +5,7 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import type { ModelSelection } from "../protocol.js";
 import { ClaudeCodeChatModel } from "./anthropic-via-claude-code.js";
 import { GeminiCliChatModel } from "./gemini-via-cli.js";
+import { CopilotCliChatModel } from "./copilot-via-cli.js";
 import { AiTrafficHandler, getAiCaptureCtx } from "../ai-capture.js";
 
 /** Optional, per-call passthroughs that don't belong on ModelSelection
@@ -126,6 +127,18 @@ function buildModelInner(
         ...(geminiThinkingConfig != null
           ? { modelKwargs: geminiThinkingConfig }
           : {}),
+      });
+    }
+    case "copilot": {
+      // Delegate to the user's locally-installed GitHub Copilot CLI.
+      // The CLI owns its own auth (`copilot login` → device flow against
+      // the user's GitHub account, or COPILOT_GITHUB_TOKEN) so the
+      // sidecar never sees credentials. Thinking + maxTokens pass
+      // through silently — the CLI has no flag for either and uses
+      // its own defaults.
+      return new CopilotCliChatModel({
+        model,
+        maxTokens,
       });
     }
     case "ollama": {

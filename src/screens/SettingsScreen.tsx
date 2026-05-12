@@ -38,6 +38,7 @@ import { AnthropicSection } from "./settings/anthropic";
 import { BitbucketSection } from "./settings/bitbucket";
 import { CacheSection } from "./settings/cache";
 import { ConfigSection } from "./settings/config";
+import { CopilotSection } from "./settings/copilot";
 import { WorktreesSection } from "./settings/worktrees";
 import { CrossMeetingsSearchSection } from "./settings/cross-meetings";
 import { DataDirectorySection } from "./settings/data-directory";
@@ -207,6 +208,10 @@ export function SettingsScreen({ onClose, onNavigate }: SettingsScreenProps) {
                 />
                 <GeminiSection
                   isConfigured={credStatus.geminiApiKey}
+                  onSaved={refresh}
+                />
+                <CopilotSection
+                  isConfigured={credStatus.copilotCli}
                   onSaved={refresh}
                 />
                 <LocalLlmSection

@@ -66,10 +66,12 @@ export async function enableClaudeCodeDelegation(): Promise<string> {
  * Open a terminal window (using the user's configured terminal app) and run
  * a guided install + sign-in script for the chosen provider's CLI. The
  * script checks if the CLI is already installed, asks to install via npm
- * if not, then runs the CLI's own sign-in command (`claude /login` or
- * `gemini`). Pass "anthropic" or "google" as the provider.
+ * if not, then runs the CLI's own sign-in command (`claude /login`,
+ * `gemini`, or `copilot login`).
  */
-export async function setupAiCli(provider: "anthropic" | "google"): Promise<void> {
+export async function setupAiCli(
+  provider: "anthropic" | "google" | "copilot",
+): Promise<void> {
   return invoke<void>("setup_ai_cli", { provider });
 }
 
@@ -155,6 +157,66 @@ export async function validateGemini(apiKey: string): Promise<string> {
 /** Test the already-stored Gemini API key without re-saving it. */
 export async function testGeminiStored(): Promise<string> {
   return invoke<string>("test_gemini_stored");
+}
+
+// ── Copilot CLI ───────────────────────────────────────────────────────────────
+
+/**
+ * Detect the locally-installed GitHub Copilot CLI. Returns the absolute
+ * path to the `copilot` binary on success; throws with an install hint
+ * when the CLI isn't on PATH.
+ */
+export async function detectCopilotCli(): Promise<string> {
+  return invoke<string>("detect_copilot_cli");
+}
+
+/**
+ * Switch the active Copilot auth mode to CLI delegation. Verifies the
+ * CLI is on PATH, then writes the auth-method preference. The sidecar's
+ * dispatcher reads that preference and routes to the
+ * `CopilotCliChatModel` adapter, which shells out per call. No
+ * credentials are stored — the CLI owns its own auth (`copilot login`
+ * or COPILOT_GITHUB_TOKEN).
+ */
+export async function enableCopilotCliDelegation(): Promise<string> {
+  return invoke<string>("enable_copilot_cli_delegation");
+}
+
+/** Test the already-stored Copilot configuration — re-detects the CLI. */
+export async function testCopilotStored(): Promise<string> {
+  return invoke<string>("test_copilot_stored");
+}
+
+/** Send a real "hello" message to Copilot via the CLI and verify a response. */
+export async function pingCopilot(): Promise<string> {
+  return invoke<string>("ping_copilot");
+}
+
+/** Same shape as ClaudeModelsResult / GeminiModelsResult, minus the
+ *  `fetchError` field — Copilot has no live-fetch path (the built-in
+ *  list is hand-curated). */
+export interface CopilotModelsResult {
+  models: [string, string][];
+}
+
+export async function getCopilotModels(): Promise<CopilotModelsResult> {
+  return invoke<CopilotModelsResult>("get_copilot_models");
+}
+
+export async function getCustomCopilotModels(): Promise<string[]> {
+  return invoke<string[]>("get_custom_copilot_models");
+}
+
+export async function addCustomCopilotModel(
+  modelId: string,
+): Promise<string[]> {
+  return invoke<string[]>("add_custom_copilot_model", { modelId });
+}
+
+export async function removeCustomCopilotModel(
+  modelId: string,
+): Promise<string[]> {
+  return invoke<string[]>("remove_custom_copilot_model", { modelId });
 }
 
 /**

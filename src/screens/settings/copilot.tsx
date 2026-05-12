@@ -1,4 +1,3 @@
-import { CredentialField } from "@/components/CredentialField";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -9,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { setPreference } from "@/lib/preferences";
-import { deleteCredential, getNonSecretConfig } from "@/lib/tauri/credentials";
+import { getNonSecretConfig } from "@/lib/tauri/credentials";
 import {
     addCustomCopilotModel,
     detectCopilotCli,
@@ -19,15 +18,12 @@ import {
     pingCopilot,
     removeCustomCopilotModel,
     setupAiCli,
-    testCopilotPatStored,
     testCopilotStored,
-    validateCopilotPat,
 } from "@/lib/tauri/providers";
 import { useAiSelectionStore } from "@/stores/aiSelectionStore";
-import { ChevronDown, ChevronRight, ExternalLink, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
-    MASKED_SENTINEL,
     SectionMessage,
     StatusBadge,
     VerifiedBadge,
@@ -55,18 +51,11 @@ export function CopilotSection({
   const [cliPath, setCliPath] = useState<string | null>(null);
   const [cliError, setCliError] = useState<string | null>(null);
   const [models, setModels] = useState<[string, string][]>([]);
-  const [modelsFetchError, setModelsFetchError] = useState<string | null>(null);
   const [customModels, setCustomModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [customModelDraft, setCustomModelDraft] = useState("");
   const [customModelErr, setCustomModelErr] = useState("");
   const [savingCustom, setSavingCustom] = useState(false);
-  // PAT-based live model fetching state (independent of CLI delegation —
-  // the PAT only powers the model picker; workflows still run via the CLI).
-  const [patConfigured, setPatConfigured] = useState(false);
-  const [patEditing, setPatEditing] = useState(false);
-  const [patValue, setPatValue] = useState("");
-  const [showPatInstructions, setShowPatInstructions] = useState(false);
 
   async function refreshModelLists() {
     const [result, custom] = await Promise.all([
@@ -74,7 +63,6 @@ export function CopilotSection({
       getCustomCopilotModels(),
     ]);
     setModels(result.models);
-    setModelsFetchError(result.fetchError);
     setCustomModels(custom);
   }
 
@@ -85,17 +73,6 @@ export function CopilotSection({
         if (cfg.copilot_model) setSelectedModel(cfg.copilot_model);
       })
       .catch(() => {});
-    // The PAT presence isn't returned by getNonSecretConfig (it's a
-    // secret), so we infer it from credential_status would-be flag —
-    // but that flag doesn't exist for the PAT. Instead, treat any
-    // non-null fetchError as "PAT is set but the fetch failed", and
-    // a successful live list as "PAT is set and working". Both imply
-    // patConfigured = true. An empty fetchError with a hardcoded-looking
-    // list (id "auto" first, etc) leaves it false. A simpler signal is
-    // the testCopilotPatStored call — if it returns "no PAT", we know.
-    void testCopilotPatStored()
-      .then(() => setPatConfigured(true))
-      .catch(() => setPatConfigured(false));
     void detectCopilotCli()
       .then((p) => {
         setCliPath(p);
@@ -214,66 +191,6 @@ export function CopilotSection({
     }
   }
 
-  // ── PAT-based live model fetcher ──────────────────────────────────────────
-
-  function startEditingPat() {
-    setPatValue(patConfigured ? MASKED_SENTINEL : "");
-    setStatus({ state: "idle", message: "" });
-    setPatEditing(true);
-  }
-
-  function cancelEditingPat() {
-    setPatEditing(false);
-    setPatValue("");
-    setStatus({ state: "idle", message: "" });
-  }
-
-  async function handlePatSave() {
-    if (!patValue.trim() || patValue === MASKED_SENTINEL) return;
-    setStatus({ state: "loading", message: "Verifying PAT against GitHub…" });
-    try {
-      const msg = await validateCopilotPat(patValue.trim());
-      setPatConfigured(true);
-      setPatEditing(false);
-      setPatValue("");
-      setStatus({ state: "success", message: msg });
-      useAiSelectionStore.getState().invalidateModels("copilot");
-      refreshModelLists().catch(() => {});
-    } catch (err) {
-      setStatus({ state: "error", message: String(err) });
-    }
-  }
-
-  async function handlePatTest() {
-    setStatus({ state: "loading", message: "Testing stored PAT…" });
-    try {
-      const msg = await testCopilotPatStored();
-      setStatus({ state: "success", message: msg });
-      useAiSelectionStore.getState().invalidateModels("copilot");
-      refreshModelLists().catch(() => {});
-    } catch (err) {
-      setStatus({ state: "error", message: String(err) });
-    }
-  }
-
-  async function handlePatReset() {
-    try {
-      await deleteCredential("copilot_github_pat");
-      setPatConfigured(false);
-      setPatEditing(false);
-      setPatValue("");
-      setStatus({
-        state: "success",
-        message:
-          "PAT removed. Model list now shows the built-in fallback catalogue.",
-      });
-      useAiSelectionStore.getState().invalidateModels("copilot");
-      refreshModelLists().catch(() => {});
-    } catch (err) {
-      setStatus({ state: "error", message: String(err) });
-    }
-  }
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -380,160 +297,6 @@ export function CopilotSection({
 
         <SectionMessage {...status} />
 
-        {/* Optional: GitHub PAT for plan-aware model list. The default
-            list is hand-curated; with a PAT we fetch the user's actual
-            Copilot subscription catalogue from GitHub's models endpoint. */}
-        {isConfigured && (
-          <div className="space-y-2 pt-2 border-t">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-medium text-muted-foreground">
-                Plan-aware model list (optional)
-              </label>
-              {patConfigured && (
-                <span className="text-[10px] uppercase tracking-wide text-green-700 dark:text-green-400">
-                  Live fetch on
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-muted-foreground -mt-0.5">
-              Paste a GitHub fine-grained PAT with the{" "}
-              <strong>Copilot Requests</strong> permission to fetch the
-              actual model list available on your Copilot subscription
-              (instead of the built-in fallback list). The PAT is stored
-              in your keychain and only used to query GitHub's models
-              endpoint — workflows still run through the CLI.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setShowPatInstructions((v) => !v)}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              {showPatInstructions ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              How to create a PAT
-            </button>
-
-            {showPatInstructions && (
-              <div className="rounded-md border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground space-y-1.5">
-                <ol className="list-decimal pl-4 space-y-1">
-                  <li>
-                    Open{" "}
-                    <a
-                      href="https://github.com/settings/personal-access-tokens/new"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-0.5 underline hover:text-foreground"
-                    >
-                      github.com/settings/personal-access-tokens/new
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  </li>
-                  <li>
-                    <strong>Name:</strong> something like "Meridian Copilot".
-                  </li>
-                  <li>
-                    <strong>Resource owner:</strong> your personal GitHub
-                    account (whichever one holds the Copilot subscription).
-                  </li>
-                  <li>
-                    <strong>Expiration:</strong> as long as you like —
-                    longer means fewer rotations.
-                  </li>
-                  <li>
-                    <strong>Repository access:</strong> "Public Repositories
-                    (read-only)" — Copilot Requests is an account-level
-                    permission, so repo access doesn't matter.
-                  </li>
-                  <li>
-                    <strong>Account permissions →</strong> find{" "}
-                    <code className="text-[10px]">Copilot Requests</code> and
-                    set it to <strong>Read-only</strong>.
-                  </li>
-                  <li>
-                    Click <strong>Generate token</strong>, copy the{" "}
-                    <code className="text-[10px]">github_pat_…</code> value,
-                    and paste it below.
-                  </li>
-                </ol>
-                <p className="text-[10px] opacity-70">
-                  The PAT is revocable from the same Settings page if you
-                  ever want to disable Meridian's access.
-                </p>
-              </div>
-            )}
-
-            {!patEditing ? (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={startEditingPat}>
-                  {patConfigured ? "Update PAT" : "Add PAT"}
-                </Button>
-                {patConfigured && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePatTest}
-                    disabled={status.state === "loading"}
-                  >
-                    {status.state === "loading" ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" /> Testing…
-                      </>
-                    ) : (
-                      "Refresh model list"
-                    )}
-                  </Button>
-                )}
-                {patConfigured && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground gap-1"
-                    onClick={handlePatReset}
-                  >
-                    <RotateCcw className="h-3 w-3" /> Remove PAT
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <CredentialField
-                  id="settings-copilot-pat"
-                  label="GitHub PAT"
-                  placeholder="github_pat_…"
-                  masked
-                  value={patValue}
-                  onChange={setPatValue}
-                  disabled={status.state === "loading"}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={handlePatSave}
-                    disabled={
-                      !patValue.trim() ||
-                      patValue === MASKED_SENTINEL ||
-                      status.state === "loading"
-                    }
-                  >
-                    {status.state === "loading" ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      "Save & verify"
-                    )}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={cancelEditingPat}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Model picker — visible when Copilot is configured */}
         {isConfigured && (
           <div className="space-y-1.5 pt-2 border-t">
@@ -553,20 +316,20 @@ export function CopilotSection({
               ))}
             </select>
             <p className="text-[11px] text-muted-foreground">
-              {patConfigured
-                ? "Showing your plan-specific model list, fetched from GitHub."
-                : <>
-                    <code>auto</code> lets Copilot pick. Available named models
-                    depend on your Copilot plan — add a PAT above to fetch
-                    the actual catalogue for your subscription.
-                  </>}
+              <code>auto</code> lets Copilot pick. Multipliers are deducted
+              from your monthly premium request allowance —{" "}
+              <a
+                href="https://docs.github.com/en/copilot/reference/ai-models/supported-models"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-0.5 underline hover:text-foreground"
+              >
+                browse GitHub's full model catalogue
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>{" "}
+              to confirm which IDs your plan grants and grab any new ones
+              into the Custom models field below.
             </p>
-            {modelsFetchError && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-500">
-                Couldn't fetch the live model list from GitHub —{" "}
-                {modelsFetchError}
-              </p>
-            )}
 
             <div className="pt-2 space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">

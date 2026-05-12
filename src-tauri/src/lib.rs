@@ -100,8 +100,6 @@ use commands::{
     add_custom_copilot_model,
     remove_custom_copilot_model,
     test_copilot_stored,
-    validate_copilot_pat,
-    test_copilot_pat_stored,
     ping_copilot,
     setup_ai_cli,
     // Agent skills
@@ -370,8 +368,6 @@ pub fn run() {
             add_custom_copilot_model,
             remove_custom_copilot_model,
             test_copilot_stored,
-            validate_copilot_pat,
-            test_copilot_pat_stored,
             ping_copilot,
             setup_ai_cli,
             test_jira_stored,

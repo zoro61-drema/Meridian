@@ -1,8 +1,8 @@
-// Grooming runner — wraps the grooming StateGraph and emits its parsed
+// Grooming runner — invokes the grooming workflow and emits its parsed
 // structured output.
 
 import type { ModelSelection } from "../../../protocol.js";
-import { buildGroomingGraph, GroomingInputSchema } from "../../grooming.js";
+import { GroomingInputSchema, runGroomingWorkflow } from "../../grooming.js";
 import type { Emitter } from "../types.js";
 
 export async function runGrooming(args: {
@@ -26,20 +26,21 @@ export async function runGrooming(args: {
 
   emit({ id: workflowId, type: "progress", node: "analyse", status: "started" });
 
-  const graph = buildGroomingGraph({ emit, workflowId });
-  const finalState = await graph.invoke({
+  const result = await runGroomingWorkflow({
     input: parsed.data,
     model,
+    emit,
+    workflowId,
   });
 
   emit({ id: workflowId, type: "progress", node: "analyse", status: "completed" });
 
-  if (finalState.parseError) {
+  if (result.parseError) {
     emit({
       id: workflowId,
       type: "error",
-      message: `Grooming response failed schema validation: ${finalState.parseError}`,
-      cause: finalState.rawResponse,
+      message: `Grooming response failed schema validation: ${result.parseError}`,
+      cause: result.rawResponse,
     });
     return;
   }
@@ -47,10 +48,7 @@ export async function runGrooming(args: {
   emit({
     id: workflowId,
     type: "result",
-    output: finalState.parsedOutput,
-    usage: {
-      inputTokens: finalState.usage?.inputTokens ?? 0,
-      outputTokens: finalState.usage?.outputTokens ?? 0,
-    },
+    output: result.parsedOutput,
+    usage: result.usage,
   });
 }

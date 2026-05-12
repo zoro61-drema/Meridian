@@ -1,9 +1,12 @@
-// PR Review runner — drives the chunk-aware StateGraph and surfaces per-chunk
+// PR Review runner — drives the chunk-aware workflow and surfaces per-chunk
 // progress so the UI can show "reviewing chunk N/M" or "synthesising" while
-// the graph runs.
+// it runs.
 
 import type { ModelSelection } from "../../../protocol.js";
-import { buildPrReviewGraph, PrReviewInputSchema } from "../../pr-review.js";
+import {
+  PrReviewInputSchema,
+  runPrReviewWorkflow,
+} from "../../pr-review.js";
 import type { Emitter } from "../types.js";
 
 export async function runPrReview(args: {
@@ -32,41 +35,42 @@ export async function runPrReview(args: {
     status: "started",
   });
 
-  const graph = buildPrReviewGraph({ emit, workflowId, signal });
-  let finalState: Awaited<ReturnType<typeof graph.invoke>> | undefined;
-  for await (const update of await graph.stream(
-    { input: parsed.data, model },
-    { streamMode: "values", signal },
-  )) {
-    finalState = update;
-    if (update.mode === "multi_chunk" && update.chunks?.length) {
-      const total = update.chunks.length;
-      const done = Math.min(update.currentChunk ?? 0, total);
-      emit({
-        id: workflowId,
-        type: "progress",
-        node: "chunk_review",
-        status: done >= total ? "completed" : "started",
-        data: { done, total },
-      });
-    } else if (update.mode === "single_pass") {
-      emit({
-        id: workflowId,
-        type: "progress",
-        node: "single_pass",
-        status: "started",
-      });
-    }
-  }
-
-  if (!finalState) {
-    emit({
-      id: workflowId,
-      type: "error",
-      message: "PR review workflow ended without producing a state",
-    });
-    return;
-  }
+  const result = await runPrReviewWorkflow({
+    input: parsed.data,
+    model,
+    emit,
+    workflowId,
+    signal,
+    progress: {
+      onMode: (mode, total) => {
+        if (mode === "single_pass") {
+          emit({
+            id: workflowId,
+            type: "progress",
+            node: "single_pass",
+            status: "started",
+          });
+        } else {
+          emit({
+            id: workflowId,
+            type: "progress",
+            node: "chunk_review",
+            status: "started",
+            data: { done: 0, total },
+          });
+        }
+      },
+      onChunkProgress: (done, total) => {
+        emit({
+          id: workflowId,
+          type: "progress",
+          node: "chunk_review",
+          status: done >= total ? "completed" : "started",
+          data: { done, total },
+        });
+      },
+    },
+  });
 
   emit({
     id: workflowId,
@@ -75,12 +79,12 @@ export async function runPrReview(args: {
     status: "completed",
   });
 
-  if (finalState.parseError) {
+  if (result.parseError) {
     emit({
       id: workflowId,
       type: "error",
-      message: `PR review synthesis failed schema validation: ${finalState.parseError}`,
-      cause: finalState.rawReport,
+      message: `PR review synthesis failed schema validation: ${result.parseError}`,
+      cause: result.rawReport,
     });
     return;
   }
@@ -88,10 +92,7 @@ export async function runPrReview(args: {
   emit({
     id: workflowId,
     type: "result",
-    output: finalState.parsedReport,
-    usage: {
-      inputTokens: finalState.usage?.inputTokens ?? 0,
-      outputTokens: finalState.usage?.outputTokens ?? 0,
-    },
+    output: result.parsedReport,
+    usage: result.usage,
   });
 }

@@ -1,20 +1,12 @@
-// PR Review workflow — sequential, chunk-aware (faithful port of the Rust
-// review_pr behaviour, expressed as a LangGraph StateGraph).
+// PR Review workflow — sequential, chunk-aware. Faithful port of the
+// previous LangGraph StateGraph implementation as a plain async function.
 //
-// Two paths through the graph:
+// Two paths through the pipeline, chosen by chunk count:
 //   - Single-pass (small PRs ≤ chunkChars): one synthesis call on the
 //     line-annotated diff produces the final report directly.
 //   - Multi-chunk (large PRs): for each chunk, one CHUNK_SYSTEM call collects
 //     findings; a final SYNTHESIS_SYSTEM call deduplicates and calibrates.
-//
-// Structure:
-//   START → prepare ─[mode]─→ single_pass → END
-//                  │
-//                  └────────→ chunk_review ─[done?]─→ synthesis → END
-//                                  ↑                 │
-//                                  └─────────────────┘  (loop back if more chunks)
 
-import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { AIMessageChunk } from "@langchain/core/messages";
 import { parsePartialJson } from "@langchain/core/output_parsers";
@@ -36,7 +28,7 @@ import {
 // token/sec local model doesn't flood the IPC channel.
 const PARTIAL_FLUSH_MS = 80;
 
-// Thinking budget for every PR-review node. Code review is a reasoning-heavy
+// Thinking budget for every PR-review call. Code review is a reasoning-heavy
 // workload — severity calibration, scope-of-impact reasoning, hunting for
 // subtle logic errors — so bounded native reasoning materially improves
 // finding quality on models that support it. The factory routes this to the
@@ -108,39 +100,25 @@ export const PrReviewReportSchema = z.object({
 
 export type PrReviewReport = z.infer<typeof PrReviewReportSchema>;
 
-// ── State graph annotation ────────────────────────────────────────────────────
+// ── Public result + progress shape ────────────────────────────────────────────
 
-type Mode = "single_pass" | "multi_chunk";
+export type PrReviewMode = "single_pass" | "multi_chunk";
 
-const PrReviewStateAnnotation = Annotation.Root({
-  input: Annotation<PrReviewInput>(),
-  model: Annotation<ModelSelection>(),
-  mode: Annotation<Mode | undefined>(),
-  chunks: Annotation<string[]>({
-    reducer: (_current, update) => update,
-    default: () => [],
-  }),
-  currentChunk: Annotation<number>({
-    reducer: (_current, update) => update,
-    default: () => 0,
-  }),
-  allFindings: Annotation<Finding[]>({
-    reducer: (current, update) => [...current, ...update],
-    default: () => [],
-  }),
-  rawReport: Annotation<string | undefined>(),
-  parsedReport: Annotation<PrReviewReport | undefined>(),
-  parseError: Annotation<string | undefined>(),
-  usage: Annotation<{ inputTokens: number; outputTokens: number }>({
-    reducer: (current, update) => ({
-      inputTokens: (current?.inputTokens ?? 0) + update.inputTokens,
-      outputTokens: (current?.outputTokens ?? 0) + update.outputTokens,
-    }),
-    default: () => ({ inputTokens: 0, outputTokens: 0 }),
-  }),
-});
+export interface PrReviewResult {
+  rawReport: string;
+  parsedReport?: PrReviewReport;
+  parseError?: string;
+  usage: { inputTokens: number; outputTokens: number };
+}
 
-type PrReviewState = typeof PrReviewStateAnnotation.State;
+export interface PrReviewProgress {
+  /** Emitted by the runner once the mode is decided. The wrapper turns this
+   *  into the appropriate `progress` IPC event for the frontend. */
+  onMode?: (mode: PrReviewMode, totalChunks: number) => void;
+  /** Called after each chunk completes in multi-chunk mode with the running
+   *  done/total counter. */
+  onChunkProgress?: (done: number, total: number) => void;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -163,15 +141,20 @@ function tokenUsage(
   };
 }
 
+function addUsage(
+  a: { inputTokens: number; outputTokens: number },
+  b: { inputTokens: number; outputTokens: number },
+): { inputTokens: number; outputTokens: number } {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+  };
+}
+
 /**
  * Stream a synthesis-style model response while emitting partial-JSON
  * progress events. Returns the final raw text and accumulated usage so the
  * caller can run schema validation once streaming completes.
- *
- * Each emit carries the deepest valid partial parse of the JSON tokens
- * received so far. The frontend renders whatever fields exist; missing
- * fields simply don't render yet, so users see the summary appear, then
- * each lens populate as the model produces it.
  */
 async function streamSynthesis(args: {
   model: BaseChatModel;
@@ -228,9 +211,6 @@ async function streamSynthesis(args: {
     });
   };
 
-  // Forward the running input/output token counts to the frontend so
-  // the PR Review TokenUsageBadge updates live during synthesis. Same
-  // throttle as the partial-report flush.
   const tryEmitUsage = () => {
     if (!emit || !workflowId) return;
     const meta = accumulated?.usage_metadata as
@@ -288,218 +268,194 @@ function buildSynthesisSystem(skillsBlock?: string | null): string {
   );
 }
 
-// ── Nodes ─────────────────────────────────────────────────────────────────────
-
-function prepareNode(state: PrReviewState): Partial<PrReviewState> {
-  const chunks = splitReviewIntoChunks(state.input.reviewText, state.input.chunkChars);
-  const mode: Mode = chunks.length > 1 ? "multi_chunk" : "single_pass";
-  return { chunks, mode, currentChunk: 0 };
+function parseReport(raw: string): {
+  parsedReport?: PrReviewReport;
+  parseError?: string;
+} {
+  const cleaned = sanitiseBareLineRanges(stripJsonFences(raw));
+  try {
+    const parsed = JSON.parse(cleaned);
+    return { parsedReport: PrReviewReportSchema.parse(parsed) };
+  } catch (err) {
+    return { parseError: err instanceof Error ? err.message : String(err) };
+  }
 }
 
-function makeSinglePassNode(
-  emit?: (event: OutboundEvent) => void,
-  workflowId?: string,
-  signal?: AbortSignal,
-) {
-  return async function singlePassNode(
-    state: PrReviewState,
-  ): Promise<Partial<PrReviewState>> {
-    const model: BaseChatModel = buildModel(state.model, PR_REVIEW_THINKING);
-    const annotated = buildSinglePassReviewText(state.input.reviewText);
-    const system = buildSynthesisSystem(state.input.skillsBlock);
-    const user =
-      `Review this pull request across five lenses: acceptance_criteria, security, ` +
-      `logic, quality, and testing. Apply the severity calibration rules from your ` +
-      `system prompt carefully — do not inflate severity. Note what is done well in ` +
-      `the summary. Produce the final review report JSON.\n\n${annotated}`;
-
-    const { raw, usage } = await streamSynthesis({
-      model,
-      system,
-      user,
-      emit,
-      workflowId,
-      node: "single_pass",
-      signal,
-    });
-
-    const cleaned = sanitiseBareLineRanges(stripJsonFences(raw));
-
-    try {
-      const parsed = JSON.parse(cleaned);
-      const validated = PrReviewReportSchema.parse(parsed);
-      return {
-        rawReport: raw,
-        parsedReport: validated,
-        usage,
-      };
-    } catch (err) {
-      return {
-        rawReport: raw,
-        parseError: err instanceof Error ? err.message : String(err),
-        usage,
-      };
-    }
-  };
-}
-
-function makeChunkReviewNode(signal?: AbortSignal) {
-  return async function chunkReviewNode(
-    state: PrReviewState,
-  ): Promise<Partial<PrReviewState>> {
-    const model = buildModel(state.model, PR_REVIEW_THINKING);
-    const chunk = state.chunks[state.currentChunk];
-    if (!chunk) {
-      // Defensive — shouldn't happen given the conditional edge, but stay safe.
-      return { currentChunk: state.currentChunk + 1 };
-    }
-
-    const user = `Find all review findings in this diff chunk:\n\n${chunk}`;
-
-    // Stream chunk reviews so adapters that surface usage_metadata only via
-    // the streaming path (notably the CLI-delegation adapters, which yield
-    // a single terminal chunk carrying usage_metadata) feed the per-call
-    // token totals back into the workflow's usage accumulator. The chunk's
-    // raw findings JSON isn't surfaced to the UI, but tokens still need to
-    // count toward the run total.
-    //
-    // The signal aborts the underlying fetch when the user presses Stop
-    // Review, closing the streaming connection so the provider (Ollama,
-    // Anthropic, Gemini) cancels in-flight generation.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stream = (await (model as any).stream(
-      [new SystemMessage(CHUNK_SYSTEM), new HumanMessage(user)],
-      signal ? { signal } : undefined,
-    )) as AsyncIterable<AIMessageChunk>;
-    let accumulated: AIMessageChunk | undefined;
-    for await (const part of stream) {
-      accumulated = accumulated ? accumulated.concat(part) : part;
-    }
-    const raw = accumulated ? extractText(accumulated.content) : "";
-    const cleaned = stripJsonFences(raw);
-
-    let chunkFindings: Finding[] = [];
-    try {
-      const parsed = JSON.parse(cleaned);
-      if (Array.isArray(parsed)) {
-        // Validate each finding individually; skip ones the model malformed
-        // rather than failing the whole chunk.
-        for (const item of parsed) {
-          const result = FindingSchema.safeParse(item);
-          if (result.success) {
-            chunkFindings.push(result.data);
-          }
-        }
-      }
-    } catch (err) {
-      console.error(
-        `[pr-review] chunk ${state.currentChunk + 1}/${state.chunks.length} returned unparsable findings:`,
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-
-    return {
-      allFindings: chunkFindings,
-      currentChunk: state.currentChunk + 1,
-      usage: tokenUsage(accumulated?.usage_metadata),
-    };
-  };
-}
-
-function makeSynthesisNode(
-  emit?: (event: OutboundEvent) => void,
-  workflowId?: string,
-  signal?: AbortSignal,
-) {
-  return async function synthesisNode(
-    state: PrReviewState,
-  ): Promise<Partial<PrReviewState>> {
-    const model = buildModel(state.model, PR_REVIEW_THINKING);
-    const system = buildSynthesisSystem(state.input.skillsBlock);
-
-    const { json: cappedFindings, dropped } = capFindingsBySeverity(
-      state.allFindings,
-      state.input.findingsBudget,
-    );
-
-    const dropNote = dropped > 0
-      ? `\n\nNote: ${dropped} lower-severity finding(s) were omitted to fit the model context window. All blocking and non-blocking findings are included.`
-      : "";
-
-    const marker = "=== DIFF ===";
-    const idx = state.input.reviewText.indexOf(marker);
-    const header = idx !== -1
-      ? state.input.reviewText.slice(0, idx + marker.length) +
-        "\n[diff reviewed in chunks — findings collected above]"
-      : state.input.reviewText;
-
-    const user =
-      `Pull request context:\n${header}\n\n` +
-      `Findings collected from reviewing all diff chunks:${dropNote}\n${cappedFindings}\n\n` +
-      `Produce the final review report JSON.`;
-
-    const { raw, usage } = await streamSynthesis({
-      model,
-      system,
-      user,
-      emit,
-      workflowId,
-      node: "synthesis",
-      signal,
-    });
-
-    const cleaned = sanitiseBareLineRanges(stripJsonFences(raw));
-
-    try {
-      const parsed = JSON.parse(cleaned);
-      const validated = PrReviewReportSchema.parse(parsed);
-      return {
-        rawReport: raw,
-        parsedReport: validated,
-        usage,
-      };
-    } catch (err) {
-      return {
-        rawReport: raw,
-        parseError: err instanceof Error ? err.message : String(err),
-        usage,
-      };
-    }
-  };
-}
-
-// ── Routing ───────────────────────────────────────────────────────────────────
-
-function routeFromPrepare(state: PrReviewState): "single_pass" | "chunk_review" {
-  return state.mode === "multi_chunk" ? "chunk_review" : "single_pass";
-}
-
-function routeFromChunk(state: PrReviewState): "chunk_review" | "synthesis" {
-  return state.currentChunk < state.chunks.length ? "chunk_review" : "synthesis";
-}
-
-// ── Graph builder ─────────────────────────────────────────────────────────────
-
-export function buildPrReviewGraph(opts?: {
+async function runSinglePass(args: {
+  input: PrReviewInput;
+  model: BaseChatModel;
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
   signal?: AbortSignal;
-}) {
-  return new StateGraph(PrReviewStateAnnotation)
-    .addNode("prepare", prepareNode)
-    .addNode("single_pass", makeSinglePassNode(opts?.emit, opts?.workflowId, opts?.signal))
-    .addNode("chunk_review", makeChunkReviewNode(opts?.signal))
-    .addNode("synthesis", makeSynthesisNode(opts?.emit, opts?.workflowId, opts?.signal))
-    .addEdge(START, "prepare")
-    .addConditionalEdges("prepare", routeFromPrepare, {
-      single_pass: "single_pass",
-      chunk_review: "chunk_review",
-    })
-    .addConditionalEdges("chunk_review", routeFromChunk, {
-      chunk_review: "chunk_review",
-      synthesis: "synthesis",
-    })
-    .addEdge("single_pass", END)
-    .addEdge("synthesis", END)
-    .compile();
+}): Promise<PrReviewResult> {
+  const { input, model, emit, workflowId, signal } = args;
+  const annotated = buildSinglePassReviewText(input.reviewText);
+  const system = buildSynthesisSystem(input.skillsBlock);
+  const user =
+    `Review this pull request across five lenses: acceptance_criteria, security, ` +
+    `logic, quality, and testing. Apply the severity calibration rules from your ` +
+    `system prompt carefully — do not inflate severity. Note what is done well in ` +
+    `the summary. Produce the final review report JSON.\n\n${annotated}`;
+
+  const { raw, usage } = await streamSynthesis({
+    model,
+    system,
+    user,
+    emit,
+    workflowId,
+    node: "single_pass",
+    signal,
+  });
+
+  return { rawReport: raw, usage, ...parseReport(raw) };
+}
+
+async function runChunkReview(args: {
+  chunk: string;
+  model: BaseChatModel;
+  signal?: AbortSignal;
+}): Promise<{
+  findings: Finding[];
+  usage: { inputTokens: number; outputTokens: number };
+}> {
+  const { chunk, model, signal } = args;
+  const user = `Find all review findings in this diff chunk:\n\n${chunk}`;
+
+  // Stream chunk reviews so adapters that surface usage_metadata only via the
+  // streaming path (notably the CLI-delegation adapters, which yield a single
+  // terminal chunk carrying usage_metadata) feed the per-call token totals
+  // back into the workflow's usage accumulator.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stream = (await (model as any).stream(
+    [new SystemMessage(CHUNK_SYSTEM), new HumanMessage(user)],
+    signal ? { signal } : undefined,
+  )) as AsyncIterable<AIMessageChunk>;
+
+  let accumulated: AIMessageChunk | undefined;
+  for await (const part of stream) {
+    accumulated = accumulated ? accumulated.concat(part) : part;
+  }
+  const raw = accumulated ? extractText(accumulated.content) : "";
+  const cleaned = stripJsonFences(raw);
+
+  const findings: Finding[] = [];
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) {
+      // Validate each finding individually; skip malformed entries rather
+      // than failing the whole chunk.
+      for (const item of parsed) {
+        const result = FindingSchema.safeParse(item);
+        if (result.success) findings.push(result.data);
+      }
+    }
+  } catch (err) {
+    console.error(
+      `[pr-review] chunk returned unparsable findings:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
+  return { findings, usage: tokenUsage(accumulated?.usage_metadata) };
+}
+
+async function runMultiChunkSynthesis(args: {
+  input: PrReviewInput;
+  findings: Finding[];
+  model: BaseChatModel;
+  emit?: (event: OutboundEvent) => void;
+  workflowId?: string;
+  signal?: AbortSignal;
+}): Promise<PrReviewResult> {
+  const { input, findings, model, emit, workflowId, signal } = args;
+  const system = buildSynthesisSystem(input.skillsBlock);
+
+  const { json: cappedFindings, dropped } = capFindingsBySeverity(
+    findings,
+    input.findingsBudget,
+  );
+
+  const dropNote = dropped > 0
+    ? `\n\nNote: ${dropped} lower-severity finding(s) were omitted to fit the model context window. All blocking and non-blocking findings are included.`
+    : "";
+
+  const marker = "=== DIFF ===";
+  const idx = input.reviewText.indexOf(marker);
+  const header = idx !== -1
+    ? input.reviewText.slice(0, idx + marker.length) +
+      "\n[diff reviewed in chunks — findings collected above]"
+    : input.reviewText;
+
+  const user =
+    `Pull request context:\n${header}\n\n` +
+    `Findings collected from reviewing all diff chunks:${dropNote}\n${cappedFindings}\n\n` +
+    `Produce the final review report JSON.`;
+
+  const { raw, usage } = await streamSynthesis({
+    model,
+    system,
+    user,
+    emit,
+    workflowId,
+    node: "synthesis",
+    signal,
+  });
+
+  return { rawReport: raw, usage, ...parseReport(raw) };
+}
+
+/**
+ * Run the PR review workflow end-to-end. Replaces the previous
+ * `buildPrReviewGraph(...).stream(...)` driver — the runner calls this
+ * single function and awaits the result.
+ */
+export async function runPrReviewWorkflow(args: {
+  input: PrReviewInput;
+  model: ModelSelection;
+  emit?: (event: OutboundEvent) => void;
+  workflowId?: string;
+  signal?: AbortSignal;
+  progress?: PrReviewProgress;
+}): Promise<PrReviewResult> {
+  const { input, model: selection, emit, workflowId, signal, progress } = args;
+
+  const chunks = splitReviewIntoChunks(input.reviewText, input.chunkChars);
+  const mode: PrReviewMode = chunks.length > 1 ? "multi_chunk" : "single_pass";
+  progress?.onMode?.(mode, chunks.length);
+
+  if (mode === "single_pass") {
+    const model = buildModel(selection, PR_REVIEW_THINKING);
+    return runSinglePass({ input, model, emit, workflowId, signal });
+  }
+
+  // Multi-chunk path: review each chunk sequentially, then synthesise.
+  // A fresh model is built per call so AI-traffic capture can label each
+  // node distinctly via the metadata on its own callback handler.
+  let allFindings: Finding[] = [];
+  let usage = { inputTokens: 0, outputTokens: 0 };
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (signal?.aborted) break;
+    const model = buildModel(selection, PR_REVIEW_THINKING);
+    const { findings, usage: chunkUsage } = await runChunkReview({
+      chunk: chunks[i]!,
+      model,
+      signal,
+    });
+    allFindings = allFindings.concat(findings);
+    usage = addUsage(usage, chunkUsage);
+    progress?.onChunkProgress?.(i + 1, chunks.length);
+  }
+
+  const synthModel = buildModel(selection, PR_REVIEW_THINKING);
+  const result = await runMultiChunkSynthesis({
+    input,
+    findings: allFindings,
+    model: synthModel,
+    emit,
+    workflowId,
+    signal,
+  });
+
+  return { ...result, usage: addUsage(usage, result.usage) };
 }

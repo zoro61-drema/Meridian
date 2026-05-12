@@ -17,7 +17,6 @@
     "@anthropic-ai/sdk": "^0.30.1",
     "@google/generative-ai": "^0.24.1",
     "@langchain/core": "^0.3.27",
-    "@langchain/langgraph": "^0.2.39",
     "undici": "^6.25.0",
     "zod": "^3.23.8"
   },

@@ -1,7 +1,5 @@
-import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildModel } from "../models/factory.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
 import { streamLLMJson } from "./streaming.js";
@@ -289,18 +287,14 @@ export function buildUserPrompt(input: GroomingInput): string {
   return `Groom this ticket:\n\n${input.ticketText}${fileBlock}`;
 }
 
-// ── State graph ───────────────────────────────────────────────────────────────
+// ── Runner ────────────────────────────────────────────────────────────────────
 
-const GroomingStateAnnotation = Annotation.Root({
-  input: Annotation<GroomingInput>(),
-  model: Annotation<ModelSelection>(),
-  rawResponse: Annotation<string | undefined>(),
-  parsedOutput: Annotation<GroomingOutput | undefined>(),
-  parseError: Annotation<string | undefined>(),
-  usage: Annotation<{ inputTokens: number; outputTokens: number } | undefined>(),
-});
-
-type GroomingState = typeof GroomingStateAnnotation.State;
+export interface GroomingResult {
+  rawResponse: string;
+  parsedOutput?: GroomingOutput;
+  parseError?: string;
+  usage: { inputTokens: number; outputTokens: number };
+}
 
 function stripJsonFences(text: string): string {
   const trimmed = text.trim();
@@ -333,53 +327,38 @@ function tryParseJsonLenient(text: string): unknown {
   }
 }
 
-function makeAnalyseNode(
-  emit?: (event: OutboundEvent) => void,
-  workflowId?: string,
-) {
-  return async function analyseNode(
-    state: GroomingState,
-  ): Promise<Partial<GroomingState>> {
-    const model: BaseChatModel = buildModel(state.model);
-    const system = buildSystemPrompt(
-      state.input.templates,
-      state.input.ticketType,
-    );
-    const user = buildUserPrompt(state.input);
-
-    const { raw, usage } = await streamLLMJson({
-      llm: model,
-      messages: [new SystemMessage(system), new HumanMessage(user)],
-      emit,
-      workflowId,
-      nodeName: "analyse",
-      cleanText: stripJsonFences,
-    });
-
-    // Parse + validate against the schema. On failure we surface parseError so
-    // the caller can decide how to handle it (retry, surface to user, etc.).
-    const cleaned = stripJsonFences(raw);
-    try {
-      const parsed = tryParseJsonLenient(cleaned);
-      const validated = GroomingOutputSchema.parse(parsed);
-      return { rawResponse: raw, parsedOutput: validated, usage };
-    } catch (err) {
-      return {
-        rawResponse: raw,
-        parseError: err instanceof Error ? err.message : String(err),
-        usage,
-      };
-    }
-  };
-}
-
-export function buildGroomingGraph(opts?: {
+export async function runGroomingWorkflow(args: {
+  input: GroomingInput;
+  model: ModelSelection;
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
-}) {
-  return new StateGraph(GroomingStateAnnotation)
-    .addNode("analyse", makeAnalyseNode(opts?.emit, opts?.workflowId))
-    .addEdge(START, "analyse")
-    .addEdge("analyse", END)
-    .compile();
+}): Promise<GroomingResult> {
+  const { input, model: selection, emit, workflowId } = args;
+  const llm = buildModel(selection);
+  const system = buildSystemPrompt(input.templates, input.ticketType);
+  const user = buildUserPrompt(input);
+
+  const { raw, usage } = await streamLLMJson({
+    llm,
+    messages: [new SystemMessage(system), new HumanMessage(user)],
+    emit,
+    workflowId,
+    nodeName: "analyse",
+    cleanText: stripJsonFences,
+  });
+
+  // Parse + validate. On failure we surface parseError so the caller can
+  // decide how to handle it (retry, surface to user, etc.).
+  const cleaned = stripJsonFences(raw);
+  try {
+    const parsed = tryParseJsonLenient(cleaned);
+    const validated = GroomingOutputSchema.parse(parsed);
+    return { rawResponse: raw, parsedOutput: validated, usage };
+  } catch (err) {
+    return {
+      rawResponse: raw,
+      parseError: err instanceof Error ? err.message : String(err),
+      usage,
+    };
+  }
 }

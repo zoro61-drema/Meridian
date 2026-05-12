@@ -1,8 +1,8 @@
-import { ChatAnthropic } from "@langchain/anthropic";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { ChatOllama } from "@langchain/ollama";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { ModelSelection } from "../protocol.js";
+import { AnthropicDirectChatModel } from "./anthropic-direct.js";
+import { GoogleDirectChatModel } from "./google-direct.js";
+import { OllamaDirectChatModel } from "./ollama-direct.js";
 import { ClaudeCodeChatModel } from "./anthropic-via-claude-code.js";
 import { GeminiCliChatModel } from "./gemini-via-cli.js";
 import { CopilotCliChatModel } from "./copilot-via-cli.js";
@@ -23,8 +23,8 @@ export interface BuildModelOptions {
   /** Working directory for CLI-delegation adapters (Claude Code,
    *  Gemini CLI, Copilot CLI). When set, the CLI binary spawns with
    *  cwd=worktreePath so its built-in filesystem tools operate against
-   *  the user's repo. API-key adapters (ChatAnthropic, ChatGoogle,
-   *  ChatOllama) silently ignore it — they have no local execution
+   *  the user's repo. API-key adapters (AnthropicDirect, GoogleDirect,
+   *  OllamaDirect) silently ignore it — they have no local execution
    *  surface. Workflows that need codebase access (grooming_file_probe,
    *  pr_review_chat, grooming_chat) pass this through; one-shot
    *  workflows that don't touch code leave it undefined. */
@@ -70,15 +70,6 @@ function buildModelInner(
       }
     : undefined;
 
-  // When thinking is enabled, Anthropic's API requires `temperature: 1`
-  // and rejects any other value (including the LangChain default). Pin
-  // it explicitly so callers don't see a 400 the moment they opt into
-  // thinking. No effect on non-thinking calls; when omitted, the SDK
-  // applies its own default.
-  const anthropicThinkingExtras = anthropicThinking
-    ? { temperature: 1 }
-    : {};
-
   switch (credentials.provider) {
     case "anthropic": {
       if (credentials.mode === "claude_code") {
@@ -93,16 +84,16 @@ function buildModelInner(
           cwd: options.worktreePath,
         });
       }
-      // ChatAnthropic's own default is conservative (~4K) and caused
-      // truncation on long synthesis stages. When the user hasn't set
-      // an explicit preference yet, pass nothing and let the SDK pick
-      // its default; once they have, use their number.
-      return new ChatAnthropic({
+      // Direct Anthropic API path. When thinking is enabled the API
+      // requires `temperature: 1`; non-thinking calls leave temperature
+      // unset and the API uses its default. maxTokens is forwarded only
+      // when set so the SDK's own floor takes over otherwise.
+      return new AnthropicDirectChatModel({
         apiKey: credentials.apiKey,
         model,
-        ...(maxTokens != null ? { maxTokens } : {}),
-        ...(anthropicThinking != null ? { thinking: anthropicThinking } : {}),
-        ...anthropicThinkingExtras,
+        maxTokens,
+        thinking: anthropicThinking,
+        ...(anthropicThinking ? { temperature: 1 } : {}),
       });
     }
     case "google": {
@@ -119,25 +110,11 @@ function buildModelInner(
           cwd: options.worktreePath,
         });
       }
-      // Best-effort Gemini API-key path: 2.5 Flash/Pro accept a
-      // thinking config via the SDK's `thinkingConfig`. Older models
-      // ignore it. Passed as `modelKwargs` so an SDK that doesn't
-      // recognise the key just drops it.
-      const geminiThinkingConfig = options.thinking
-        ? {
-            thinkingConfig: {
-              thinkingBudget: options.thinking.budgetTokens,
-              includeThoughts: true,
-            },
-          }
-        : undefined;
-      return new ChatGoogleGenerativeAI({
+      return new GoogleDirectChatModel({
         apiKey: credentials.apiKey,
         model,
-        ...(maxTokens != null ? { maxOutputTokens: maxTokens } : {}),
-        ...(geminiThinkingConfig != null
-          ? { modelKwargs: geminiThinkingConfig }
-          : {}),
+        maxTokens,
+        thinking: options.thinking,
       });
     }
     case "copilot": {
@@ -165,20 +142,15 @@ function buildModelInner(
       //
       // Thinking support: Ollama's recent versions accept `think: true`
       // for models that have a thinking mode (Qwen3, DeepSeek-R1, etc.)
-      // The flag is silently ignored by models that don't support it,
-      // so it's safe to pass through whenever the caller requested
-      // thinking. Returned thinking lands in a `thinking` field on the
-      // response that @langchain/ollama maps to an AIMessage content
-      // block on recent versions (older versions emit `<think>` tags
-      // inside the text content; we treat both shapes in the loop's
-      // extractor).
+      // The flag is silently ignored by models that don't support it.
+      //
       // The stored `local_llm_url` is normalised to end with `/v1` for the
-      // OpenAI-compatible model-list and embeddings endpoints. ChatOllama
-      // talks to Ollama's native `/api/chat` and appends that path itself,
-      // so we strip a trailing `/v1` here — otherwise requests land at
+      // OpenAI-compatible model-list and embeddings endpoints. The native
+      // chat endpoint lives at `/api/chat` on the bare base URL, so we
+      // strip a trailing `/v1` here — otherwise requests land at
       // `…/v1/api/chat` and 404.
       const ollamaBaseUrl = credentials.baseUrl.replace(/\/v1\/?$/, "");
-      return new ChatOllama({
+      return new OllamaDirectChatModel({
         baseUrl: ollamaBaseUrl,
         model,
         ...(options.thinking != null ? { think: true } : {}),

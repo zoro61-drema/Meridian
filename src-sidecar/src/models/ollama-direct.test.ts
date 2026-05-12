@@ -1,20 +1,15 @@
 import { describe, expect, it } from "vitest";
-import {
-  AIMessage,
-  HumanMessage,
-  SystemMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
+import type { ChatMessage } from "./types.js";
 import { _formatMessages, readNdjson } from "./ollama-direct.js";
+
+const sys = (content: string): ChatMessage => ({ role: "system", content });
+const user = (content: string): ChatMessage => ({ role: "user", content });
+const ai = (content: string): ChatMessage => ({ role: "assistant", content });
+const tool = (content: string): ChatMessage => ({ role: "tool", content });
 
 describe("formatMessages → Ollama /api/chat messages", () => {
   it("emits role-preserving {role, content} records in order", () => {
-    const out = _formatMessages([
-      new SystemMessage("Be terse."),
-      new HumanMessage("hi"),
-      new AIMessage("hello"),
-      new HumanMessage("again"),
-    ]);
+    const out = _formatMessages([sys("Be terse."), user("hi"), ai("hello"), user("again")]);
     expect(out).toEqual([
       { role: "system", content: "Be terse." },
       { role: "user", content: "hi" },
@@ -24,11 +19,7 @@ describe("formatMessages → Ollama /api/chat messages", () => {
   });
 
   it("preserves multiple system messages as separate entries so the server sees each one", () => {
-    const out = _formatMessages([
-      new SystemMessage("A"),
-      new SystemMessage("B"),
-      new HumanMessage("go"),
-    ]);
+    const out = _formatMessages([sys("A"), sys("B"), user("go")]);
     expect(out).toEqual([
       { role: "system", content: "A" },
       { role: "system", content: "B" },
@@ -36,21 +27,13 @@ describe("formatMessages → Ollama /api/chat messages", () => {
     ]);
   });
 
-  it("maps ToolMessage to 'tool' role — Ollama accepts a tool role natively", () => {
-    const out = _formatMessages([
-      new HumanMessage("read"),
-      new AIMessage("calling tool"),
-      new ToolMessage({ tool_call_id: "1", content: "file data" }),
-    ]);
+  it("maps tool role straight through — Ollama accepts a tool role natively", () => {
+    const out = _formatMessages([user("read"), ai("calling tool"), tool("file data")]);
     expect(out[2]).toEqual({ role: "tool", content: "file data" });
   });
 
   it("skips empty content so blank turns don't reach the server", () => {
-    const out = _formatMessages([
-      new HumanMessage("hi"),
-      new AIMessage(""),
-      new HumanMessage("again"),
-    ]);
+    const out = _formatMessages([user("hi"), ai(""), user("again")]);
     expect(out).toEqual([
       { role: "user", content: "hi" },
       { role: "user", content: "again" },
@@ -58,7 +41,7 @@ describe("formatMessages → Ollama /api/chat messages", () => {
   });
 });
 
-describe("readNdjson → NDJSON streaming parser", () => {
+describe("readNdjson — NDJSON streaming parser", () => {
   function makeStream(parts: string[]): ReadableStream<Uint8Array> {
     return new ReadableStream({
       start(controller) {
@@ -81,10 +64,7 @@ describe("readNdjson → NDJSON streaming parser", () => {
       events.push(ev);
     }
     expect(events).toHaveLength(2);
-    expect(events[0]).toEqual({
-      message: { content: "hello" },
-      done: false,
-    });
+    expect(events[0]).toEqual({ message: { content: "hello" }, done: false });
     expect(events[1]).toEqual({
       message: { content: " world" },
       done: true,
@@ -99,22 +79,15 @@ describe("readNdjson → NDJSON streaming parser", () => {
     for await (const ev of readNdjson(stream)) {
       events.push(ev);
     }
-    expect(events).toEqual([
-      { message: { content: "x" }, done: true },
-    ]);
+    expect(events).toEqual([{ message: { content: "x" }, done: true }]);
   });
 
   it("skips malformed lines so a partial frame mid-stream doesn't poison subsequent parses", async () => {
-    const stream = makeStream([
-      "not-json\n",
-      '{"message":{"content":"ok"},"done":true}\n',
-    ]);
+    const stream = makeStream(["not-json\n", '{"message":{"content":"ok"},"done":true}\n']);
     const events = [];
     for await (const ev of readNdjson(stream)) {
       events.push(ev);
     }
-    expect(events).toEqual([
-      { message: { content: "ok" }, done: true },
-    ]);
+    expect(events).toEqual([{ message: { content: "ok" }, done: true }]);
   });
 });

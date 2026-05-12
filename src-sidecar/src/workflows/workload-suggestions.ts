@@ -4,7 +4,6 @@
 // returns markdown rebalancing suggestions for the sprint. No tools, no
 // checkpoints — same shape as Sprint Retrospective.
 
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { buildModel } from "../models/factory.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
@@ -51,8 +50,8 @@ export async function runWorkloadSuggestions(args: {
   const { text, usage } = await streamLLMText({
     llm,
     messages: [
-      new SystemMessage(SYSTEM_PROMPT),
-      new HumanMessage(buildUserPrompt(args.input.workloadText)),
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: buildUserPrompt(args.input.workloadText) },
     ],
     emit: args.emit,
     workflowId: args.workflowId,

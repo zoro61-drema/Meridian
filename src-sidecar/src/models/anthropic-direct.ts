@@ -1,40 +1,30 @@
-// LangChain BaseChatModel that talks to the Anthropic API directly via
-// the official `@anthropic-ai/sdk` client. Replaces `@langchain/anthropic`
-// (Phase 1 of the LangChain removal) — the adapter shape mirrors the
-// CLI-delegation adapters so workflow callers don't change.
+// Adapter that talks to the Anthropic API directly via the official
+// `@anthropic-ai/sdk` client. Plain class (no LangChain inheritance);
+// exposes the shared `ChatModel` interface from `./types.ts`.
 //
 // Per-call lifecycle:
-//   1. Convert LangChain messages → Anthropic `MessageParam[]`. System
+//   1. Convert `ChatMessage[]` → Anthropic `MessageParam[]`. System
 //      messages collapse into the top-level `system` field; user/
-//      assistant/tool turns become `MessageParam` records.
-//   2. Call `client.messages.stream({ model, max_tokens, system,
-//      messages, thinking? })` and iterate the `RawMessageStreamEvent`
-//      AsyncIterable.
-//   3. Forward `text_delta` content as ChatGenerationChunks. Track
-//      usage incrementally — `message_start.message.usage.input_tokens`
-//      plus cache_creation/read fields up front, then accumulate
+//      assistant/tool turns become MessageParam records.
+//   2. Call `client.messages.stream(...)` and iterate the
+//      `RawMessageStreamEvent` AsyncIterable.
+//   3. Forward `text_delta` events as `{text}` chunks. Track usage
+//      incrementally — `message_start.message.usage.input_tokens`
+//      (plus cache_creation/read) up front, then accumulate
 //      `message_delta.usage.output_tokens` until the stream ends.
-//   4. Emit a final empty chunk carrying `usage_metadata` so streaming
-//      consumers (streamLLMText / streamLLMJson) pick it up off the
-//      terminal chunk.
+//   4. Emit a final empty-text chunk carrying `usage` so consumers
+//      pick up the totals off the terminal frame.
 
-import {
-  AIMessage,
-  AIMessageChunk,
-  type BaseMessage,
-  HumanMessage,
-  SystemMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
-import {
-  BaseChatModel,
-  type BaseChatModelParams,
-} from "@langchain/core/language_models/chat_models";
-import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
-import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs";
 import Anthropic from "@anthropic-ai/sdk";
+import type {
+  ChatMessage,
+  ChatModel,
+  ChatModelStreamOptions,
+  ChatStreamChunk,
+  ChatUsage,
+} from "./types.js";
 
-export interface AnthropicDirectChatModelInput extends BaseChatModelParams {
+export interface AnthropicDirectChatModelInput {
   apiKey: string;
   model: string;
   maxTokens?: number;
@@ -51,14 +41,7 @@ interface MessageStartEventUsage {
   cache_read_input_tokens?: number;
 }
 
-interface UsageTotals {
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  input_token_details: { cache_creation: number; cache_read: number };
-}
-
-export class AnthropicDirectChatModel extends BaseChatModel {
+export class AnthropicDirectChatModel implements ChatModel {
   private apiKey: string;
   private model: string;
   private maxTokens?: number;
@@ -67,7 +50,6 @@ export class AnthropicDirectChatModel extends BaseChatModel {
   private client: Anthropic;
 
   constructor(input: AnthropicDirectChatModelInput) {
-    super(input);
     this.apiKey = input.apiKey;
     this.model = input.model;
     this.maxTokens = input.maxTokens;
@@ -76,70 +58,10 @@ export class AnthropicDirectChatModel extends BaseChatModel {
     this.client = new Anthropic({ apiKey: this.apiKey });
   }
 
-  _llmType(): string {
-    return "anthropic-direct";
-  }
-
-  async _generate(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): Promise<ChatResult> {
-    let text = "";
-    let usage = emptyUsage();
-    for await (const chunk of this.runStream(messages)) {
-      if (chunk.kind === "delta") {
-        text += chunk.text;
-        await runManager?.handleLLMNewToken(chunk.text);
-      } else {
-        usage = chunk.usage;
-      }
-    }
-    return {
-      generations: [
-        {
-          text,
-          message: new AIMessage({
-            content: text,
-            usage_metadata: usage,
-          }),
-        },
-      ],
-      llmOutput: { tokenUsage: usage },
-    };
-  }
-
-  async *_streamResponseChunks(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): AsyncGenerator<ChatGenerationChunk> {
-    let usage = emptyUsage();
-    for await (const chunk of this.runStream(messages)) {
-      if (chunk.kind === "delta") {
-        await runManager?.handleLLMNewToken(chunk.text);
-        yield new ChatGenerationChunk({
-          text: chunk.text,
-          message: new AIMessageChunk({ content: chunk.text }),
-        });
-      } else {
-        usage = chunk.usage;
-      }
-    }
-    yield new ChatGenerationChunk({
-      text: "",
-      message: new AIMessageChunk({
-        content: "",
-        usage_metadata: usage,
-      }),
-    });
-  }
-
-  private async *runStream(
-    messages: BaseMessage[],
-  ): AsyncGenerator<
-    { kind: "delta"; text: string } | { kind: "usage"; usage: UsageTotals }
-  > {
+  async *stream(
+    messages: ChatMessage[],
+    _options?: ChatModelStreamOptions,
+  ): AsyncIterable<ChatStreamChunk> {
     const { system, body } = formatMessages(messages);
     if (body.length === 0) {
       throw new Error(
@@ -147,9 +69,9 @@ export class AnthropicDirectChatModel extends BaseChatModel {
       );
     }
 
-    // `max_tokens` is required by the API; the original adapter let the
-    // SDK pick its default by omitting the field. Replicate that by
-    // passing a generous floor (8192) only when the caller didn't.
+    // `max_tokens` is required by the API. The original LangChain adapter
+    // let the SDK pick its default by omitting the field — preserve that
+    // by passing a generous floor (8192) only when the caller didn't.
     const params = {
       model: this.model,
       max_tokens: this.maxTokens ?? 8192,
@@ -168,9 +90,10 @@ export class AnthropicDirectChatModel extends BaseChatModel {
 
     for await (const event of stream) {
       if (event.type === "message_start") {
-        // `usage` on the start event carries the prompt-side totals (including
-        // cache_*). Older SDK type defs don't list the cache fields on
-        // Usage, but the wire payload includes them — read them defensively.
+        // `usage` on the start event carries the prompt-side totals
+        // (including cache_*). Older SDK type defs don't list the cache
+        // fields on Usage, but the wire payload includes them — read
+        // them defensively.
         const u = event.message.usage as MessageStartEventUsage | undefined;
         inputTokens = u?.input_tokens ?? 0;
         outputTokens = u?.output_tokens ?? 0;
@@ -179,91 +102,48 @@ export class AnthropicDirectChatModel extends BaseChatModel {
       } else if (event.type === "content_block_delta") {
         const delta = event.delta;
         if (delta.type === "text_delta") {
-          yield { kind: "delta", text: delta.text };
+          yield { text: delta.text };
         }
       } else if (event.type === "message_delta") {
         outputTokens = event.usage.output_tokens ?? outputTokens;
       }
     }
 
-    const totalInput = inputTokens + cacheCreation + cacheRead;
-    yield {
-      kind: "usage",
-      usage: {
-        input_tokens: totalInput,
-        output_tokens: outputTokens,
-        total_tokens: totalInput + outputTokens,
-        input_token_details: {
-          cache_creation: cacheCreation,
-          cache_read: cacheRead,
-        },
-      },
+    const usage: ChatUsage = {
+      inputTokens: inputTokens + cacheCreation + cacheRead,
+      outputTokens,
+      cacheCreation,
+      cacheRead,
     };
+    yield { usage };
   }
 }
 
-function emptyUsage(): UsageTotals {
-  return {
-    input_tokens: 0,
-    output_tokens: 0,
-    total_tokens: 0,
-    input_token_details: { cache_creation: 0, cache_read: 0 },
-  };
-}
-
-/** Convert a LangChain message list into Anthropic's
- *  `{system, messages: MessageParam[]}` shape. System messages collapse
- *  into the top-level `system` string; tool messages map to
- *  `tool_result` content blocks attached to a user-role turn. */
-export function formatMessages(messages: BaseMessage[]): {
+/** Convert a `ChatMessage[]` into Anthropic's `{system, messages}` shape.
+ *  System messages collapse into the top-level `system` string; tool
+ *  messages render as user-role text (Anthropic's API has no 'tool' role
+ *  for replayed history). */
+export function formatMessages(messages: ChatMessage[]): {
   system: string;
   body: Anthropic.MessageParam[];
 } {
   const systemParts: string[] = [];
   const body: Anthropic.MessageParam[] = [];
   for (const msg of messages) {
-    const text = messageText(msg);
-    if (msg instanceof SystemMessage) {
+    const text = msg.content;
+    if (msg.role === "system") {
       if (text) systemParts.push(text);
       continue;
     }
-    if (msg instanceof HumanMessage) {
+    if (msg.role === "user") {
       body.push({ role: "user", content: text });
-    } else if (msg instanceof AIMessage) {
+    } else if (msg.role === "assistant") {
       body.push({ role: "assistant", content: text });
-    } else if (msg instanceof ToolMessage) {
-      // No tool-calling roundtrips happen via this adapter (chat
-      // workflows that need tools route through Ollama), but if a
-      // history dump replays a ToolMessage, render it as a user turn
-      // so the API doesn't reject the role.
-      body.push({
-        role: "user",
-        content: `Tool result:\n${text}`,
-      });
+    } else if (msg.role === "tool") {
+      body.push({ role: "user", content: `Tool result:\n${text}` });
     }
   }
-  return {
-    system: systemParts.join("\n\n"),
-    body,
-  };
-}
-
-function messageText(msg: BaseMessage): string {
-  if (typeof msg.content === "string") return msg.content;
-  if (Array.isArray(msg.content)) {
-    return msg.content
-      .map((c) => {
-        if (typeof c === "string") return c;
-        if (typeof c === "object" && c !== null) {
-          const co = c as { type?: string; text?: string };
-          if (co.type === "text" && typeof co.text === "string") return co.text;
-        }
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  return "";
+  return { system: systemParts.join("\n\n"), body };
 }
 
 // Exported for tests.

@@ -5,7 +5,6 @@
 // tools, no checkpoints, no structured-output validation — the frontend
 // renders the result as markdown directly.
 
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { buildModel } from "../models/factory.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
@@ -52,8 +51,8 @@ export async function runSprintRetrospective(args: {
   const { text, usage } = await streamLLMText({
     llm,
     messages: [
-      new SystemMessage(SYSTEM_PROMPT),
-      new HumanMessage(buildUserPrompt(args.input.sprintText)),
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: buildUserPrompt(args.input.sprintText) },
     ],
     emit: args.emit,
     workflowId: args.workflowId,

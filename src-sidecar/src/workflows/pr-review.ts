@@ -7,12 +7,10 @@
 //   - Multi-chunk (large PRs): for each chunk, one CHUNK_SYSTEM call collects
 //     findings; a final SYNTHESIS_SYSTEM call deduplicates and calibrates.
 
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import type { AIMessageChunk } from "@langchain/core/messages";
-import { parsePartialJson } from "@langchain/core/output_parsers";
 import { z } from "zod";
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildModel } from "../models/factory.js";
+import type { ChatModel } from "../models/types.js";
+import { parsePartialJson } from "../lib/partial-json.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
 import { CHUNK_SYSTEM, SYNTHESIS_SYSTEM } from "./pr-review-prompts.js";
 import {
@@ -122,25 +120,6 @@ export interface PrReviewProgress {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function extractText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((b) => (typeof b === "string" ? b : (b as { text?: string }).text ?? ""))
-      .join("");
-  }
-  return "";
-}
-
-function tokenUsage(
-  metadata: { input_tokens?: number; output_tokens?: number } | undefined,
-): { inputTokens: number; outputTokens: number } {
-  return {
-    inputTokens: metadata?.input_tokens ?? 0,
-    outputTokens: metadata?.output_tokens ?? 0,
-  };
-}
-
 function addUsage(
   a: { inputTokens: number; outputTokens: number },
   b: { inputTokens: number; outputTokens: number },
@@ -157,7 +136,7 @@ function addUsage(
  * caller can run schema validation once streaming completes.
  */
 async function streamSynthesis(args: {
-  model: BaseChatModel;
+  model: ChatModel;
   system: string;
   user: string;
   emit?: (event: OutboundEvent) => void;
@@ -175,14 +154,16 @@ async function streamSynthesis(args: {
   // API, Gemini API) that closes the streaming connection, which the server
   // detects and uses to cancel in-flight generation rather than continuing
   // to spend GPU on output the client no longer wants.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stream = (await (model as any).stream(
-    [new SystemMessage(system), new HumanMessage(user)],
+  const stream = model.stream(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
     signal ? { signal } : undefined,
-  )) as AsyncIterable<AIMessageChunk>;
+  );
 
   let raw = "";
-  let accumulated: AIMessageChunk | undefined;
+  let usage = { inputTokens: 0, outputTokens: 0 };
   let lastFlushAt = 0;
   let lastEmittedSize = -1;
   let lastUsageEmitAt = 0;
@@ -213,48 +194,42 @@ async function streamSynthesis(args: {
 
   const tryEmitUsage = () => {
     if (!emit || !workflowId) return;
-    const meta = accumulated?.usage_metadata as
-      | { input_tokens?: number; output_tokens?: number }
-      | undefined;
-    if (!meta) return;
-    const inputTokens = meta.input_tokens ?? 0;
-    const outputTokens = meta.output_tokens ?? 0;
-    if (inputTokens === lastEmittedInput && outputTokens === lastEmittedOutput) {
+    if (
+      usage.inputTokens === lastEmittedInput &&
+      usage.outputTokens === lastEmittedOutput
+    ) {
       return;
     }
     const now = Date.now();
     if (now - lastUsageEmitAt < PARTIAL_FLUSH_MS) return;
     lastUsageEmitAt = now;
-    lastEmittedInput = inputTokens;
-    lastEmittedOutput = outputTokens;
+    lastEmittedInput = usage.inputTokens;
+    lastEmittedOutput = usage.outputTokens;
     emit({
       id: workflowId,
       type: "progress",
       node,
       status: "started",
-      data: { usagePartial: { inputTokens, outputTokens } },
+      data: { usagePartial: { ...usage } },
     });
   };
 
   for await (const chunk of stream) {
-    accumulated = accumulated ? accumulated.concat(chunk) : chunk;
-    const deltaText = extractText(chunk.content);
-    if (deltaText) {
-      raw += deltaText;
+    if (chunk.text) {
+      raw += chunk.text;
       tryFlush(false);
     }
-    tryEmitUsage();
+    if (chunk.usage) {
+      usage = {
+        inputTokens: chunk.usage.inputTokens,
+        outputTokens: chunk.usage.outputTokens,
+      };
+      tryEmitUsage();
+    }
   }
   tryFlush(true);
 
-  const meta = accumulated?.usage_metadata as
-    | { input_tokens?: number; output_tokens?: number }
-    | undefined;
-
-  return {
-    raw,
-    usage: tokenUsage(meta),
-  };
+  return { raw, usage };
 }
 
 function buildSynthesisSystem(skillsBlock?: string | null): string {
@@ -283,7 +258,7 @@ function parseReport(raw: string): {
 
 async function runSinglePass(args: {
   input: PrReviewInput;
-  model: BaseChatModel;
+  model: ChatModel;
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
   signal?: AbortSignal;
@@ -312,7 +287,7 @@ async function runSinglePass(args: {
 
 async function runChunkReview(args: {
   chunk: string;
-  model: BaseChatModel;
+  model: ChatModel;
   signal?: AbortSignal;
 }): Promise<{
   findings: Finding[];
@@ -321,21 +296,28 @@ async function runChunkReview(args: {
   const { chunk, model, signal } = args;
   const user = `Find all review findings in this diff chunk:\n\n${chunk}`;
 
-  // Stream chunk reviews so adapters that surface usage_metadata only via the
-  // streaming path (notably the CLI-delegation adapters, which yield a single
-  // terminal chunk carrying usage_metadata) feed the per-call token totals
-  // back into the workflow's usage accumulator.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stream = (await (model as any).stream(
-    [new SystemMessage(CHUNK_SYSTEM), new HumanMessage(user)],
+  // Stream chunk reviews so adapters that surface usage only via the
+  // terminal chunk (notably the CLI-delegation adapters) feed the per-call
+  // token totals back into the workflow's usage accumulator.
+  const stream = model.stream(
+    [
+      { role: "system", content: CHUNK_SYSTEM },
+      { role: "user", content: user },
+    ],
     signal ? { signal } : undefined,
-  )) as AsyncIterable<AIMessageChunk>;
+  );
 
-  let accumulated: AIMessageChunk | undefined;
+  let raw = "";
+  let usage = { inputTokens: 0, outputTokens: 0 };
   for await (const part of stream) {
-    accumulated = accumulated ? accumulated.concat(part) : part;
+    if (part.text) raw += part.text;
+    if (part.usage) {
+      usage = {
+        inputTokens: part.usage.inputTokens,
+        outputTokens: part.usage.outputTokens,
+      };
+    }
   }
-  const raw = accumulated ? extractText(accumulated.content) : "";
   const cleaned = stripJsonFences(raw);
 
   const findings: Finding[] = [];
@@ -356,13 +338,13 @@ async function runChunkReview(args: {
     );
   }
 
-  return { findings, usage: tokenUsage(accumulated?.usage_metadata) };
+  return { findings, usage };
 }
 
 async function runMultiChunkSynthesis(args: {
   input: PrReviewInput;
   findings: Finding[];
-  model: BaseChatModel;
+  model: ChatModel;
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
   signal?: AbortSignal;

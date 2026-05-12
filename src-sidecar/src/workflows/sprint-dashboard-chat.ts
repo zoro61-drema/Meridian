@@ -4,14 +4,9 @@
 // subscribe to a stream channel for this workflow — it awaits the final
 // reply — so a plain non-streaming invoke is sufficient.
 
-import {
-  AIMessage,
-  HumanMessage,
-  SystemMessage,
-  type BaseMessage,
-} from "@langchain/core/messages";
 import { z } from "zod";
 import { buildModel } from "../models/factory.js";
+import type { ChatMessage } from "../models/types.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
 import { streamLLMText } from "./streaming.js";
 
@@ -65,12 +60,10 @@ export async function runSprintDashboardChat(args: {
     );
   }
 
-  const messages: BaseMessage[] = [
-    new SystemMessage(buildSystemPrompt(args.input.contextText)),
-    ...historyParsed.data.map((m) =>
-      m.role === "user"
-        ? new HumanMessage(m.content)
-        : new AIMessage(m.content),
+  const messages: ChatMessage[] = [
+    { role: "system", content: buildSystemPrompt(args.input.contextText) },
+    ...historyParsed.data.map(
+      (m): ChatMessage => ({ role: m.role, content: m.content }),
     ),
   ];
 

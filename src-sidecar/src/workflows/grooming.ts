@@ -1,4 +1,3 @@
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { buildModel } from "../models/factory.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
@@ -340,7 +339,10 @@ export async function runGroomingWorkflow(args: {
 
   const { raw, usage } = await streamLLMJson({
     llm,
-    messages: [new SystemMessage(system), new HumanMessage(user)],
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
     emit,
     workflowId,
     nodeName: "analyse",

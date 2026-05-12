@@ -7,7 +7,7 @@
 // workflow event channel.
 
 import { z } from "zod";
-import { ChatHistoryItemSchema } from "./chat-with-tools.js";
+import { ChatHistoryItemSchema } from "./chat-history.js";
 
 export const GroomingChatInputSchema = z.object({
   contextText: z.string(),

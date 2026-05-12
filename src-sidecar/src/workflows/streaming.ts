@@ -1,56 +1,14 @@
-// Shared streaming helper for one-shot text-returning workflows.
+// Shared streaming helpers for one-shot text-returning workflows.
 //
-// Wraps `model.stream()` so workflows that previously called `llm.invoke()`
-// can produce the same final string while emitting each token chunk as a
-// `StreamEvent` on the way through. Each text delta is forwarded over the
-// IPC channel, so the frontend can render the response incrementally
-// instead of waiting for the full reply.
-//
-// Workflows that previously did:
-//   const response = await llm.invoke(messages);
-//   const text = extractText(response.content);
-//   const usage = response.usage_metadata;
-// now do:
-//   const { text, usage } = await streamLLMText({ llm, messages, emit, ... });
-// and get the same final string + usage.
+// Wraps `model.stream()` so workflows that previously called
+// `model.invoke()` can produce the same final string while emitting
+// each delta as a `StreamEvent` on the way through.
 
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import type {
-  AIMessageChunk,
-  BaseMessage,
-} from "@langchain/core/messages";
-import { parsePartialJson } from "@langchain/core/output_parsers";
+import type { ChatMessage, ChatModel } from "../models/types.js";
+import { parsePartialJson } from "../lib/partial-json.js";
 import type { OutboundEvent } from "../protocol.js";
 
-/** No-op kept so existing call sites still compile after the
- *  Anthropic OAuth → Claude Code CLI pivot. The OAuth adapter used to
- *  parse `anthropic-ratelimit-*` headers off every response and emit a
- *  snapshot; the CLI delegation path doesn't surface those headers at
- *  all (the CLI handles rate-limit retries itself), so this is a stub.
- *  Callers still install it in a finally block so the helper can grow
- *  a real implementation again later if any provider re-exposes
- *  rate-limit headers we want to forward. */
-export function attachRateLimitForwarding(
-  _emit: ((event: OutboundEvent) => void) | undefined,
-  _workflowId: string | undefined,
-  _nodeName: string | undefined,
-): () => void {
-  return () => {};
-}
-
 const PARTIAL_FLUSH_MS = 80;
-
-function extractText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((b) =>
-        typeof b === "string" ? b : (b as { text?: string }).text ?? "",
-      )
-      .join("");
-  }
-  return "";
-}
 
 export interface StreamLLMTextResult {
   text: string;
@@ -58,131 +16,97 @@ export interface StreamLLMTextResult {
 }
 
 /**
- * Stream a chat model response, forwarding each text delta as a
+ * Stream a chat-model response, forwarding each text delta as a
  * `StreamEvent` while accumulating the full reply for the caller. When
  * `emit` / `workflowId` / `nodeName` are absent the helper still streams
- * (so we get the final usage metadata that LangChain only attaches to the
- * stream's terminal chunk) but does not forward deltas — useful for
- * tests.
+ * (so we get the final usage off the terminal frame) but does not
+ * forward deltas — useful for tests.
  */
 export async function streamLLMText(args: {
-  llm: BaseChatModel;
-  messages: BaseMessage[];
+  llm: ChatModel;
+  messages: ChatMessage[];
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
   nodeName?: string;
+  signal?: AbortSignal;
 }): Promise<StreamLLMTextResult> {
-  const { llm, messages, emit, workflowId, nodeName } = args;
-  const detachRateLimits = attachRateLimitForwarding(emit, workflowId, nodeName);
-  try {
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stream = (await (llm as any).stream(
-    messages,
-  )) as AsyncIterable<AIMessageChunk>;
+  const { llm, messages, emit, workflowId, nodeName, signal } = args;
 
   let text = "";
-  let accumulated: AIMessageChunk | undefined;
+  let usage = { inputTokens: 0, outputTokens: 0 };
   let lastUsageEmitAt = 0;
   let lastEmittedInput = -1;
   let lastEmittedOutput = -1;
 
-  const tryEmitUsage = () => {
+  const maybeEmitUsage = () => {
     if (!emit || !workflowId || !nodeName) return;
-    const meta = accumulated?.usage_metadata as
-      | { input_tokens?: number; output_tokens?: number }
-      | undefined;
-    if (!meta) return;
-    const inputTokens = meta.input_tokens ?? 0;
-    const outputTokens = meta.output_tokens ?? 0;
-    // Skip emits when the running total hasn't moved since the last
-    // event we forwarded — providers occasionally re-attach the same
-    // usage_metadata to multiple chunks.
-    if (inputTokens === lastEmittedInput && outputTokens === lastEmittedOutput) {
+    if (
+      usage.inputTokens === lastEmittedInput &&
+      usage.outputTokens === lastEmittedOutput
+    ) {
       return;
     }
     const now = Date.now();
     if (now - lastUsageEmitAt < PARTIAL_FLUSH_MS) return;
     lastUsageEmitAt = now;
-    lastEmittedInput = inputTokens;
-    lastEmittedOutput = outputTokens;
+    lastEmittedInput = usage.inputTokens;
+    lastEmittedOutput = usage.outputTokens;
     emit({
       id: workflowId,
       type: "progress",
       node: nodeName,
       status: "started",
-      data: { usagePartial: { inputTokens, outputTokens } },
+      data: { usagePartial: { ...usage } },
     });
   };
 
-  for await (const chunk of stream) {
-    accumulated = accumulated ? accumulated.concat(chunk) : chunk;
-    const delta = extractText(chunk.content);
-    if (delta) {
-      text += delta;
+  for await (const chunk of llm.stream(messages, signal ? { signal } : undefined)) {
+    if (chunk.text) {
+      text += chunk.text;
       if (emit && workflowId && nodeName) {
-        emit({
-          id: workflowId,
-          type: "stream",
-          node: nodeName,
-          delta,
-        });
+        emit({ id: workflowId, type: "stream", node: nodeName, delta: chunk.text });
       }
     }
-    tryEmitUsage();
+    if (chunk.usage) {
+      usage = {
+        inputTokens: chunk.usage.inputTokens,
+        outputTokens: chunk.usage.outputTokens,
+      };
+      maybeEmitUsage();
+    }
   }
 
-  const meta = accumulated?.usage_metadata as
-    | { input_tokens?: number; output_tokens?: number }
-    | undefined;
-
-  return {
-    text,
-    usage: {
-      inputTokens: meta?.input_tokens ?? 0,
-      outputTokens: meta?.output_tokens ?? 0,
-    },
-  };
-  } finally {
-    detachRateLimits();
-  }
+  return { text, usage };
 }
 
 export interface StreamLLMJsonResult {
-  /** Final concatenated raw text — caller is responsible for validating it
-   *  against a schema (Zod) once streaming completes. */
+  /** Final concatenated raw text — caller is responsible for validating
+   *  it against a schema (Zod) once streaming completes. */
   raw: string;
   usage: { inputTokens: number; outputTokens: number };
 }
 
 /**
- * Stream a chat model response that produces a JSON document, emitting
- * incremental partial-parsed objects as `progress` events while the JSON
- * tokens arrive. The deepest valid partial parse is sent on each flush so
- * the frontend can render fields as they fill in.
+ * Stream a chat-model response that produces a JSON document, emitting
+ * incremental partial-parsed objects as `progress` events while the
+ * tokens arrive. The deepest valid partial parse is sent on each flush.
  *
  * `cleanText` is run on the accumulated raw text before parsePartialJson —
  * use it to strip code fences or sanitise common model glitches.
  */
 export async function streamLLMJson(args: {
-  llm: BaseChatModel;
-  messages: BaseMessage[];
+  llm: ChatModel;
+  messages: ChatMessage[];
   emit?: (event: OutboundEvent) => void;
   workflowId?: string;
   nodeName?: string;
   cleanText?: (raw: string) => string;
+  signal?: AbortSignal;
 }): Promise<StreamLLMJsonResult> {
-  const { llm, messages, emit, workflowId, nodeName, cleanText } = args;
-  const detachRateLimits = attachRateLimitForwarding(emit, workflowId, nodeName);
-  try {
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stream = (await (llm as any).stream(
-    messages,
-  )) as AsyncIterable<AIMessageChunk>;
+  const { llm, messages, emit, workflowId, nodeName, cleanText, signal } = args;
 
   let raw = "";
-  let accumulated: AIMessageChunk | undefined;
+  let usage = { inputTokens: 0, outputTokens: 0 };
   let lastFlushAt = 0;
   let lastEmittedSize = -1;
   let lastUsageEmitAt = 0;
@@ -211,58 +135,42 @@ export async function streamLLMJson(args: {
     });
   };
 
-  // Emit running input/output token counts as the model streams so the
-  // panel's TokenUsageBadge can update live instead of staying frozen
-  // until the call's final usage lands. Throttled the same as partial
-  // JSON flushes to avoid event-channel chatter.
-  const tryEmitUsage = () => {
+  const maybeEmitUsage = () => {
     if (!emit || !workflowId || !nodeName) return;
-    const meta = accumulated?.usage_metadata as
-      | { input_tokens?: number; output_tokens?: number }
-      | undefined;
-    if (!meta) return;
-    const inputTokens = meta.input_tokens ?? 0;
-    const outputTokens = meta.output_tokens ?? 0;
-    if (inputTokens === lastEmittedInput && outputTokens === lastEmittedOutput) {
+    if (
+      usage.inputTokens === lastEmittedInput &&
+      usage.outputTokens === lastEmittedOutput
+    ) {
       return;
     }
     const now = Date.now();
     if (now - lastUsageEmitAt < PARTIAL_FLUSH_MS) return;
     lastUsageEmitAt = now;
-    lastEmittedInput = inputTokens;
-    lastEmittedOutput = outputTokens;
+    lastEmittedInput = usage.inputTokens;
+    lastEmittedOutput = usage.outputTokens;
     emit({
       id: workflowId,
       type: "progress",
       node: nodeName,
       status: "started",
-      data: { usagePartial: { inputTokens, outputTokens } },
+      data: { usagePartial: { ...usage } },
     });
   };
 
-  for await (const chunk of stream) {
-    accumulated = accumulated ? accumulated.concat(chunk) : chunk;
-    const delta = extractText(chunk.content);
-    if (delta) {
-      raw += delta;
+  for await (const chunk of llm.stream(messages, signal ? { signal } : undefined)) {
+    if (chunk.text) {
+      raw += chunk.text;
       tryFlush(false);
     }
-    tryEmitUsage();
+    if (chunk.usage) {
+      usage = {
+        inputTokens: chunk.usage.inputTokens,
+        outputTokens: chunk.usage.outputTokens,
+      };
+      maybeEmitUsage();
+    }
   }
   tryFlush(true);
 
-  const meta = accumulated?.usage_metadata as
-    | { input_tokens?: number; output_tokens?: number }
-    | undefined;
-
-  return {
-    raw,
-    usage: {
-      inputTokens: meta?.input_tokens ?? 0,
-      outputTokens: meta?.output_tokens ?? 0,
-    },
-  };
-  } finally {
-    detachRateLimits();
-  }
+  return { raw, usage };
 }

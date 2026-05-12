@@ -13,7 +13,6 @@
 // they have no local execution surface; for them this stays a blind
 // one-shot prediction from the ticket text.
 
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { buildModel } from "../models/factory.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
@@ -66,8 +65,11 @@ export async function runGroomingFileProbe(args: {
   const { text, usage } = await streamLLMText({
     llm,
     messages: [
-      new SystemMessage(SYSTEM_PROMPT),
-      new HumanMessage(`Identify relevant files for this ticket:\n\n${args.input.ticketText}`),
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Identify relevant files for this ticket:\n\n${args.input.ticketText}`,
+      },
     ],
   });
   return { markdown: text, usage };

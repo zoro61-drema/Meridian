@@ -1,62 +1,42 @@
-// LangChain BaseChatModel that delegates to the locally-installed
-// `@google/gemini-cli` (`gemini -p`) instead of authenticating against
-// Google directly.
+// Adapter that delegates to the locally-installed `@google/gemini-cli`
+// (`gemini -p`) instead of authenticating against Google directly.
 //
 // Replaces the previous CodeAssist OAuth adapter — that one impersonated
 // the official Cloud Code / Android Studio Gemini integration against
 // `cloudcode-pa.googleapis.com/v1internal:generateContent`, which is
 // explicitly forbidden by Gemini CLI's own TOS (the "OpenClaw" example
 // quoted in their license-and-privacy doc). The shell-out pattern is
-// the sanctioned headless-mode recipe; auth lives in the user's gemini-
-// cli install (personal Google OAuth via "Sign in with Google" → free
-// Gemini Code Assist tier, or GEMINI_API_KEY for AI Studio, or Vertex
-// service-account / ADC) and Meridian never sees credentials.
+// the sanctioned headless-mode recipe; auth lives in the user's
+// gemini-cli install (personal Google OAuth via "Sign in with Google" →
+// free Gemini Code Assist tier, or GEMINI_API_KEY for AI Studio, or
+// Vertex service-account / ADC) and Meridian never sees credentials.
 //
 // Headless mode reference: https://geminicli.com/docs/cli/headless/
 //
 // Per-call lifecycle:
-//   1. Convert LangChain messages → single prompt text. Gemini CLI's
-//      `-p` doesn't have a dedicated --system-prompt flag, so system
-//      messages are inlined at the head of the prompt under a heading.
+//   1. Convert `ChatMessage[]` → single prompt text. Gemini CLI has no
+//      separate --system-prompt flag, so system messages are inlined at
+//      the head of the prompt under a heading.
 //   2. Spawn `gemini -p "<prompt>" --output-format json --model <id>`.
 //      The `json` envelope returns `{ response, stats, error? }` in a
 //      single JSON object once the model is done — simpler and more
 //      stable than stream-json (which has known regression reports in
 //      issue #9009 and an open feature gap on schema constraint #8022).
-//   3. Parse the response, extract usage stats, emit text + usage.
-//      For streaming workflows we still call _stream and yield the
-//      entire response in a single chunk at the end — that satisfies
-//      LangChain's streaming protocol but the UI sees the text arrive
-//      in one burst rather than token-by-token.
-//
-// Tool calling: not supported from the embedder. gemini-cli loads tools
-// from MCP servers configured in ~/.gemini/settings.json — there's no
-// command-line surface for ad-hoc tool definitions. Same architectural
-// choice as Claude Code delegation: Meridian's surviving workflows
-// either don't bind tools or route them through Ollama.
-//
-// Structured output: gemini-cli has no --json-schema flag (issue #8022
-// is the open feature request). Callers that want JSON output prompt
-// for it and validate with Zod after parsing — which is what Meridian's
-// workflows already do, so no change required.
+//   3. Parse the response, extract usage stats, emit text + usage in
+//      one go (the CLI doesn't expose intermediate text chunks via the
+//      json envelope, so streaming consumers see the whole reply land
+//      as a single chunk).
 
 import { spawn } from "node:child_process";
-import {
-  AIMessage,
-  AIMessageChunk,
-  type BaseMessage,
-  HumanMessage,
-  SystemMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
-import {
-  BaseChatModel,
-  type BaseChatModelParams,
-} from "@langchain/core/language_models/chat_models";
-import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
-import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs";
+import type {
+  ChatMessage,
+  ChatModel,
+  ChatModelStreamOptions,
+  ChatStreamChunk,
+  ChatUsage,
+} from "./types.js";
 
-export interface GeminiCliChatModelInput extends BaseChatModelParams {
+export interface GeminiCliChatModelInput {
   /** Model id passed to `gemini --model` (e.g. `gemini-2.5-flash`,
    *  `gemini-2.5-pro`). The CLI also accepts the `*-latest` aliases. */
   model: string;
@@ -91,70 +71,29 @@ interface GeminiJsonEnvelope {
   error?: { message?: string } | string;
 }
 
-export class GeminiCliChatModel extends BaseChatModel {
+export class GeminiCliChatModel implements ChatModel {
   private model: string;
   private geminiBinary: string;
   private cwd?: string;
 
   constructor(input: GeminiCliChatModelInput) {
-    super(input);
     this.model = input.model;
     this.geminiBinary = input.geminiBinary ?? "gemini";
     this.cwd = input.cwd;
   }
 
-  _llmType(): string {
-    return "gemini-cli";
-  }
-
-  async _generate(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): Promise<ChatResult> {
+  async *stream(
+    messages: ChatMessage[],
+    _options?: ChatModelStreamOptions,
+  ): AsyncIterable<ChatStreamChunk> {
     const { text, usage } = await this.runCli(messages);
-    await runManager?.handleLLMNewToken(text);
-    return {
-      generations: [
-        {
-          text,
-          message: new AIMessage({
-            content: text,
-            usage_metadata: usage,
-          }),
-        },
-      ],
-      llmOutput: { tokenUsage: usage },
-    };
+    if (text) yield { text };
+    yield { usage };
   }
 
-  async *_streamResponseChunks(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): AsyncGenerator<ChatGenerationChunk> {
-    const { text, usage } = await this.runCli(messages);
-    if (text) {
-      await runManager?.handleLLMNewToken(text);
-      yield new ChatGenerationChunk({
-        text,
-        message: new AIMessageChunk({ content: text }),
-      });
-    }
-    // Final empty chunk carrying usage so the workflow's accumulator
-    // picks it up via the usage_metadata path on the terminal chunk.
-    yield new ChatGenerationChunk({
-      text: "",
-      message: new AIMessageChunk({
-        content: "",
-        usage_metadata: usage,
-      }),
-    });
-  }
-
-  private async runCli(messages: BaseMessage[]): Promise<{
+  private async runCli(messages: ChatMessage[]): Promise<{
     text: string;
-    usage: ReturnType<typeof emptyUsage>;
+    usage: ChatUsage;
   }> {
     const prompt = formatMessages(messages);
     if (!prompt) {
@@ -215,11 +154,11 @@ export class GeminiCliChatModel extends BaseChatModel {
 
 export function parseGeminiOutput(stdout: string): {
   text: string;
-  usage: ReturnType<typeof emptyUsage>;
+  usage: ChatUsage;
 } {
   const trimmed = stdout.trim();
   if (!trimmed) {
-    return { text: "", usage: emptyUsage() };
+    return { text: "", usage: { inputTokens: 0, outputTokens: 0 } };
   }
   let envelope: GeminiJsonEnvelope;
   try {
@@ -228,9 +167,8 @@ export function parseGeminiOutput(stdout: string): {
     // If the CLI emitted something other than a single JSON object
     // (e.g. plain text output because the --output-format flag was
     // ignored in a CLI version we haven't pinned against), fall back
-    // to surfacing the raw stdout as the response so the workflow
-    // can still do something useful with it.
-    return { text: trimmed, usage: emptyUsage() };
+    // to surfacing the raw stdout as the response.
+    return { text: trimmed, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
   if (envelope.error) {
@@ -243,54 +181,36 @@ export function parseGeminiOutput(stdout: string): {
 
   const text = envelope.response ?? "";
   const tokens = envelope.stats?.tokens;
-  const inputTokens =
-    tokens?.input ?? tokens?.promptTokenCount ?? 0;
-  const outputTokens =
-    tokens?.output ?? tokens?.candidatesTokenCount ?? 0;
-  const totalTokens =
-    tokens?.total ?? tokens?.totalTokenCount ?? inputTokens + outputTokens;
+  const inputTokens = tokens?.input ?? tokens?.promptTokenCount ?? 0;
+  const outputTokens = tokens?.output ?? tokens?.candidatesTokenCount ?? 0;
 
   return {
     text,
-    usage: {
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      total_tokens: totalTokens,
-      input_token_details: { cache_creation: 0, cache_read: 0 },
-    },
+    usage: { inputTokens, outputTokens },
   };
 }
 
-function emptyUsage() {
-  return {
-    input_tokens: 0,
-    output_tokens: 0,
-    total_tokens: 0,
-    input_token_details: { cache_creation: 0, cache_read: 0 },
-  };
-}
-
-/** Build a single prompt string from a LangChain message list. Gemini CLI
- *  has no separate --system-prompt flag, so system messages prefix the
- *  prompt under an explicit heading; subsequent user/assistant/tool turns
- *  are joined with role labels (first non-system human turn unlabelled
- *  for clean single-turn prompts). */
-export function formatMessages(messages: BaseMessage[]): string {
+/** Build a single prompt string from a `ChatMessage[]`. Gemini CLI has
+ *  no separate --system-prompt flag, so system messages prefix the
+ *  prompt under an explicit heading; subsequent user/assistant/tool
+ *  turns are joined with role labels (first non-system human turn
+ *  unlabelled for clean single-turn prompts). */
+export function formatMessages(messages: ChatMessage[]): string {
   const systemParts: string[] = [];
   const turns: string[] = [];
   let turnIndex = 0;
   for (const msg of messages) {
-    const text = messageText(msg);
+    const text = msg.content;
     if (!text) continue;
-    if (msg instanceof SystemMessage) {
+    if (msg.role === "system") {
       systemParts.push(text);
-    } else if (msg instanceof HumanMessage) {
+    } else if (msg.role === "user") {
       turns.push(turnIndex === 0 ? text : `User:\n${text}`);
       turnIndex++;
-    } else if (msg instanceof AIMessage) {
+    } else if (msg.role === "assistant") {
       turns.push(`Assistant:\n${text}`);
       turnIndex++;
-    } else if (msg instanceof ToolMessage) {
+    } else if (msg.role === "tool") {
       turns.push(`Tool result:\n${text}`);
       turnIndex++;
     }
@@ -299,24 +219,6 @@ export function formatMessages(messages: BaseMessage[]): string {
   if (systemParts.length === 0) return body;
   const system = systemParts.join("\n\n");
   return `System instructions:\n${system}\n\n---\n\n${body}`;
-}
-
-function messageText(msg: BaseMessage): string {
-  if (typeof msg.content === "string") return msg.content;
-  if (Array.isArray(msg.content)) {
-    return msg.content
-      .map((c) => {
-        if (typeof c === "string") return c;
-        if (typeof c === "object" && c !== null) {
-          const co = c as { type?: string; text?: string };
-          if (co.type === "text" && typeof co.text === "string") return co.text;
-        }
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  return "";
 }
 
 // Exported for tests.

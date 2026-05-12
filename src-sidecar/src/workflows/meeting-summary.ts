@@ -6,7 +6,6 @@
 // text and returns it via the same `{ markdown }` shape used by other
 // single-shot workflows.
 
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { buildModel } from "../models/factory.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
@@ -85,8 +84,8 @@ export async function runMeetingSummary(args: {
   const { raw, usage } = await streamLLMJson({
     llm,
     messages: [
-      new SystemMessage(SYSTEM_PROMPT),
-      new HumanMessage(buildUserPrompt(args.input)),
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: buildUserPrompt(args.input) },
     ],
     emit: args.emit,
     workflowId: args.workflowId,

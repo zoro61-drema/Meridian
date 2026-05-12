@@ -1,7 +1,6 @@
-// LangChain BaseChatModel that talks to a local Ollama server directly
-// over its native HTTP API. Replaces `@langchain/ollama` (Phase 1 of the
-// LangChain removal) — the adapter shape mirrors the CLI-delegation
-// adapters so workflow callers don't change.
+// Adapter that talks to a local Ollama server directly over its native
+// HTTP API. Plain class (no LangChain inheritance); exposes the shared
+// `ChatModel` interface from `./types.ts`.
 //
 // Ollama's chat endpoint:
 //   POST {baseUrl}/api/chat
@@ -10,39 +9,18 @@
 //     { message: { role, content }, done: boolean,
 //       prompt_eval_count?, eval_count?, total_duration?, ... }
 //   The final chunk (done=true) carries the prompt/output token counts.
-//
-// `think: true` is forwarded for models that have a thinking mode
-// (Qwen3, DeepSeek-R1, …). Older Ollama versions and non-thinking
-// models ignore the flag. When thinking is on, recent Ollama versions
-// return reasoning under a separate `message.thinking` field; we don't
-// surface it as text — only the final answer's `content` is streamed.
 
-import {
-  AIMessage,
-  AIMessageChunk,
-  type BaseMessage,
-  HumanMessage,
-  SystemMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
-import {
-  BaseChatModel,
-  type BaseChatModelParams,
-} from "@langchain/core/language_models/chat_models";
-import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
-import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs";
+import type {
+  ChatMessage,
+  ChatModel,
+  ChatModelStreamOptions,
+  ChatStreamChunk,
+} from "./types.js";
 
-export interface OllamaDirectChatModelInput extends BaseChatModelParams {
+export interface OllamaDirectChatModelInput {
   baseUrl: string;
   model: string;
   think?: boolean;
-}
-
-interface UsageTotals {
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  input_token_details: { cache_creation: number; cache_read: number };
 }
 
 interface OllamaChunk {
@@ -58,83 +36,21 @@ interface OllamaChatMessage {
   content: string;
 }
 
-export class OllamaDirectChatModel extends BaseChatModel {
+export class OllamaDirectChatModel implements ChatModel {
   private baseUrl: string;
   private model: string;
   private think?: boolean;
 
   constructor(input: OllamaDirectChatModelInput) {
-    super(input);
-    // Normalise: strip trailing slash so we can join `/api/chat` cleanly.
     this.baseUrl = input.baseUrl.replace(/\/+$/, "");
     this.model = input.model;
     this.think = input.think;
   }
 
-  _llmType(): string {
-    return "ollama-direct";
-  }
-
-  async _generate(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): Promise<ChatResult> {
-    let text = "";
-    let usage = emptyUsage();
-    for await (const chunk of this.runStream(messages)) {
-      if (chunk.kind === "delta") {
-        text += chunk.text;
-        await runManager?.handleLLMNewToken(chunk.text);
-      } else {
-        usage = chunk.usage;
-      }
-    }
-    return {
-      generations: [
-        {
-          text,
-          message: new AIMessage({
-            content: text,
-            usage_metadata: usage,
-          }),
-        },
-      ],
-      llmOutput: { tokenUsage: usage },
-    };
-  }
-
-  async *_streamResponseChunks(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): AsyncGenerator<ChatGenerationChunk> {
-    let usage = emptyUsage();
-    for await (const chunk of this.runStream(messages)) {
-      if (chunk.kind === "delta") {
-        await runManager?.handleLLMNewToken(chunk.text);
-        yield new ChatGenerationChunk({
-          text: chunk.text,
-          message: new AIMessageChunk({ content: chunk.text }),
-        });
-      } else {
-        usage = chunk.usage;
-      }
-    }
-    yield new ChatGenerationChunk({
-      text: "",
-      message: new AIMessageChunk({
-        content: "",
-        usage_metadata: usage,
-      }),
-    });
-  }
-
-  private async *runStream(
-    messages: BaseMessage[],
-  ): AsyncGenerator<
-    { kind: "delta"; text: string } | { kind: "usage"; usage: UsageTotals }
-  > {
+  async *stream(
+    messages: ChatMessage[],
+    options?: ChatModelStreamOptions,
+  ): AsyncIterable<ChatStreamChunk> {
     const body = {
       model: this.model,
       messages: formatMessages(messages),
@@ -146,6 +62,7 @@ export class OllamaDirectChatModel extends BaseChatModel {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
 
     if (!response.ok || !response.body) {
@@ -164,7 +81,7 @@ export class OllamaDirectChatModel extends BaseChatModel {
       }
       const text = event.message?.content;
       if (typeof text === "string" && text.length > 0) {
-        yield { kind: "delta", text };
+        yield { text };
       }
       if (event.done) {
         inputTokens = event.prompt_eval_count ?? 0;
@@ -172,25 +89,8 @@ export class OllamaDirectChatModel extends BaseChatModel {
       }
     }
 
-    yield {
-      kind: "usage",
-      usage: {
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        total_tokens: inputTokens + outputTokens,
-        input_token_details: { cache_creation: 0, cache_read: 0 },
-      },
-    };
+    yield { usage: { inputTokens, outputTokens } };
   }
-}
-
-function emptyUsage(): UsageTotals {
-  return {
-    input_tokens: 0,
-    output_tokens: 0,
-    total_tokens: 0,
-    input_token_details: { cache_creation: 0, cache_read: 0 },
-  };
 }
 
 /** Parse a fetch response body's ReadableStream as newline-delimited JSON. */
@@ -213,14 +113,12 @@ export async function* readNdjson(
           try {
             yield JSON.parse(line) as OllamaChunk;
           } catch {
-            // Skip malformed lines (e.g. partial frames on early
-            // disconnects); the next valid frame will still parse.
+            // Skip malformed lines.
           }
         }
         nl = buffer.indexOf("\n");
       }
     }
-    // Flush any trailing data without a terminating newline.
     const tail = buffer.trim();
     if (tail) {
       try {
@@ -234,44 +132,15 @@ export async function* readNdjson(
   }
 }
 
-/** Convert a LangChain message list into Ollama's chat message format.
- *  Roles map 1:1 except ToolMessage → 'tool'. Ollama accepts a 'tool'
- *  role; older models without tool support will just see it as a system-
- *  ish hint, which is fine for the no-tools chat path. */
-export function formatMessages(messages: BaseMessage[]): OllamaChatMessage[] {
+/** Convert a `ChatMessage[]` into Ollama's chat message format. Ollama
+ *  accepts a 'tool' role natively. */
+export function formatMessages(messages: ChatMessage[]): OllamaChatMessage[] {
   const out: OllamaChatMessage[] = [];
   for (const msg of messages) {
-    const text = messageText(msg);
-    if (!text) continue;
-    if (msg instanceof SystemMessage) {
-      out.push({ role: "system", content: text });
-    } else if (msg instanceof HumanMessage) {
-      out.push({ role: "user", content: text });
-    } else if (msg instanceof AIMessage) {
-      out.push({ role: "assistant", content: text });
-    } else if (msg instanceof ToolMessage) {
-      out.push({ role: "tool", content: text });
-    }
+    if (!msg.content) continue;
+    out.push({ role: msg.role, content: msg.content });
   }
   return out;
-}
-
-function messageText(msg: BaseMessage): string {
-  if (typeof msg.content === "string") return msg.content;
-  if (Array.isArray(msg.content)) {
-    return msg.content
-      .map((c) => {
-        if (typeof c === "string") return c;
-        if (typeof c === "object" && c !== null) {
-          const co = c as { type?: string; text?: string };
-          if (co.type === "text" && typeof co.text === "string") return co.text;
-        }
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  return "";
 }
 
 // Exported for tests.

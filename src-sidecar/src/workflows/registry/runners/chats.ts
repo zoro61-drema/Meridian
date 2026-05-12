@@ -1,10 +1,15 @@
-// Streaming-chat-with-tools runners (PR review chat, grooming chat). Both
-// follow the same shape: validate input + history, drive
-// runStreamingChatWithTools with the workflow-specific system prompt,
-// emit progress + result events.
+// Streaming-chat runners (PR Review chat, Grooming chat). Both follow
+// the same shape: validate input + history, drive a streaming chat with
+// the workflow-specific system prompt, emit progress + result events.
+//
+// Neither chat binds tools. CLI-delegation providers (Claude Code,
+// Gemini CLI, Copilot CLI) read/glob/grep via their own built-in tools
+// when spawned with cwd=worktreePath; API-key providers get a tool-less
+// chat. The pivot to this no-bindTools shape landed 2026-05-12.
 
+import { buildModel } from "../../../models/factory.js";
+import type { ChatMessage } from "../../../models/types.js";
 import type { ModelSelection } from "../../../protocol.js";
-import { runStreamingChat } from "../../chat-with-tools.js";
 import {
   PrReviewChatInputSchema,
   PrReviewChatHistorySchema,
@@ -15,7 +20,36 @@ import {
   GroomingChatHistorySchema,
   buildGroomingChatSystemPrompt,
 } from "../../grooming-chat.js";
+import { streamLLMText } from "../../streaming.js";
 import type { Emitter } from "../types.js";
+
+async function runChatStreaming(args: {
+  workflowId: string;
+  model: ModelSelection;
+  systemPrompt: string;
+  history: ReadonlyArray<{ role: "user" | "assistant"; content: string }>;
+  emit: Emitter;
+  worktreePath?: string;
+  signal: AbortSignal;
+}): Promise<{ reply: string; usage: { inputTokens: number; outputTokens: number } }> {
+  const { workflowId, model, systemPrompt, history, emit, worktreePath, signal } = args;
+  const llm = buildModel(model, { worktreePath });
+  const messages: ChatMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...history.map(
+      (m): ChatMessage => ({ role: m.role, content: m.content }),
+    ),
+  ];
+  const { text, usage } = await streamLLMText({
+    llm,
+    messages,
+    emit,
+    workflowId,
+    nodeName: "reply",
+    signal,
+  });
+  return { reply: text, usage };
+}
 
 // ── PR Review Chat runner ────────────────────────────────────────────────────
 
@@ -27,7 +61,7 @@ export async function runPrReviewChatWorkflow(args: {
   signal: AbortSignal;
   worktreePath?: string;
 }): Promise<void> {
-  const { workflowId, input, model, emit, worktreePath } = args;
+  const { workflowId, input, model, emit, signal, worktreePath } = args;
 
   const parsed = PrReviewChatInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -52,19 +86,16 @@ export async function runPrReviewChatWorkflow(args: {
 
   emit({ id: workflowId, type: "progress", node: "reply", status: "started" });
 
-  // No tools bound. CLI-delegation providers (Claude Code, Gemini CLI,
-  // Copilot CLI) read/glob/grep via their own built-in tools when spawned
-  // with cwd=worktreePath; API-key providers get a tool-less chat.
   let result: { reply: string; usage: { inputTokens: number; outputTokens: number } };
   try {
-    result = await runStreamingChat({
+    result = await runChatStreaming({
       workflowId,
       model,
       systemPrompt: buildPrReviewChatSystemPrompt(parsed.data),
       history: historyParsed.data,
       emit,
-      nodeName: "reply",
       worktreePath,
+      signal,
     });
   } catch (err) {
     emit({
@@ -81,10 +112,7 @@ export async function runPrReviewChatWorkflow(args: {
     id: workflowId,
     type: "result",
     output: { reply: result.reply },
-    usage: {
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-    },
+    usage: result.usage,
   });
 }
 
@@ -98,7 +126,7 @@ export async function runGroomingChatWorkflow(args: {
   signal: AbortSignal;
   worktreePath?: string;
 }): Promise<void> {
-  const { workflowId, input, model, emit, worktreePath } = args;
+  const { workflowId, input, model, emit, signal, worktreePath } = args;
 
   const parsed = GroomingChatInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -123,22 +151,16 @@ export async function runGroomingChatWorkflow(args: {
 
   emit({ id: workflowId, type: "progress", node: "reply", status: "started" });
 
-  // Grooming chat doesn't bind repo tools — its job is pure
-  // conversational refinement of an existing JSON edits payload using
-  // the engineer's answers. The repo context arrives in the system
-  // prompt from the earlier file-probe stage. Skipping tool binding
-  // means the workflow works with any provider, including CLI
-  // delegation paths (Claude Code, Gemini CLI, Copilot CLI).
   let result: { reply: string; usage: { inputTokens: number; outputTokens: number } };
   try {
-    result = await runStreamingChat({
+    result = await runChatStreaming({
       workflowId,
       model,
       systemPrompt: buildGroomingChatSystemPrompt(parsed.data),
       history: historyParsed.data,
       emit,
-      nodeName: "reply",
       worktreePath,
+      signal,
     });
   } catch (err) {
     emit({
@@ -155,10 +177,6 @@ export async function runGroomingChatWorkflow(args: {
     id: workflowId,
     type: "result",
     output: { reply: result.reply },
-    usage: {
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-    },
+    usage: result.usage,
   });
 }
-

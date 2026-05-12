@@ -6,7 +6,7 @@
 // answering. Streams reply tokens live to the frontend.
 
 import { z } from "zod";
-import { ChatHistoryItemSchema } from "./chat-with-tools.js";
+import { ChatHistoryItemSchema } from "./chat-history.js";
 
 export const PrReviewChatInputSchema = z.object({
   contextText: z.string(),

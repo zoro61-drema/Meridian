@@ -1,150 +1,72 @@
-// LangChain BaseChatModel that delegates to the locally-installed GitHub
-// Copilot CLI (`copilot -p`) instead of authenticating against GitHub
-// directly.
+// Adapter that delegates to the locally-installed GitHub Copilot CLI
+// (`copilot -p`) instead of authenticating against GitHub directly.
 //
 // Background: GitHub shipped a Copilot CLI in late 2025 with a
 // programmatic `-p`/`--prompt` invocation pattern that mirrors what
 // `claude -p` and `gemini -p` already do — the user signs in once with
 // `copilot login` (or sets GITHUB_TOKEN / COPILOT_GITHUB_TOKEN) and the
 // CLI handles auth locally. Meridian never sees credentials; we just
-// spawn the binary per call. This is the sanctioned headless-mode
-// recipe documented by GitHub, parallel to the other two CLI adapters.
+// spawn the binary per call.
 //
 // Programmatic reference:
 //   https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference
 //
 // Per-call lifecycle:
-//   1. Convert LangChain messages → single prompt text. Copilot CLI has
-//      no separate --system-prompt flag, so system messages are inlined
-//      at the head of the prompt under an explicit heading (same shape
+//   1. Convert `ChatMessage[]` → single prompt text. Copilot CLI has no
+//      separate --system-prompt flag, so system messages are inlined at
+//      the head of the prompt under an explicit heading (same shape
 //      Gemini adapter uses).
 //   2. Spawn `copilot -p "<prompt>" --model <id> -s --no-ask-user
-//      --allow-all-tools`. The `-s/--silent` flag suppresses stats and
-//      decoration so stdout is the pure agent reply — simplest stable
-//      contract across CLI versions. `--no-ask-user` and
-//      `--allow-all-tools` keep the run fully headless (no interactive
-//      approval prompts mid-stream).
+//      --allow-all-tools`.
 //   3. Read stdout to completion; return it as the assistant text.
-//      Token usage isn't surfaced via `-s` — return zero counts. GitHub
-//      Copilot is flat-rate subscription billing on the user's side,
-//      so the missing per-call counters don't affect anything except
-//      Meridian's debug panel, which already tolerates zero usage.
-//
-// CLI volatility note: GitHub removed `--headless --stdio` (the older
-// programmatic interface used by `@github/copilot-sdk`) without
-// deprecation in Feb 2026. The `-p`-based path used here is the
-// currently sanctioned replacement, but the CLI's programmatic surface
-// has demonstrably moved without notice — bump and chase if the flag
-// names change again.
-//
-// Tool calling: not supported from the embedder side, same constraint
-// as Claude/Gemini delegation. Meridian's surviving workflows either
-// don't bind tools or route them through Ollama when the user picks
-// that provider.
+//      Token usage isn't surfaced via `-s` — return zero counts.
 
 import { spawn } from "node:child_process";
-import {
-  AIMessage,
-  AIMessageChunk,
-  type BaseMessage,
-  HumanMessage,
-  SystemMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
-import {
-  BaseChatModel,
-  type BaseChatModelParams,
-} from "@langchain/core/language_models/chat_models";
-import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
-import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs";
+import type {
+  ChatMessage,
+  ChatModel,
+  ChatModelStreamOptions,
+  ChatStreamChunk,
+} from "./types.js";
 
-export interface CopilotCliChatModelInput extends BaseChatModelParams {
+export interface CopilotCliChatModelInput {
   /** Model id passed to `copilot --model`. Accepts vendor names the CLI
    *  recognises (`auto`, `gpt-5.2`, `claude-sonnet-4.6`, …) — Meridian
    *  doesn't validate; whatever the user picks in Settings is forwarded
    *  verbatim. */
   model: string;
-  /** Unused — `copilot -p` doesn't expose a max-tokens flag. Kept on
-   *  the interface so the factory can pass the user's preference
-   *  through without conditionals. */
+  /** Unused — `copilot -p` doesn't expose a max-tokens flag. */
   maxTokens?: number;
   /** Path to the `copilot` binary. If absent, looks up "copilot" on
-   *  PATH — fine in `tauri dev` because Rust spawns the sidecar with
-   *  the user's full PATH inherited via tauri-plugin-shell. */
+   *  PATH. */
   copilotBinary?: string;
   /** Working directory to spawn the CLI in. When set, Copilot's
    *  built-in filesystem tools (enabled by `--allow-all-tools`)
-   *  operate against this directory — typically the user's worktree,
-   *  so Copilot can find and inspect files when the workflow's
-   *  prompt asks it to. Workflows that need codebase access (e.g.
-   *  grooming_file_probe) pass this through; workflows that don't
-   *  leave it undefined and Copilot inherits the sidecar's cwd. */
+   *  operate against this directory — typically the user's worktree. */
   cwd?: string;
 }
 
-export class CopilotCliChatModel extends BaseChatModel {
+export class CopilotCliChatModel implements ChatModel {
   private model: string;
   private copilotBinary: string;
   private cwd?: string;
 
   constructor(input: CopilotCliChatModelInput) {
-    super(input);
     this.model = input.model;
     this.copilotBinary = input.copilotBinary ?? "copilot";
     this.cwd = input.cwd;
   }
 
-  _llmType(): string {
-    return "copilot-cli";
-  }
-
-  async _generate(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): Promise<ChatResult> {
+  async *stream(
+    messages: ChatMessage[],
+    _options?: ChatModelStreamOptions,
+  ): AsyncIterable<ChatStreamChunk> {
     const text = await this.runCli(messages);
-    if (text) await runManager?.handleLLMNewToken(text);
-    const usage = emptyUsage();
-    return {
-      generations: [
-        {
-          text,
-          message: new AIMessage({
-            content: text,
-            usage_metadata: usage,
-          }),
-        },
-      ],
-      llmOutput: { tokenUsage: usage },
-    };
+    if (text) yield { text };
+    yield { usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
-  async *_streamResponseChunks(
-    messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    runManager?: CallbackManagerForLLMRun,
-  ): AsyncGenerator<ChatGenerationChunk> {
-    const text = await this.runCli(messages);
-    if (text) {
-      await runManager?.handleLLMNewToken(text);
-      yield new ChatGenerationChunk({
-        text,
-        message: new AIMessageChunk({ content: text }),
-      });
-    }
-    // Final empty chunk carrying usage so the workflow's accumulator
-    // picks it up via the usage_metadata path on the terminal chunk.
-    yield new ChatGenerationChunk({
-      text: "",
-      message: new AIMessageChunk({
-        content: "",
-        usage_metadata: emptyUsage(),
-      }),
-    });
-  }
-
-  private async runCli(messages: BaseMessage[]): Promise<string> {
+  private async runCli(messages: ChatMessage[]): Promise<string> {
     const prompt = formatMessages(messages);
     if (!prompt) {
       throw new Error(
@@ -202,37 +124,27 @@ export class CopilotCliChatModel extends BaseChatModel {
   }
 }
 
-function emptyUsage() {
-  return {
-    input_tokens: 0,
-    output_tokens: 0,
-    total_tokens: 0,
-    input_token_details: { cache_creation: 0, cache_read: 0 },
-  };
-}
-
-/** Build a single prompt string from a LangChain message list. Copilot
- *  CLI has no separate --system-prompt flag (same as gemini-cli), so
- *  system messages prefix the prompt under an explicit heading;
- *  subsequent user/assistant/tool turns are joined with role labels
- *  (first non-system human turn unlabelled for a clean single-turn
- *  prompt). */
-export function formatMessages(messages: BaseMessage[]): string {
+/** Build a single prompt string from a `ChatMessage[]`. Copilot CLI has
+ *  no separate --system-prompt flag (same as gemini-cli), so system
+ *  messages prefix the prompt under an explicit heading; subsequent
+ *  user/assistant/tool turns are joined with role labels (first
+ *  non-system human turn unlabelled for a clean single-turn prompt). */
+export function formatMessages(messages: ChatMessage[]): string {
   const systemParts: string[] = [];
   const turns: string[] = [];
   let turnIndex = 0;
   for (const msg of messages) {
-    const text = messageText(msg);
+    const text = msg.content;
     if (!text) continue;
-    if (msg instanceof SystemMessage) {
+    if (msg.role === "system") {
       systemParts.push(text);
-    } else if (msg instanceof HumanMessage) {
+    } else if (msg.role === "user") {
       turns.push(turnIndex === 0 ? text : `User:\n${text}`);
       turnIndex++;
-    } else if (msg instanceof AIMessage) {
+    } else if (msg.role === "assistant") {
       turns.push(`Assistant:\n${text}`);
       turnIndex++;
-    } else if (msg instanceof ToolMessage) {
+    } else if (msg.role === "tool") {
       turns.push(`Tool result:\n${text}`);
       turnIndex++;
     }
@@ -241,24 +153,6 @@ export function formatMessages(messages: BaseMessage[]): string {
   if (systemParts.length === 0) return body;
   const system = systemParts.join("\n\n");
   return `System instructions:\n${system}\n\n---\n\n${body}`;
-}
-
-function messageText(msg: BaseMessage): string {
-  if (typeof msg.content === "string") return msg.content;
-  if (Array.isArray(msg.content)) {
-    return msg.content
-      .map((c) => {
-        if (typeof c === "string") return c;
-        if (typeof c === "object" && c !== null) {
-          const co = c as { type?: string; text?: string };
-          if (co.type === "text" && typeof co.text === "string") return co.text;
-        }
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  return "";
 }
 
 // Exported for tests.

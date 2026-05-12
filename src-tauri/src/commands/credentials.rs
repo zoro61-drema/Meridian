@@ -10,6 +10,7 @@ const ALLOWED_KEYS: &[&str] = &[
     "gemini_api_key",
     "gemini_auth_method",
     "copilot_auth_method",
+    "copilot_github_pat",
     "local_llm_url",
     "local_llm_api_key",
     "jira_base_url",

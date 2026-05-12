@@ -73,7 +73,7 @@ pub use llms::claude::{cancel_review, get_claude_models};
 pub use llms::copilot::{
     add_custom_copilot_model, detect_copilot_cli, enable_copilot_cli_delegation,
     get_copilot_models, get_custom_copilot_models, remove_custom_copilot_model,
-    test_copilot_stored,
+    test_copilot_pat_stored, test_copilot_stored, validate_copilot_pat,
 };
 pub use llms::gemini::{
     add_custom_gemini_model, detect_gemini_cli, enable_gemini_cli_delegation,

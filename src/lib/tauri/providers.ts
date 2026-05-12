@@ -192,15 +192,35 @@ export async function pingCopilot(): Promise<string> {
   return invoke<string>("ping_copilot");
 }
 
-/** Same shape as ClaudeModelsResult / GeminiModelsResult, minus the
- *  `fetchError` field — Copilot has no live-fetch path (the built-in
- *  list is hand-curated). */
+/** Same shape as ClaudeModelsResult / GeminiModelsResult. `fetchError`
+ *  is non-null only when the user has a PAT configured and the live
+ *  fetch failed — Settings surfaces it so the user knows they're
+ *  looking at a fallback list. Without a PAT no fetch is attempted
+ *  and fetchError is always null. */
 export interface CopilotModelsResult {
   models: [string, string][];
+  fetchError: string | null;
 }
 
 export async function getCopilotModels(): Promise<CopilotModelsResult> {
   return invoke<CopilotModelsResult>("get_copilot_models");
+}
+
+/**
+ * Validate a GitHub PAT with "Copilot Requests" permission by doing the
+ * full token-exchange + models-fetch round-trip against GitHub. Saves
+ * the PAT in the keychain on success; throws on failure with a clear
+ * message. The saved PAT lets `getCopilotModels` return the user's
+ * actual plan-specific catalogue instead of the built-in fallback list.
+ */
+export async function validateCopilotPat(pat: string): Promise<string> {
+  return invoke<string>("validate_copilot_pat", { pat });
+}
+
+/** Test the already-stored Copilot PAT without re-saving — used by the
+ *  "Test connection" button in Settings. */
+export async function testCopilotPatStored(): Promise<string> {
+  return invoke<string>("test_copilot_pat_stored");
 }
 
 export async function getCustomCopilotModels(): Promise<string[]> {

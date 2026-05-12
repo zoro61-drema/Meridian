@@ -63,8 +63,27 @@ export async function runStreamingChatWithTools(args: {
 
   const llm = buildModel(model);
   if (typeof llm.bindTools !== "function") {
+    const llmType = llm._llmType();
+    // The three CLI-delegation adapters (claude-code-cli, gemini-cli,
+    // copilot-cli) all shell out to the user's installed binary, which
+    // exposes the CLI's own built-in tools but doesn't accept ad-hoc
+    // tool definitions from the embedder. Chat panels that bind repo-
+    // inspection tools need a provider with native bindTools support —
+    // surface a concrete "switch the model picker to X" message so the
+    // user doesn't have to interpret a generic LangChain error.
+    const cliNames: Record<string, string> = {
+      "claude-code-cli": "Claude Code CLI",
+      "gemini-cli": "Gemini CLI",
+      "copilot-cli": "GitHub Copilot CLI",
+    };
+    if (cliNames[llmType]) {
+      throw new Error(
+        `${cliNames[llmType]} doesn't support tool calls — its programmatic interface doesn't accept ad-hoc tool definitions from Meridian. ` +
+          `This chat panel needs a provider that does. Open the model picker (top right of this panel) and switch to your Anthropic API key, your Gemini API key, or a local Ollama instance.`,
+      );
+    }
     throw new Error(
-      `Model ${llm._llmType()} does not support tool calls. The chat workflow requires a provider with native bindTools support.`,
+      `Model ${llmType} does not support tool calls. The chat workflow requires a provider with native bindTools support — switch the model picker to Anthropic (API key), Gemini (API key), or Ollama.`,
     );
   }
   const llmWithTools = llm.bindTools(tools);

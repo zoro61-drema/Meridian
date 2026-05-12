@@ -4,11 +4,7 @@
 // emit progress + result events.
 
 import type { ModelSelection } from "../../../protocol.js";
-import { makeRepoTools } from "../../../tools/repo-tools.js";
-import {
-  runStreamingChat,
-  runStreamingChatWithTools,
-} from "../../chat-with-tools.js";
+import { runStreamingChat } from "../../chat-with-tools.js";
 import {
   PrReviewChatInputSchema,
   PrReviewChatHistorySchema,
@@ -29,8 +25,9 @@ export async function runPrReviewChatWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
-  const { workflowId, input, model, emit } = args;
+  const { workflowId, input, model, emit, worktreePath } = args;
 
   const parsed = PrReviewChatInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -55,17 +52,19 @@ export async function runPrReviewChatWorkflow(args: {
 
   emit({ id: workflowId, type: "progress", node: "reply", status: "started" });
 
-  const tools = makeRepoTools({ workflowId, emit });
+  // No tools bound. CLI-delegation providers (Claude Code, Gemini CLI,
+  // Copilot CLI) read/glob/grep via their own built-in tools when spawned
+  // with cwd=worktreePath; API-key providers get a tool-less chat.
   let result: { reply: string; usage: { inputTokens: number; outputTokens: number } };
   try {
-    result = await runStreamingChatWithTools({
+    result = await runStreamingChat({
       workflowId,
       model,
-      tools,
       systemPrompt: buildPrReviewChatSystemPrompt(parsed.data),
       history: historyParsed.data,
       emit,
       nodeName: "reply",
+      worktreePath,
     });
   } catch (err) {
     emit({
@@ -97,8 +96,9 @@ export async function runGroomingChatWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
-  const { workflowId, input, model, emit } = args;
+  const { workflowId, input, model, emit, worktreePath } = args;
 
   const parsed = GroomingChatInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -138,6 +138,7 @@ export async function runGroomingChatWorkflow(args: {
       history: historyParsed.data,
       emit,
       nodeName: "reply",
+      worktreePath,
     });
   } catch (err) {
     emit({

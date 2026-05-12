@@ -60,19 +60,30 @@ async function runMarkdownWorkflow<TInput>(args: {
   workflowName: string;
   nodeName: string;
   schema: z.ZodType<TInput>;
+  worktreePath?: string;
   run: (a: {
     input: TInput;
     model: ModelSelection;
     emit?: Emitter;
     workflowId?: string;
     nodeName?: string;
+    worktreePath?: string;
   }) => Promise<{
     markdown: string;
     usage: { inputTokens: number; outputTokens: number };
   }>;
 }): Promise<void> {
-  const { workflowId, input, model, emit, workflowName, nodeName, schema, run } =
-    args;
+  const {
+    workflowId,
+    input,
+    model,
+    emit,
+    workflowName,
+    nodeName,
+    schema,
+    run,
+    worktreePath,
+  } = args;
 
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
@@ -88,7 +99,14 @@ async function runMarkdownWorkflow<TInput>(args: {
 
   let result: { markdown: string; usage: { inputTokens: number; outputTokens: number } };
   try {
-    result = await run({ input: parsed.data, model, emit, workflowId, nodeName });
+    result = await run({
+      input: parsed.data,
+      model,
+      emit,
+      workflowId,
+      nodeName,
+      worktreePath,
+    });
   } catch (err) {
     emit({
       id: workflowId,
@@ -119,6 +137,7 @@ export async function runSprintRetrospectiveWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -137,6 +156,7 @@ export async function runWorkloadSuggestionsWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -155,6 +175,7 @@ export async function runMultiSprintTrendsWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -173,6 +194,7 @@ export async function runMeetingSummaryWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -189,6 +211,7 @@ export async function runMeetingTitleWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -207,6 +230,7 @@ export async function runSprintDashboardChatWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -225,6 +249,7 @@ export async function runMeetingChatWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -243,6 +268,7 @@ export async function runCrossMeetingsChatWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,
@@ -261,6 +287,7 @@ export async function runGroomingFileProbeWorkflow(args: {
   model: ModelSelection;
   emit: Emitter;
   signal: AbortSignal;
+  worktreePath?: string;
 }): Promise<void> {
   return runMarkdownWorkflow({
     ...args,

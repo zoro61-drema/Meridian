@@ -127,6 +127,21 @@ pub async fn resolve_model_for_context(ctx: &AiContext) -> Result<ModelSelection
     })
 }
 
+/// Resolve the configured worktree path for workflows that pass it
+/// through to CLI-delegation adapters as a spawn cwd. The CLI's built-in
+/// filesystem tools (Read/Glob/Grep on Claude Code, equivalents on
+/// Gemini CLI and Copilot CLI under `--allow-all-tools`) operate against
+/// this directory, so workflows that ask the model to look at code (PR
+/// review chat, grooming, grooming file probe) need it set. Returns
+/// None when no worktree is configured — the sidecar treats that as
+/// "skip cwd, let CLI use its default."
+fn resolve_worktree_path() -> Option<String> {
+    crate::storage::preferences::get_pref("repo_worktree_path")
+        .or_else(|| crate::storage::credentials::get_credential("repo_worktree_path"))
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+}
+
 /// Per-provider response-token ceiling, read live on every workflow
 /// dispatch so the user's Settings choice takes effect on the very
 /// next call. Returns None for Ollama (the local server enforces the
@@ -499,7 +514,7 @@ pub async fn run_pr_review_chat_workflow(
         "pr_review_chat",
         input,
         model,
-        None,
+        resolve_worktree_path(),
         None,
     )
     .await
@@ -545,7 +560,7 @@ pub async fn run_grooming_chat_workflow(
         "grooming_chat",
         input,
         model,
-        None,
+        resolve_worktree_path(),
         None,
     )
     .await
@@ -575,6 +590,10 @@ pub async fn run_grooming_file_probe_workflow(
         "ticketText": ticket_text,
     });
 
+    // Pass the configured worktree as the spawn cwd for CLI-delegation
+    // adapters — that lets Copilot/Claude Code/Gemini CLI use their own
+    // built-in file tools to actually inspect the repo while picking
+    // relevant paths, instead of guessing blindly from the ticket text.
     crate::integrations::sidecar::run_workflow(
         &app,
         &state,
@@ -582,7 +601,7 @@ pub async fn run_grooming_file_probe_workflow(
         "grooming_file_probe",
         input,
         model,
-        None,
+        resolve_worktree_path(),
         None,
     )
     .await

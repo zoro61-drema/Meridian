@@ -20,6 +20,15 @@ export interface BuildModelOptions {
    *  in tool loops. The Build phase uses this to replace unbounded
    *  per-turn reasoning prose with bounded thinking blocks. */
   thinking?: { budgetTokens: number };
+  /** Working directory for CLI-delegation adapters (Claude Code,
+   *  Gemini CLI, Copilot CLI). When set, the CLI binary spawns with
+   *  cwd=worktreePath so its built-in filesystem tools operate against
+   *  the user's repo. API-key adapters (ChatAnthropic, ChatGoogle,
+   *  ChatOllama) silently ignore it — they have no local execution
+   *  surface. Workflows that need codebase access (grooming_file_probe,
+   *  pr_review_chat, grooming_chat) pass this through; one-shot
+   *  workflows that don't touch code leave it undefined. */
+  worktreePath?: string;
 }
 
 export function buildModel(
@@ -81,6 +90,7 @@ function buildModelInner(
         return new ClaudeCodeChatModel({
           model,
           maxTokens,
+          cwd: options.worktreePath,
         });
       }
       // ChatAnthropic's own default is conservative (~4K) and caused
@@ -106,6 +116,7 @@ function buildModelInner(
         return new GeminiCliChatModel({
           model,
           maxTokens,
+          cwd: options.worktreePath,
         });
       }
       // Best-effort Gemini API-key path: 2.5 Flash/Pro accept a
@@ -135,10 +146,14 @@ function buildModelInner(
       // the user's GitHub account, or COPILOT_GITHUB_TOKEN) so the
       // sidecar never sees credentials. Thinking + maxTokens pass
       // through silently — the CLI has no flag for either and uses
-      // its own defaults.
+      // its own defaults. cwd=worktreePath lets Copilot's built-in
+      // read/glob/grep tools (enabled by `--allow-all-tools`) operate
+      // against the user's repo, which is how grooming and review
+      // workflows pick up code context.
       return new CopilotCliChatModel({
         model,
         maxTokens,
+        cwd: options.worktreePath,
       });
     }
     case "ollama": {

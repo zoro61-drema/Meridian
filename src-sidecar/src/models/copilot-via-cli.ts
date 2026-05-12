@@ -72,16 +72,26 @@ export interface CopilotCliChatModelInput extends BaseChatModelParams {
    *  PATH — fine in `tauri dev` because Rust spawns the sidecar with
    *  the user's full PATH inherited via tauri-plugin-shell. */
   copilotBinary?: string;
+  /** Working directory to spawn the CLI in. When set, Copilot's
+   *  built-in filesystem tools (enabled by `--allow-all-tools`)
+   *  operate against this directory — typically the user's worktree,
+   *  so Copilot can find and inspect files when the workflow's
+   *  prompt asks it to. Workflows that need codebase access (e.g.
+   *  grooming_file_probe) pass this through; workflows that don't
+   *  leave it undefined and Copilot inherits the sidecar's cwd. */
+  cwd?: string;
 }
 
 export class CopilotCliChatModel extends BaseChatModel {
   private model: string;
   private copilotBinary: string;
+  private cwd?: string;
 
   constructor(input: CopilotCliChatModelInput) {
     super(input);
     this.model = input.model;
     this.copilotBinary = input.copilotBinary ?? "copilot";
+    this.cwd = input.cwd;
   }
 
   _llmType(): string {
@@ -153,6 +163,7 @@ export class CopilotCliChatModel extends BaseChatModel {
 
     const proc = spawn(this.copilotBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      ...(this.cwd ? { cwd: this.cwd } : {}),
     });
 
     const stdoutChunks: Buffer[] = [];

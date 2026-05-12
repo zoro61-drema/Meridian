@@ -38,6 +38,7 @@ export async function runWorkflow(msg: WorkflowStart, emit: Emitter): Promise<vo
           model: msg.model,
           emit,
           signal: controller.signal,
+          worktreePath: msg.worktreePath,
         }),
     );
   } catch (err) {

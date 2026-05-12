@@ -63,13 +63,19 @@ export async function runStreamingChat(args: {
   history: ChatHistoryItem[];
   emit: Emitter;
   nodeName: string;
+  /** Absolute path to the user's worktree. Forwarded to buildModel
+   *  so CLI-delegation adapters spawn with cwd=worktree — that's what
+   *  lets the CLI's own built-in file tools find the user's repo when
+   *  the chat asks "look at file X". */
+  worktreePath?: string;
 }): Promise<{
   reply: string;
   usage: { inputTokens: number; outputTokens: number };
 }> {
-  const { workflowId, model, systemPrompt, history, emit, nodeName } = args;
+  const { workflowId, model, systemPrompt, history, emit, nodeName, worktreePath } =
+    args;
 
-  const llm = buildModel(model);
+  const llm = buildModel(model, { worktreePath });
   const messages: BaseMessage[] = [
     new SystemMessage(systemPrompt),
     ...history.map((m) =>

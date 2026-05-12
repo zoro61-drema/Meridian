@@ -64,6 +64,10 @@ export interface GeminiCliChatModelInput extends BaseChatModelParams {
   maxTokens?: number;
   /** Path to the `gemini` binary. If absent, looks up "gemini" on PATH. */
   geminiBinary?: string;
+  /** Working directory for the spawn. When set, Gemini CLI's built-in
+   *  filesystem tools operate against this directory — typically the
+   *  user's worktree. */
+  cwd?: string;
 }
 
 /** Shape of `gemini -p --output-format json` stdout. */
@@ -90,11 +94,13 @@ interface GeminiJsonEnvelope {
 export class GeminiCliChatModel extends BaseChatModel {
   private model: string;
   private geminiBinary: string;
+  private cwd?: string;
 
   constructor(input: GeminiCliChatModelInput) {
     super(input);
     this.model = input.model;
     this.geminiBinary = input.geminiBinary ?? "gemini";
+    this.cwd = input.cwd;
   }
 
   _llmType(): string {
@@ -167,6 +173,7 @@ export class GeminiCliChatModel extends BaseChatModel {
 
     const proc = spawn(this.geminiBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      ...(this.cwd ? { cwd: this.cwd } : {}),
     });
 
     const stdoutChunks: Buffer[] = [];

@@ -64,6 +64,11 @@ export interface ClaudeCodeChatModelInput extends BaseChatModelParams {
    *  which is fine in `tauri dev` because Rust spawns the sidecar with
    *  the user's full PATH inherited via `tauri-plugin-shell`. */
   claudeBinary?: string;
+  /** Working directory for the spawn. When set, Claude Code's built-in
+   *  Read/Glob/Grep/Bash/Write tools operate against this directory —
+   *  typically the user's worktree, so Claude can find files when the
+   *  workflow prompt asks it to. */
+  cwd?: string;
 }
 
 /** Sub-set of the events `claude -p --output-format stream-json` emits.
@@ -91,6 +96,7 @@ interface StreamEvent {
 export class ClaudeCodeChatModel extends BaseChatModel {
   private model: string;
   private claudeBinary: string;
+  private cwd?: string;
 
   constructor(input: ClaudeCodeChatModelInput) {
     super(input);
@@ -99,6 +105,7 @@ export class ClaudeCodeChatModel extends BaseChatModel {
     // expose a max-output-tokens flag. Kept on the interface so the
     // factory can pass the user's preference through without conditionals.
     this.claudeBinary = input.claudeBinary ?? "claude";
+    this.cwd = input.cwd;
   }
 
   _llmType(): string {
@@ -193,6 +200,7 @@ export class ClaudeCodeChatModel extends BaseChatModel {
 
     const proc = spawn(this.claudeBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      ...(this.cwd ? { cwd: this.cwd } : {}),
     });
 
     const stderrChunks: Buffer[] = [];

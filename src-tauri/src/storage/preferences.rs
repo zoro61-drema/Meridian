@@ -272,6 +272,10 @@ pub fn move_data_directory(from: String, to: String) -> Result<(), String> {
         // overwriting silently could destroy data the user actively wanted
         // in the new location.
     }
+    // The time-tracking snapshot in data_dir is on a 24h throttle — after a
+    // migration we want the new location to receive a fresh copy on the
+    // next save rather than waiting up to a day for the timer to elapse.
+    crate::storage::time_tracking::invalidate_snapshot_throttle();
     Ok(())
 }
 

@@ -89,9 +89,11 @@ pub fn get_system_activity_state() -> Result<SystemActivitySnapshot, String> {
     Ok(read_system_state())
 }
 
-/// Persist the time-tracking store state to disk. Stored under the user's
-/// resolved data directory in `time_tracking.json` — outside the
-/// `store_cache/` tree so it survives the Settings "Clear Cache" action.
+/// Persist the time-tracking store state to disk. Writes the live copy
+/// to `app_data_dir/time_tracking.json` every call; mirrors to the user's
+/// resolved `<data_dir>/time_tracking.json` at most once every 24 hours
+/// (see `storage::time_tracking` for the rationale — keeps cloud-synced
+/// data_dirs from being hammered by every-5s heartbeat ticks).
 #[tauri::command]
 pub fn save_time_tracking_state(app: tauri::AppHandle, json: String) -> Result<(), String> {
     crate::storage::time_tracking::save(&app, json)

@@ -15,7 +15,7 @@ interface DocNode {
   type?: string;
   content?: DocNode[];
   text?: string;
-  attrs?: { checked?: boolean };
+  attrs?: { checked?: boolean; label?: string };
 }
 
 export interface NotesTaskItem {
@@ -62,6 +62,14 @@ function walk(node: DocNode, path: number[], out: NotesTaskItem[]) {
 }
 
 function extractText(node: DocNode): string {
+  // Mention nodes are atoms — they have no `text`. The display name lives on
+  // `attrs.label` and we render it as `@<name>` so the Tasks panel shows the
+  // same syntax the user typed. Without this, "Ask @Alice for review" was
+  // extracting as "Ask  for review" with the mention silently dropped.
+  if (node.type === "mention") {
+    const label = node.attrs?.label?.trim();
+    return label ? `@${label}` : "";
+  }
   if (typeof node.text === "string") return node.text;
   if (!Array.isArray(node.content)) return "";
   return node.content.map(extractText).join("");

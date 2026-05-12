@@ -46,6 +46,67 @@ function extractText(content: unknown): string {
   return "";
 }
 
+/**
+ * Streaming chat without tool calling. Used by chat panels whose work is
+ * pure conversational refinement against an already-injected context
+ * (e.g. grooming_chat refines a JSON edits payload using the engineer's
+ * answers — the repo context arrives in the system prompt from the
+ * earlier file-probe stage, so no mid-conversation tool calls are
+ * needed). Works with every provider — CLI delegation paths (Claude
+ * Code, Gemini CLI, Copilot CLI) included — because there's no
+ * bindTools requirement.
+ */
+export async function runStreamingChat(args: {
+  workflowId: string;
+  model: ModelSelection;
+  systemPrompt: string;
+  history: ChatHistoryItem[];
+  emit: Emitter;
+  nodeName: string;
+}): Promise<{
+  reply: string;
+  usage: { inputTokens: number; outputTokens: number };
+}> {
+  const { workflowId, model, systemPrompt, history, emit, nodeName } = args;
+
+  const llm = buildModel(model);
+  const messages: BaseMessage[] = [
+    new SystemMessage(systemPrompt),
+    ...history.map((m) =>
+      m.role === "user"
+        ? new HumanMessage(m.content)
+        : new AIMessage(m.content),
+    ),
+  ];
+
+  let accumulated: AIMessageChunk | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stream = (await (llm as any).stream(messages)) as AsyncIterable<
+    AIMessageChunk
+  >;
+  for await (const chunk of stream) {
+    const deltaText = extractText(chunk.content);
+    if (deltaText) {
+      emit({ id: workflowId, type: "stream", node: nodeName, delta: deltaText });
+    }
+    accumulated = accumulated ? accumulated.concat(chunk) : chunk;
+  }
+  if (!accumulated) {
+    throw new Error("Chat received an empty stream from the model");
+  }
+
+  const u = accumulated.usage_metadata as
+    | { input_tokens?: number; output_tokens?: number }
+    | undefined;
+  return {
+    reply: extractText(accumulated.content),
+    usage: {
+      inputTokens: u?.input_tokens ?? 0,
+      outputTokens: u?.output_tokens ?? 0,
+    },
+  };
+}
+
 export async function runStreamingChatWithTools(args: {
   workflowId: string;
   model: ModelSelection;

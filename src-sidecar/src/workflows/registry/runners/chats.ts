@@ -5,7 +5,10 @@
 
 import type { ModelSelection } from "../../../protocol.js";
 import { makeRepoTools } from "../../../tools/repo-tools.js";
-import { runStreamingChatWithTools } from "../../chat-with-tools.js";
+import {
+  runStreamingChat,
+  runStreamingChatWithTools,
+} from "../../chat-with-tools.js";
 import {
   PrReviewChatInputSchema,
   PrReviewChatHistorySchema,
@@ -120,13 +123,17 @@ export async function runGroomingChatWorkflow(args: {
 
   emit({ id: workflowId, type: "progress", node: "reply", status: "started" });
 
-  const tools = makeRepoTools({ workflowId, emit });
+  // Grooming chat doesn't bind repo tools — its job is pure
+  // conversational refinement of an existing JSON edits payload using
+  // the engineer's answers. The repo context arrives in the system
+  // prompt from the earlier file-probe stage. Skipping tool binding
+  // means the workflow works with any provider, including CLI
+  // delegation paths (Claude Code, Gemini CLI, Copilot CLI).
   let result: { reply: string; usage: { inputTokens: number; outputTokens: number } };
   try {
-    result = await runStreamingChatWithTools({
+    result = await runStreamingChat({
       workflowId,
       model,
-      tools,
       systemPrompt: buildGroomingChatSystemPrompt(parsed.data),
       history: historyParsed.data,
       emit,

@@ -181,6 +181,26 @@ memory whenever a task hits its scope rather than re-deriving from
 files. The `.claude/settings.json` hooks (committed) keep Serena's
 session reminder injected and auto-approve its MCP calls.
 
+### Serena vs the official LSP plugins
+Both Serena and the four `*-lsp@claude-plugins-official` plugins
+expose LSP-backed code intelligence. They spawn separate language-
+server processes (≈2× memory for `rust-analyzer` + `tsserver` on
+this repo), but they're not redundant in capability:
+
+- **Default to Serena** for any non-trivial code work — it's the
+  only path with symbolic *editing* tools (`replace_symbol_body`,
+  `insert_after_symbol`, `safe_delete_symbol`), `find_referencing_symbols`,
+  and per-project memories. Its session hook is also already wired
+  to remind/auto-approve, so the friction is already paid.
+- **The built-in `LSP` tool** is the cheap fallback for a one-shot
+  lookup when Serena's manual flow (`get_symbols_overview` →
+  `find_symbol` → `include_body`) would be more ceremony than the
+  question deserves — e.g. a single `hover` for a type, or a quick
+  `goToDefinition` while skimming.
+
+When in doubt, reach for Serena. The LSP plugin is the snack;
+Serena is the meal.
+
 ### codesight (project shape map)
 Before diving into unfamiliar areas of the repo, call
 `codesight_get_summary` for a ~500-token stack overview, or

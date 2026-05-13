@@ -100,6 +100,28 @@ docs/                   supplementary architecture docs
 
 ---
 
+## Visual verification of UI changes
+
+There's a `meridian-screenshot` MCP server in `tools/screenshot-mcp/`
+that exposes two tools to Claude Code:
+
+- **`screenshot`** — captures the running Meridian window. Accepts an
+  optional `navigateTo: <screen-id>` so you can jump to a specific
+  screen and capture in one round-trip.
+- **`navigate`** — switches Meridian's main window to a given screen
+  by id. Driven by a tiny HTTP server inside the Tauri app on
+  `127.0.0.1:31415` (`src-tauri/src/control_server.rs`).
+
+**When you make a UI change in this repo, verify it visually after.**
+Call `screenshot` with `navigateTo` set to the affected screen — no
+need to ask the user to click around. Skip gracefully if the tool isn't
+listed (the user may not have run `pnpm mcp:connect` yet, or Meridian
+may not be running). Valid screen ids: `landing`, `onboarding`,
+`settings`, `agent-skills`, `review-pr`, `sprint-dashboard`,
+`retrospectives`, `ticket-quality`, `meetings`, `time-tracking`.
+
+---
+
 ## Layer Responsibilities
 
 Three layers, with strict boundaries:

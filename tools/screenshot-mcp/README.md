@@ -6,14 +6,28 @@ Claude can call the `screenshot` tool, get a PNG of the actual Tauri
 window back, and verify the change visually — same as a human reviewer
 glancing at the screen.
 
-## What it does
+## Tools
 
-- Locates Meridian's main on-screen window via macOS's CoreGraphics
-  window list (JXA, no extra dependencies).
-- Captures *just that window* (not the whole screen) with
-  `screencapture -l <CGWindowID>` so terminal output and other apps
-  stay out of the screenshot.
-- Returns the PNG to the calling LLM as an MCP `image` content block.
+- **`screenshot`** — captures the running Meridian window and returns
+  a PNG. Optional `navigateTo: <screen-id>` argument jumps to a
+  specific screen before capturing.
+- **`navigate`** — switches Meridian's main window to a specific
+  screen by id (without capturing). Useful when you want to set up the
+  UI for a follow-up step.
+
+## How it works
+
+- **Screenshot path**: JXA + CoreGraphics' `CGWindowListCopyWindowInfo`
+  locates Meridian's largest on-screen window. `screencapture
+  -l <CGWindowID>` then captures *just that window* (not the whole
+  screen), so terminal output and other apps stay out of the image.
+- **Navigation path**: Meridian's Rust process runs a tiny HTTP
+  server on `127.0.0.1:31415` (see
+  `src-tauri/src/control_server.rs`). The MCP server POSTs
+  `{"screen":"sprint-dashboard"}` to `/navigate`; the Rust handler
+  emits a `meridian:navigate` Tauri event; the React app's listener
+  switches screens. Loopback-only — no auth needed, only processes on
+  the same machine can reach it.
 
 ## Setup
 

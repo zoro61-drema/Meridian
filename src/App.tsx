@@ -38,11 +38,31 @@ import { usePrTasksStore } from "@/stores/prTasksStore";
 import { hydrateTasksStore, useTasksStore } from "@/stores/tasksStore";
 import { hydrateTimeTrackingStore } from "@/stores/timeTrackingStore";
 import { POLL_INTERVAL_MS, useWorkloadAlertStore } from "@/stores/workloadAlertStore";
+import { listen } from "@tauri-apps/api/event";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 
 type Screen = "loading" | "onboarding" | "landing" | "settings" | "agent-skills" | WorkflowId;
+
+/** Screens the external control server (POST /navigate) can jump to.
+ *  Mirrors the VALID_SCREENS list in `src-tauri/src/control_server.rs` —
+ *  the Rust side also validates, but we double-check here so a
+ *  protocol-version mismatch can't silently switch to a screen the
+ *  React side can't render. "loading" is excluded — that's a boot
+ *  state nothing should drive externally. */
+const EXTERNAL_NAV_SCREENS: ReadonlySet<Screen> = new Set<Screen>([
+  "landing",
+  "onboarding",
+  "settings",
+  "agent-skills",
+  "review-pr",
+  "sprint-dashboard",
+  "retrospectives",
+  "ticket-quality",
+  "meetings",
+  "time-tracking",
+]);
 
 function LoadingScreen() {
   return (
@@ -130,6 +150,33 @@ function AppInner() {
         if (jiraUrl) setJiraBaseUrlCache(jiraUrl);
       })
       .catch(() => {});
+  }, []);
+
+  // Listen for `meridian:navigate` events emitted by the local control
+  // server (127.0.0.1:31415, see src-tauri/src/control_server.rs). The
+  // screenshot MCP tool drives navigation via that endpoint so Claude
+  // Code can jump to the right screen before capturing a screenshot.
+  // No-op in production builds where nothing dials the control server.
+  useEffect(() => {
+    let dispose: (() => void) | undefined;
+    listen<string>("meridian:navigate", (event) => {
+      const target = event.payload;
+      if (EXTERNAL_NAV_SCREENS.has(target as Screen)) {
+        setScreen(target as Screen);
+      } else {
+        console.warn(
+          "[meridian:navigate] ignoring unknown screen id:",
+          target,
+        );
+      }
+    })
+      .then((unlisten) => {
+        dispose = unlisten;
+      })
+      .catch((err) => console.warn("[meridian:navigate] listen failed", err));
+    return () => {
+      dispose?.();
+    };
   }, []);
 
   const checkWorkload = useWorkloadAlertStore((s) => s.checkWorkload);

@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod commands;
+pub mod control_server;
 pub mod http;
 pub mod integrations;
 pub mod llms;
@@ -305,6 +306,12 @@ pub fn run() {
             // events that the frontend's time-tracking store consumes to
             // open and close work segments.
             start_time_tracking_poller(app.handle().clone());
+
+            // Start the local control server on 127.0.0.1:31415 so the
+            // screenshot MCP tool can drive navigation programmatically
+            // (POST /navigate). Loopback only, no auth — dev-time
+            // convenience. Skips silently if the port is in use.
+            control_server::start(app.handle().clone());
 
             // Build the native menu — currently just one developer item:
             // View → AI Debug Panel (Cmd/Ctrl+Shift+D). The accelerator

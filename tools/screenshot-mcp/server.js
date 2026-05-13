@@ -34,6 +34,24 @@ import { z } from "zod";
 const exec = promisify(execFile);
 
 const DEFAULT_APP_NAME = "Meridian";
+const CONTROL_SERVER_URL = "http://127.0.0.1:31415";
+
+/** Screen ids the running Meridian app accepts for programmatic
+ *  navigation. Mirrors VALID_SCREENS in control_server.rs and
+ *  EXTERNAL_NAV_SCREENS in App.tsx. Kept here so the tool's input
+ *  schema can advertise the closed set to the calling LLM. */
+const NAV_SCREENS = [
+  "landing",
+  "onboarding",
+  "settings",
+  "agent-skills",
+  "review-pr",
+  "sprint-dashboard",
+  "retrospectives",
+  "ticket-quality",
+  "meetings",
+  "time-tracking",
+];
 
 // JXA program that prints the CGWindowID of the largest on-screen
 // window owned by the requested app, or "NOTFOUND" if none. Run via
@@ -88,6 +106,36 @@ async function findWindowId(appName) {
   return id;
 }
 
+/** POST `{screen}` to the running Meridian app's control server. Throws
+ *  with a useful message if the app isn't reachable so the LLM gets a
+ *  clear "Meridian isn't running" signal instead of a network error. */
+async function navigateApp(screen) {
+  let response;
+  try {
+    response = await fetch(`${CONTROL_SERVER_URL}/navigate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ screen }),
+    });
+  } catch (err) {
+    throw new Error(
+      `Meridian control server is unreachable at ${CONTROL_SERVER_URL}. ` +
+        `Is Meridian running (pnpm tauri dev)? Underlying error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+    );
+  }
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `Navigation failed (HTTP ${response.status}): ${body || "(empty body)"}`,
+    );
+  }
+  // Small settle delay — gives React a frame or two to commit the new
+  // screen's first paint before the caller (often) calls screenshot.
+  await new Promise((r) => setTimeout(r, 250));
+}
+
 async function captureWindow(windowId) {
   const path = join(tmpdir(), `meridian-screenshot-${randomUUID()}.png`);
   // -l <id>: capture window by CGWindowID
@@ -117,9 +165,19 @@ server.registerTool(
     description:
       "Capture a PNG screenshot of the currently-running Meridian " +
       "window on macOS and return it as an image. Use after making UI " +
-      "changes to verify them visually. Requires Meridian to be open " +
+      "changes to verify them visually. Optionally jump to a specific " +
+      "screen first via `navigateTo` so you don't have to ask the user " +
+      "to click around. Requires Meridian to be open " +
       "(`pnpm tauri dev` from the repo root).",
     inputSchema: {
+      navigateTo: z
+        .enum(NAV_SCREENS)
+        .optional()
+        .describe(
+          "If set, navigate the app to this screen before capturing. " +
+            "Useful when verifying a change on a specific surface. " +
+            "Omit to screenshot whatever is currently displayed.",
+        ),
       appName: z
         .string()
         .optional()
@@ -129,9 +187,12 @@ server.registerTool(
         ),
     },
   },
-  async ({ appName }) => {
+  async ({ navigateTo, appName }) => {
     const resolvedName = (appName && appName.trim()) || DEFAULT_APP_NAME;
     try {
+      if (navigateTo) {
+        await navigateApp(navigateTo);
+      }
       const winId = await findWindowId(resolvedName);
       const base64 = await captureWindow(winId);
       return {
@@ -150,6 +211,44 @@ server.registerTool(
           {
             type: "text",
             text: `Screenshot failed: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+      };
+    }
+  },
+);
+
+server.registerTool(
+  "navigate",
+  {
+    title: "Navigate Meridian",
+    description:
+      "Switch Meridian's main window to a specific screen. Hits the " +
+      "running app's local control server on 127.0.0.1:31415. Useful " +
+      "by itself when you want to set up the UI for a follow-up step; " +
+      "for the common 'navigate then screenshot' pattern, prefer the " +
+      "`screenshot` tool's `navigateTo` argument so it's one round-trip.",
+    inputSchema: {
+      screen: z
+        .enum(NAV_SCREENS)
+        .describe("The screen id to switch to."),
+    },
+  },
+  async ({ screen }) => {
+    try {
+      await navigateApp(screen);
+      return {
+        content: [
+          { type: "text", text: `Navigated to ${screen}.` },
+        ],
+      };
+    } catch (err) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Navigation failed: ${err instanceof Error ? err.message : String(err)}`,
           },
         ],
       };

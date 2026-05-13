@@ -1,4 +1,4 @@
-import { AiDebugDock } from "@/components/AiDebugDock";
+import { AiDebugDock, DockModePicker } from "@/components/AiDebugDock";
 import { AiDebugPanel } from "@/components/AiDebugPanel";
 import { TasksPanel } from "@/components/TasksPanel";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,7 +8,9 @@ import { OpenTimeTrackingProvider } from "@/context/OpenTimeTrackingContext";
 import { PreviewOnboardingProvider } from "@/context/PreviewOnboardingContext";
 import { RecordingContextTagsProvider } from "@/context/RecordingContextTagsContext";
 import { startAiDebugListener } from "@/lib/aiDebugListener";
-import { isAiDebugWindow } from "@/lib/aiDebugWindow";
+import { AI_DEBUG_SET_DOCK_MODE_EVENT, isAiDebugWindow } from "@/lib/aiDebugWindow";
+import type { AiDebugDockMode } from "@/lib/appPreferences";
+import { emit } from "@tauri-apps/api/event";
 import { APP_PREFERENCE_DEFAULTS, getAppPreferences } from "@/lib/appPreferences";
 import { BackgroundRenderer, getBackgroundId, useBgChangeListener } from "@/lib/backgrounds/_registry";
 import { startRateLimitListener } from "@/lib/rateLimitListener";
@@ -483,7 +485,10 @@ function GlobalFxDrawer({ hideUI, onToggleHideUI }: { hideUI: boolean; onToggleH
     "When on, comets, stars, and other effects drift toward an active black hole. The hole still appears if enabled above; this only toggles the pull.";
 
   return (
-    <div className="pointer-events-none fixed bottom-0 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center">
+    <div
+      className="pointer-events-none fixed left-1/2 z-50 flex -translate-x-1/2 flex-col items-center"
+      style={{ bottom: "var(--ai-debug-dock-bottom, 0px)" }}
+    >
       {/* fx tab — sits at the TOP of the column. Container is anchored
           at bottom-0; when the drawer below grows, the container's top
           edge (and so the tab) moves up like a pull-tab. The drawer
@@ -617,9 +622,13 @@ function GlobalFxDrawer({ hideUI, onToggleHideUI }: { hideUI: boolean; onToggleH
 
 function AiDebugWindowRoot() {
   // Popped-out debug window: subscribes to the same Tauri event
-  // channel and renders only the panel. The dock-mode picker isn't
-  // shown here since the user is already in the popped-out variant
-  // and re-docking happens from the main window.
+  // channel and renders only the panel. The dock-mode picker is shown
+  // here so the user can re-dock to bottom/right/left or hide without
+  // going back to the main window. Because each webview owns its own
+  // zustand store, the picker can't just call `setDockMode` directly —
+  // it emits a Tauri event the main window listens for, which then
+  // updates the canonical store and closes this popped-out window via
+  // the existing useEffect in `AiDebugDock`.
   useEffect(() => {
     void getAppPreferences().then((prefs) => {
       useAiDebugStore.getState().hydrate({
@@ -630,10 +639,17 @@ function AiDebugWindowRoot() {
     void startAiDebugListener();
     void startRateLimitListener();
   }, []);
+  const dockMode = useAiDebugStore((s) => s.dockMode);
+  async function requestDockMode(mode: AiDebugDockMode) {
+    await emit(AI_DEBUG_SET_DOCK_MODE_EVENT, mode);
+  }
   return (
     <ThemeProvider>
       <div className="h-screen w-screen overflow-hidden bg-background">
-        <AiDebugPanel />
+        <AiDebugPanel
+          onClose={() => void requestDockMode("hidden")}
+          controls={<DockModePicker mode={dockMode} setMode={requestDockMode} />}
+        />
       </div>
     </ThemeProvider>
   );
@@ -705,6 +721,16 @@ export default function Root() {
           theme="dark"
           richColors
           closeButton
+          // Inset by the AI-debug dock CSS vars so toasts clear a right
+          // or bottom dock instead of stacking on top of it. 24px is
+          // sonner's own default viewport gap — we add the dock size to
+          // it via calc().
+          offset={{
+            top: "24px",
+            right: "calc(var(--ai-debug-dock-right, 0px) + 24px)",
+            bottom: "calc(var(--ai-debug-dock-bottom, 0px) + 24px)",
+            left: "calc(var(--ai-debug-dock-left, 0px) + 24px)",
+          }}
           toastOptions={{
             style: { fontFamily: "inherit" },
           }}

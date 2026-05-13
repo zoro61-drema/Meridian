@@ -215,9 +215,15 @@ export function TasksPanel() {
       // Fixed overlay so the panel sits to the right of every screen without
       // each screen needing to know about it. The App wrapper provides the
       // matching `padding-right` when this is open so screen content isn't
-      // hidden behind the panel.
-      className="fixed inset-y-0 right-0 z-30 border-l bg-background flex flex-col min-h-0"
-      style={{ width: panelWidth }}
+      // hidden behind the panel. `right`/`bottom` read the AI debug dock
+      // CSS variables so the tasks panel slides left/up when that dock
+      // claims an edge instead of overlapping it.
+      className="fixed top-0 z-30 border-l bg-background flex flex-col min-h-0"
+      style={{
+        width: panelWidth,
+        right: "var(--ai-debug-dock-right, 0px)",
+        bottom: "var(--ai-debug-dock-bottom, 0px)",
+      }}
       aria-label="Tasks panel"
     >
       <ResizeHandle resize={resizePanel} commit={persistPanelWidth} />

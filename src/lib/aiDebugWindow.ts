@@ -13,6 +13,12 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 export const AI_DEBUG_WINDOW_LABEL = "ai-debug";
 export const AI_DEBUG_QUERY_PARAM = "aidebug";
+/** Tauri event the popped-out window emits to ask the main window to
+ *  switch dock modes (re-dock to bottom/right/left, or hide). The
+ *  popped-out window has its own zustand store, so directly calling
+ *  setDockMode there wouldn't reach the main window — go via this
+ *  broadcast instead. The main window's `AiDebugDock` listens. */
+export const AI_DEBUG_SET_DOCK_MODE_EVENT = "meridian:ai-debug-set-dock-mode";
 
 export function isAiDebugWindow(): boolean {
   if (typeof window === "undefined") return false;

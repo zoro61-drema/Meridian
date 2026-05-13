@@ -15,12 +15,15 @@
  * state and the current screen survive a Cmd-Shift-D press.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAiDebugStore } from "@/stores/aiDebugStore";
 import type { AiDebugDockMode } from "@/lib/appPreferences";
 import { AiDebugPanel } from "@/components/AiDebugPanel";
-import { openAiDebugWindow, closeAiDebugWindow } from "@/lib/aiDebugWindow";
+import { openAiDebugWindow, closeAiDebugWindow, AI_DEBUG_SET_DOCK_MODE_EVENT } from "@/lib/aiDebugWindow";
+import { listen } from "@tauri-apps/api/event";
 
 export function AiDebugDock({ children }: { children: React.ReactNode }) {
   const dockMode = useAiDebugStore((s) => s.dockMode);
@@ -38,6 +41,49 @@ export function AiDebugDock({ children }: { children: React.ReactNode }) {
       void closeAiDebugWindow();
     }
   }, [dockMode]);
+
+  // Publish the docked strip's size as CSS variables on <html>. Other
+  // root-level fixed-positioned elements (TasksPanel, GlobalFxDrawer,
+  // Toaster) read these to inset themselves so the dock reserves space
+  // for itself instead of clipping app UI. Includes the 4px divider so
+  // those elements clear it cleanly. Vars are 0px when no split is
+  // active (popped-out or hidden), so consumers always have a value to
+  // read.
+  useEffect(() => {
+    const root = document.documentElement;
+    const size = dockMode === "bottom" || dockMode === "right" || dockMode === "left"
+      ? `${panelSize + 4}px`
+      : "0px";
+    root.style.setProperty("--ai-debug-dock-bottom", dockMode === "bottom" ? size : "0px");
+    root.style.setProperty("--ai-debug-dock-right", dockMode === "right" ? size : "0px");
+    root.style.setProperty("--ai-debug-dock-left", dockMode === "left" ? size : "0px");
+    return () => {
+      root.style.setProperty("--ai-debug-dock-bottom", "0px");
+      root.style.setProperty("--ai-debug-dock-right", "0px");
+      root.style.setProperty("--ai-debug-dock-left", "0px");
+    };
+  }, [dockMode, panelSize]);
+
+  // The popped-out window can't change the main window's store directly —
+  // they're separate webviews with isolated zustand state. Its dock-mode
+  // picker emits a Tauri event instead, and we apply the change here. The
+  // resulting dockMode flip back to a split mode triggers the effect above
+  // and the popped-out window closes itself.
+  useEffect(() => {
+    let dispose: (() => void) | undefined;
+    listen<AiDebugDockMode>(AI_DEBUG_SET_DOCK_MODE_EVENT, (event) => {
+      void setDockMode(event.payload);
+    })
+      .then((unlisten) => {
+        dispose = unlisten;
+      })
+      .catch((err) =>
+        console.warn(`[ai-debug] listen ${AI_DEBUG_SET_DOCK_MODE_EVENT} failed`, err),
+      );
+    return () => {
+      dispose?.();
+    };
+  }, [setDockMode]);
 
   // The inline panel only renders for the three split modes. For
   // "hidden" and "window" we still render the wrapper (so children stay
@@ -62,34 +108,112 @@ export function AiDebugDock({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DockModePicker({
+export function DockModePicker({
   mode,
   setMode,
 }: {
   mode: AiDebugDockMode;
   setMode: (m: AiDebugDockMode) => Promise<void>;
 }) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  // Button rect drives the popover's fixed position. The panel slot has
+  // `overflow-hidden` (and the popped-out window's wrapper does too), so
+  // rendering the menu inline would clip — we portal to document.body and
+  // pin with fixed coordinates instead, recomputing on resize/scroll.
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    function reposition() {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (!r) return;
+      setAnchor({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   const opts: { mode: AiDebugDockMode; label: string }[] = [
     { mode: "bottom", label: "↓" },
     { mode: "right", label: "→" },
     { mode: "left", label: "←" },
     { mode: "window", label: "⧉" },
   ];
+
   return (
-    <div className="flex items-center gap-0.5">
-      {opts.map((opt) => (
-        <Button
-          key={opt.mode}
-          variant={mode === opt.mode ? "default" : "ghost"}
-          size="icon"
-          className="h-7 w-7 text-[11px]"
-          onClick={() => void setMode(opt.mode)}
-          title={`Dock ${opt.mode}`}
-        >
-          {opt.label}
-        </Button>
-      ))}
-    </div>
+    <>
+      <Button
+        ref={buttonRef}
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={() => setOpen((v) => !v)}
+        title="Dock options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <MoreHorizontal className="h-3.5 w-3.5" />
+      </Button>
+      {open && anchor &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            role="menu"
+            aria-label="Dock side"
+            style={{
+              position: "fixed",
+              top: anchor.top,
+              right: anchor.right,
+              zIndex: 100,
+            }}
+            className="flex items-center gap-1 rounded-md border bg-popover text-popover-foreground shadow-lg px-2 py-1.5"
+          >
+            <span className="text-[11px] text-muted-foreground">Dock side:</span>
+            {opts.map((opt) => (
+              <Button
+                key={opt.mode}
+                variant={mode === opt.mode ? "default" : "ghost"}
+                size="icon"
+                className="h-7 w-7 text-[11px]"
+                onClick={() => {
+                  void setMode(opt.mode);
+                  setOpen(false);
+                }}
+                title={`Dock ${opt.mode}`}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

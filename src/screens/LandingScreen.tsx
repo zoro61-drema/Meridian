@@ -354,7 +354,7 @@ export function LandingScreen({ credStatus, onNavigate }: LandingScreenProps) {
   const isOrbital = layoutId === "orbital";
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-full flex flex-col">
       <header className={APP_HEADER_BAR}>
         <div className="flex h-14 w-full items-center gap-3 overflow-hidden pl-3 pr-2.5 sm:pl-4 sm:pr-3">
           <h1 className="flex-1 min-w-0 truncate pl-2 text-base font-medium tracking-tight text-foreground/90">

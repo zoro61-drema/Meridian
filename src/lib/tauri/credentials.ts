@@ -73,8 +73,34 @@ export function bitbucketComplete(s: CredentialStatus) {
 
 // ── Credential commands ───────────────────────────────────────────────────────
 
+/** All-false default used as the starting status when the underlying
+ *  Tauri invoke fails — happens only when the app is loaded from the
+ *  vite dev URL in a plain browser (e.g. chrome-devtools UI inspection).
+ *  Mock overlays below fill in whichever surfaces the user has opted
+ *  into. In a real Tauri runtime the invoke always succeeds, so this
+ *  fallback is never reached. */
+const EMPTY_STATUS: CredentialStatus = {
+  anthropicApiKey: false,
+  geminiApiKey: false,
+  copilotCli: false,
+  localLlmUrl: false,
+  jiraBaseUrl: false,
+  jiraEmail: false,
+  jiraApiToken: false,
+  jiraBoardId: false,
+  bitbucketWorkspace: false,
+  bitbucketEmail: false,
+  bitbucketAccessToken: false,
+  bitbucketRepoSlug: false,
+};
+
 export async function getCredentialStatus(): Promise<CredentialStatus> {
-  const status = await invoke<CredentialStatus>("credential_status");
+  let status: CredentialStatus;
+  try {
+    status = await invoke<CredentialStatus>("credential_status");
+  } catch {
+    status = EMPTY_STATUS;
+  }
   let merged: CredentialStatus = { ...status };
   if (isMockMode()) {
     merged = {

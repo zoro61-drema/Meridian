@@ -14,7 +14,7 @@ import { BackgroundRenderer, getBackgroundId, useBgChangeListener } from "@/lib/
 import { startRateLimitListener } from "@/lib/rateLimitListener";
 import { clearAllEffects, fireBlackHole, fireComet, fireMeteorShower, firePulsar, fireShootingStar, fireWormhole, getBhGravityEnabled, getSpaceEffectKindToggles, setEffectsEnabled, SPACE_FX_BH_GRAVITY_EVENT, SPACE_FX_TOGGLES_EVENT, toggleBhGravityEnabled, toggleSpaceEffectKind, type SpaceEffectKind } from "@/lib/spaceEffects/_shared";
 import { SpaceEffectsOverlay } from "@/lib/spaceEffects/overlay";
-import { setJiraBaseUrlCache, setLocalLlmUrlCache } from "@/lib/tauri/core";
+import { isMockMode, setJiraBaseUrlCache, setLocalLlmUrlCache, setMockClaudeMode, setMockMode } from "@/lib/tauri/core";
 import { bitbucketComplete, credentialStatusComplete, getCredentialStatus, getNonSecretConfig, jiraComplete, type CredentialStatus } from "@/lib/tauri/credentials";
 import { cancelAllAgents } from "@/lib/cancelAllAgents";
 import { setRuntimeOverloadPct } from "@/lib/workloadClassifier";
@@ -101,6 +101,24 @@ function AppInner() {
     useState<Screen | null>(null);
 
   useEffect(() => {
+    // When loaded outside a Tauri runtime (e.g. the vite dev URL opened
+    // in chrome-devtools for UI inspection), auto-enable mock mode so
+    // the credential bootstrap below doesn't strand us on Onboarding.
+    // Inside the real Tauri webview `__TAURI_INTERNALS__` is always
+    // present, so this branch never fires there. Loud console message
+    // so a dev who opened the dev URL by accident isn't confused by
+    // mock data.
+    const inTauri =
+      typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+    if (!inTauri && !isMockMode()) {
+      console.info(
+        "[meridian] no Tauri runtime detected — auto-enabling mock mode for browser inspection. " +
+          "Disable via localStorage.removeItem('meridian_mock_mode').",
+      );
+      setMockMode(true);
+      setMockClaudeMode(true);
+    }
+
     // Hydrate persisted stores from file cache before loading credentials
     Promise.allSettled([
       hydratePrReviewStore(),
@@ -176,6 +194,47 @@ function AppInner() {
       .catch((err) => console.warn("[meridian:navigate] listen failed", err));
     return () => {
       dispose?.();
+    };
+  }, []);
+
+  // Browser-side navigation hooks for chrome-devtools and any other
+  // external script driving the app from the vite dev URL. Two surfaces:
+  //   - `location.hash` — `#sprint-dashboard` lands you there on page
+  //     load and on hashchange. Useful for bookmarks and reload-safe
+  //     deep links.
+  //   - `window.__meridianNavigate(id)` — one-shot JS hook for tools
+  //     like chrome-devtools that prefer `evaluate_script` over URL
+  //     mutation.
+  // Both validate against the same closed enum the Tauri event listener
+  // above uses. They coexist with the Tauri event without conflicting;
+  // both are no-ops in the production Tauri webview unless something
+  // sets the hash.
+  useEffect(() => {
+    const tryNav = (raw: string | undefined | null) => {
+      if (!raw) return;
+      const target = raw.replace(/^#\/?/, "").trim();
+      if (!target) return;
+      if (EXTERNAL_NAV_SCREENS.has(target as Screen)) {
+        setScreen(target as Screen);
+      } else {
+        console.warn("[meridian:hash-nav] ignoring unknown screen id:", target);
+      }
+    };
+
+    // Apply the current hash on mount (if any).
+    tryNav(location.hash);
+
+    const onHashChange = () => tryNav(location.hash);
+    window.addEventListener("hashchange", onHashChange);
+
+    type NavHook = (id: string) => void;
+    (window as unknown as { __meridianNavigate?: NavHook }).__meridianNavigate =
+      (id) => tryNav(id);
+
+    return () => {
+      window.removeEventListener("hashchange", onHashChange);
+      delete (window as unknown as { __meridianNavigate?: NavHook })
+        .__meridianNavigate;
     };
   }, []);
 

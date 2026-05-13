@@ -134,6 +134,20 @@ the live Tauri window — anything Rust-backed will error there. Pair
 with `screenshot` when "this looks off" needs to be answered by
 "and here's *why*" (computed style, layout, console error).
 
+Two navigation hooks make the in-browser app reachable past
+Onboarding (otherwise the credential bootstrap strands you there
+because `invoke` is undefined):
+
+- `evaluate_script(() => window.__meridianNavigate('sprint-dashboard'))`
+  jumps to a screen.
+- `http://localhost:1420/#sprint-dashboard` does the same via URL
+  hash and survives reloads.
+
+Mock mode is auto-enabled the first time the app loads outside a
+Tauri runtime, so the JIRA/Bitbucket-backed screens render with
+canned data instead of erroring. See `App.tsx` for the wiring and
+`src/lib/tauri/core.ts` for the mock-mode toggles.
+
 ### When to use which
 
 - **UI changed**: call `screenshot` (with `navigateTo`) to verify.

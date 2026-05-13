@@ -165,7 +165,13 @@ export const useAiDebugStore = create<AiDebugState>()(
       hydrate: ({ enabled, dockMode }) =>
         set({
           enabled,
-          dockMode,
+          // The panel never auto-opens on launch — it's a developer
+          // tool, not part of the everyday surface. The saved
+          // `dockMode` is treated as "where to restore the panel when
+          // the user opens it on demand via View → AI Debug Panel
+          // (Cmd/Ctrl+Shift+D)", not "show the panel on startup with
+          // this layout". Always hide on cold start.
+          dockMode: "hidden",
           // Seed lastVisibleDockMode from whatever the user last saved —
           // unless they saved "hidden", in which case fall back to bottom
           // so the menu-toggle still has somewhere meaningful to land.

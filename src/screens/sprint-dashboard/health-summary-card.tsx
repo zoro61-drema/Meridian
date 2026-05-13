@@ -53,8 +53,13 @@ interface PrHealthCounts {
 }
 
 function computePrHealth(openPrs: BitbucketPr[], progress: number | null): PrHealthCounts {
+  // Exclude drafts — they're explicit work-in-progress and don't contribute
+  // to "needs attention" health. The PRs Needs Attention list below applies
+  // the same filter, so the meter's urgent count matches what the user sees
+  // listed.
+  const reviewable = openPrs.filter((pr) => !pr.draft);
   let good = 0, warn = 0, urgent = 0;
-  for (const pr of openPrs) {
+  for (const pr of reviewable) {
     const s = classifyPr(pr, progress);
     if (s === "good") good++;
     else if (s === "warn") warn++;
@@ -62,7 +67,7 @@ function computePrHealth(openPrs: BitbucketPr[], progress: number | null): PrHea
   }
   const scorable = good + warn + urgent;
   const qualityScore = scorable > 0 ? (good + warn * 0.5) / scorable : 1;
-  return { good, warn, urgent, total: openPrs.length, qualityScore };
+  return { good, warn, urgent, total: reviewable.length, qualityScore };
 }
 
 interface SprintHealthResult {
@@ -289,7 +294,7 @@ export function HealthSummaryCard({
               </span>
               <span
                 className="ml-auto opacity-70"
-                title="All open PRs in the repo — sprint_status.py only counts PRs linked to Needs Review tickets"
+                title="Non-draft open PRs in the repo — drafts are excluded since they're explicit work-in-progress, matching the Needs Attention list below"
               >
                 {prHealth.total} open PRs
               </span>

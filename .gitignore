@@ -3,4 +3,6 @@ node_modules
 .history
 target
 .claude
+.codesight
+.serena
 .DS_Store

@@ -15,8 +15,11 @@
     "test:watch": "vitest",
     "sidecar:bundle": "cd src-sidecar && pnpm bundle && mkdir -p ../src-tauri/target/debug && cp -f dist/bundle.cjs ../src-tauri/target/debug/bundle.cjs",
     "sidecar:rebuild": "pnpm sidecar:bundle && (pkill -f 'target/debug/bundle.cjs' 2>/dev/null || true)",
-    "mcp:connect": "cd tools/screenshot-mcp && pnpm install --silent && cd ../.. && claude mcp add meridian-screenshot -- node \"$PWD/tools/screenshot-mcp/server.js\"",
-    "mcp:disconnect": "claude mcp remove meridian-screenshot"
+    "mcp:connect": "pnpm mcp:connect:screenshot && pnpm mcp:connect:context7 && pnpm mcp:connect:devtools",
+    "mcp:connect:screenshot": "cd tools/screenshot-mcp && pnpm install --silent && cd ../.. && claude mcp add meridian-screenshot -- node \"$PWD/tools/screenshot-mcp/server.js\"",
+    "mcp:connect:context7": "claude mcp add context7 -- npx -y @upstash/context7-mcp",
+    "mcp:connect:devtools": "claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest",
+    "mcp:disconnect": "claude mcp remove meridian-screenshot; claude mcp remove context7; claude mcp remove chrome-devtools"
   },
   "dependencies": {
     "@atlaskit/logo": "^20.1.0",

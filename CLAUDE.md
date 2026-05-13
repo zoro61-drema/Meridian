@@ -100,25 +100,51 @@ docs/                   supplementary architecture docs
 
 ---
 
-## Visual verification of UI changes
+## MCP servers used while developing Meridian
 
-There's a `meridian-screenshot` MCP server in `tools/screenshot-mcp/`
-that exposes two tools to Claude Code:
+Three MCP servers, all registered together by `pnpm mcp:connect`:
 
-- **`screenshot`** — captures the running Meridian window. Accepts an
-  optional `navigateTo: <screen-id>` so you can jump to a specific
-  screen and capture in one round-trip.
+### meridian-screenshot (local, `tools/screenshot-mcp/`)
+Two tools:
+- **`screenshot`** — captures the running Meridian window. Optional
+  `navigateTo: <screen-id>` to jump screens + capture in one
+  round-trip.
 - **`navigate`** — switches Meridian's main window to a given screen
   by id. Driven by a tiny HTTP server inside the Tauri app on
   `127.0.0.1:31415` (`src-tauri/src/control_server.rs`).
 
-**When you make a UI change in this repo, verify it visually after.**
-Call `screenshot` with `navigateTo` set to the affected screen — no
-need to ask the user to click around. Skip gracefully if the tool isn't
-listed (the user may not have run `pnpm mcp:connect` yet, or Meridian
-may not be running). Valid screen ids: `landing`, `onboarding`,
-`settings`, `agent-skills`, `review-pr`, `sprint-dashboard`,
-`retrospectives`, `ticket-quality`, `meetings`, `time-tracking`.
+Renders against the real Tauri WKWebView window, so Tauri commands
+(`invoke()` for JIRA, Bitbucket, etc.) run for real and native chrome
+is included. Valid screen ids: `landing`, `onboarding`, `settings`,
+`agent-skills`, `review-pr`, `sprint-dashboard`, `retrospectives`,
+`ticket-quality`, `meetings`, `time-tracking`.
+
+### context7 (npm `@upstash/context7-mcp`)
+Pulls up-to-date library docs on demand. Useful when verifying
+current API surface for the things Meridian touches — Tauri 2.10,
+React 18, `@modelcontextprotocol/sdk`, Zod, etc. — without burning
+WebFetch round-trips. Reach for it whenever an API call's behaviour
+or signature is in doubt.
+
+### chrome-devtools (npm `chrome-devtools-mcp`)
+Full Chromium devtools surface: DOM, computed CSS, console, network
+waterfall. Targets Chromium against the vite dev URL (typically
+`http://localhost:1420` or whatever `pnpm tauri dev` exposes), NOT
+the live Tauri window — anything Rust-backed will error there. Pair
+with `screenshot` when "this looks off" needs to be answered by
+"and here's *why*" (computed style, layout, console error).
+
+### When to use which
+
+- **UI changed**: call `screenshot` (with `navigateTo`) to verify.
+- **Something looks wrong and you can't tell why**: open
+  chrome-devtools against the vite URL, inspect computed styles /
+  console / network.
+- **API behaviour or signature in doubt**: ask context7 first.
+
+Skip gracefully if any of the three isn't listed — the user may not
+have run `pnpm mcp:connect`, Meridian may not be running, or the
+vite dev URL may not be up.
 
 ---
 

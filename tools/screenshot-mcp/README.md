@@ -17,17 +17,25 @@ glancing at the screen.
 
 ## How it works
 
-- **Screenshot path**: JXA + CoreGraphics' `CGWindowListCopyWindowInfo`
-  locates Meridian's largest on-screen window. `screencapture
-  -l <CGWindowID>` then captures *just that window* (not the whole
-  screen), so terminal output and other apps stay out of the image.
-- **Navigation path**: Meridian's Rust process runs a tiny HTTP
-  server on `127.0.0.1:31415` (see
-  `src-tauri/src/control_server.rs`). The MCP server POSTs
+Both tools talk to Meridian's own control server on
+`127.0.0.1:31415` (`src-tauri/src/control_server.rs`).
+
+- **Screenshot path**: `GET /window-bounds` returns the main window's
+  CGWindowID + screen rect — Tauri reads it directly via
+  `NSWindow.windowNumber`. The MCP server then runs `screencapture
+  -l <window_id> -t png …` to grab that window's pixels even when
+  occluded, without raising focus.
+  - On older builds whose control server doesn't return a `window_id`,
+    falls back to `screencapture -R x,y,w,h` (region capture).
+  - Sidestepping `CGWindowListCopyWindowInfo` matters because on
+    macOS 26 that API silently returns an empty list to processes
+    that lack a per-binary Screen Recording grant in TCC, even when
+    the parent terminal has the grant.
+- **Navigation path**: The MCP server POSTs
   `{"screen":"sprint-dashboard"}` to `/navigate`; the Rust handler
   emits a `meridian:navigate` Tauri event; the React app's listener
-  switches screens. Loopback-only — no auth needed, only processes on
-  the same machine can reach it.
+  switches screens. Loopback-only — no auth needed, only processes
+  on the same machine can reach it.
 
 ## Setup
 
@@ -37,13 +45,19 @@ From the repo root:
 pnpm mcp:connect
 ```
 
-That installs the server's deps and registers it with Claude Code in
-one shot — equivalent to `cd tools/screenshot-mcp && pnpm install`
-followed by `claude mcp add meridian-screenshot -- node $PWD/tools/screenshot-mcp/server.js`.
+That installs this server's deps and registers all three MCP servers
+Meridian uses for development — `meridian-screenshot`, `context7`,
+and `chrome-devtools` (the latter two are pulled in on demand via
+`npx`, no local install needed). See the **MCP servers used while
+developing Meridian** section in the repo-root `CLAUDE.md` for what
+each does and when to reach for it.
+
+For screenshot only: `pnpm mcp:connect:screenshot`.
+
 Restart Claude Code (or `/mcp`) to confirm `meridian-screenshot` is
 listed as **connected**.
 
-To remove: `pnpm mcp:disconnect`.
+To remove all three: `pnpm mcp:disconnect`.
 
 ## Usage
 
@@ -52,8 +66,10 @@ Claude Code session, ask Claude to verify a UI change:
 
 > "Use the screenshot tool to show me the sprint dashboard."
 
-The tool takes no required arguments. Optional `appName` override (for
-renamed builds): `{ "appName": "Meridian Dev" }`.
+The tool takes no required arguments. Optional `navigateTo: <screen-id>`
+jumps to a specific screen first. Valid ids match Meridian's
+`Screen` union — see `src-tauri/src/control_server.rs`
+(`VALID_SCREENS`) and `src/App.tsx` (`EXTERNAL_NAV_SCREENS`).
 
 ## Requirements
 

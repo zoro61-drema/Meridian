@@ -66,7 +66,7 @@ export function WelcomeStep({ onNext, onMockMode }: { onNext: () => void; onMock
       </div>
 
       <p className="text-xs text-center text-muted-foreground">
-        You'll connect at least one AI provider (Claude, Gemini, or a local LLM)
+        You'll connect at least one AI provider (Claude, Gemini, GitHub Copilot, or a local LLM)
         plus credentials for JIRA and Bitbucket.
       </p>
 

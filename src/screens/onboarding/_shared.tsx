@@ -2,6 +2,7 @@ import { CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight, AlertCircle }
 import { Card, CardContent } from "@/components/ui/card";
 import type { AiProvider } from "@/stores/aiSelectionStore";
 import { ClaudeAuthForm } from "./claude-auth-form";
+import { CopilotAuthForm } from "./copilot-auth-form";
 import { GeminiAuthForm } from "./gemini-auth-form";
 import { LocalLlmAuthForm } from "./local-llm-auth-form";
 
@@ -19,22 +20,23 @@ export interface ProviderAuthState {
   suggestedModel?: string;
 }
 
-/** Onboarding intentionally covers only the three "first-class" providers
- *  with dedicated auth-form components. Copilot lives behind Settings →
- *  GitHub Copilot — users wire it up after onboarding. */
-export type OnboardingProvider = Exclude<AiProvider, "copilot">;
+/** All four LLM providers Meridian supports. Each has its own auth-form
+ *  component below. */
+export type OnboardingProvider = AiProvider;
 
-export const PROVIDER_ORDER: OnboardingProvider[] = ["claude", "gemini", "local"];
+export const PROVIDER_ORDER: OnboardingProvider[] = ["claude", "gemini", "copilot", "local"];
 
 export const PROVIDER_BLURB: Record<OnboardingProvider, string> = {
   claude: "Anthropic's Claude — recommended default. Delegate to the user-installed Claude Code CLI (uses your Pro/Max subscription locally), or an API key.",
   gemini: "Google's Gemini — delegate to the user-installed gemini-cli, or an API key from AI Studio.",
+  copilot: "GitHub Copilot — delegate to the user-installed Copilot CLI (uses your GitHub Copilot subscription). CLI-only; no API key path.",
   local: "Run models locally via Ollama or any OpenAI-compatible server. No subscription needed.",
 };
 
 export const PROVIDER_TITLE: Record<OnboardingProvider, string> = {
   claude: "Claude (Anthropic)",
   gemini: "Gemini (Google)",
+  copilot: "GitHub Copilot",
   local: "Local LLM (Ollama)",
 };
 
@@ -153,6 +155,9 @@ export function ProviderCard({
             )}
             {provider === "gemini" && (
               <GeminiAuthForm onAuthed={onAuthed} onCleared={onCleared} />
+            )}
+            {provider === "copilot" && (
+              <CopilotAuthForm onAuthed={onAuthed} onCleared={onCleared} />
             )}
             {provider === "local" && (
               <LocalLlmAuthForm onAuthed={onAuthed} onCleared={onCleared} />

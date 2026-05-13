@@ -24,6 +24,7 @@ export function AiProvidersStep({
   const [authState, setAuthState] = useState<Record<OnboardingProvider, ProviderAuthState>>({
     claude: { authed: false },
     gemini: { authed: false },
+    copilot: { authed: false },
     local: { authed: false },
   });
   const [expanded, setExpanded] = useState<OnboardingProvider | null>("claude");
@@ -36,6 +37,7 @@ export function AiProvidersStep({
         ...prev,
         claude: { ...prev.claude, authed: !!s.anthropicApiKey },
         gemini: { ...prev.gemini, authed: !!s.geminiApiKey },
+        copilot: { ...prev.copilot, authed: !!s.copilotCli },
         local: { ...prev.local, authed: !!s.localLlmUrl },
       }));
     });

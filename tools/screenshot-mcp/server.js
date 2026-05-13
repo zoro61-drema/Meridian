@@ -2,19 +2,27 @@
 // Tiny MCP server: screenshots Meridian's running macOS window and
 // returns the PNG to the calling LLM as an image content block.
 //
-// Lookup path (no external CLI deps beyond what ships with macOS):
-//   1. JXA (`osascript -l JavaScript`) calls CGWindowListCopyWindowInfo
-//      and walks the on-screen window list to find the largest window
-//      owned by the configured app name (default "Meridian").
-//   2. `screencapture -l <CGWindowID> -t png -x` writes that window's
-//      pixels to a temp PNG.
-//   3. The server reads the PNG, base64-encodes it, and returns it as
+// Capture path (no external CLI deps beyond what ships with macOS):
+//   1. GET /window-bounds on Meridian's control server → main window's
+//      CGWindowID plus its screen rect in logical points.
+//   2. `screencapture -l <windowId> -t png -x` writes that window's
+//      pixels to a temp PNG (window content, not screen region — so
+//      occluding apps don't show up, and we never have to raise focus
+//      away from whatever the user was just in).
+//   3. If the control server didn't return a windowId (e.g. running
+//      against an old build), fall back to `screencapture -R x,y,w,h`.
+//   4. The server reads the PNG, base64-encodes it, and returns it as
 //      an MCP `image` content block.
 //
-// Why only-the-window (not full-screen): a full-screen grab would also
+// Why bounds-from-Tauri rather than CGWindowList: macOS 26 silently
+// returns an empty window list to processes that lack a per-binary
+// Screen Recording grant in TCC, even when the parent terminal has it.
+// `screencapture` itself works fine via inheritance, so we just need
+// the windowId/rect from a source we already own — Meridian itself.
+//
+// Why window-scoped (not full-screen): a full-screen grab would also
 // include the terminal Claude Code is running in plus any other apps —
-// noisy context and a real privacy concern. Window-scoped capture
-// stays tight.
+// noisy context and a real privacy concern.
 //
 // Register in Claude Code by running, from the repo root:
 //   claude mcp add meridian-screenshot \
@@ -33,7 +41,6 @@ import { z } from "zod";
 
 const exec = promisify(execFile);
 
-const DEFAULT_APP_NAME = "Meridian";
 const CONTROL_SERVER_URL = "http://127.0.0.1:31415";
 
 /** Screen ids the running Meridian app accepts for programmatic
@@ -53,57 +60,42 @@ const NAV_SCREENS = [
   "time-tracking",
 ];
 
-// JXA program that prints the CGWindowID of the largest on-screen
-// window owned by the requested app, or "NOTFOUND" if none. Run via
-// `osascript -l JavaScript -e <code>`. Kept as a template so we can
-// inject the app name without shell-escaping headaches.
-function jxaFindWindowId(appName) {
-  // The JXA runtime exposes ObjC bindings out of the box. We use
-  // CGWindowListCopyWindowInfo to enumerate every on-screen window
-  // (excluding the desktop and dock), then pick the largest one
-  // owned by `appName` — Tauri-built apps typically open a single
-  // main window, but during DevTools-open sessions there's a second
-  // child window; the main one is reliably the largest.
-  return `
-    ObjC.import('CoreGraphics');
-    ObjC.import('Foundation');
-    const opts = $.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements;
-    const windows = $.CGWindowListCopyWindowInfo(opts, $.kCGNullWindowID);
-    const count = windows.count;
-    let winID = null;
-    let bestArea = 0;
-    for (let i = 0; i < count; i++) {
-      const w = windows.objectAtIndex(i);
-      const owner = ObjC.unwrap(w.objectForKey("kCGWindowOwnerName")) || "";
-      if (owner !== ${JSON.stringify(appName)}) continue;
-      const bounds = w.objectForKey("kCGWindowBounds");
-      if (!bounds) continue;
-      const width = ObjC.unwrap(bounds.objectForKey("Width")) || 0;
-      const height = ObjC.unwrap(bounds.objectForKey("Height")) || 0;
-      const area = width * height;
-      if (area > bestArea) {
-        bestArea = area;
-        winID = ObjC.unwrap(w.objectForKey("kCGWindowNumber"));
-      }
-    }
-    winID === null ? "NOTFOUND" : String(winID);
-  `;
-}
-
-async function findWindowId(appName) {
-  const { stdout } = await exec("osascript", [
-    "-l",
-    "JavaScript",
-    "-e",
-    jxaFindWindowId(appName),
-  ]);
-  const id = stdout.trim();
-  if (id === "NOTFOUND" || !/^\d+$/.test(id)) {
+/** GET /window-bounds on Meridian's control server. Returns the main
+ *  window's screen rect in logical points (matches `screencapture -R`
+ *  coordinate units). Throws with the same "is Meridian running?" hint
+ *  navigateApp uses, so the LLM gets a consistent signal. */
+async function fetchWindowBounds() {
+  let response;
+  try {
+    response = await fetch(`${CONTROL_SERVER_URL}/window-bounds`);
+  } catch (err) {
     throw new Error(
-      `No on-screen window found for app "${appName}". Is Meridian running?`,
+      `Meridian control server is unreachable at ${CONTROL_SERVER_URL}. ` +
+        `Is Meridian running (pnpm tauri dev)? Underlying error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
     );
   }
-  return id;
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `Bounds lookup failed (HTTP ${response.status}): ${body || "(empty body)"}`,
+    );
+  }
+  const json = await response.json();
+  if (!json || json.ok !== true) {
+    throw new Error(`Bounds lookup returned: ${JSON.stringify(json)}`);
+  }
+  const { x, y, width, height, window_id: windowId } = json;
+  if (![x, y, width, height].every((v) => Number.isFinite(v))) {
+    throw new Error(`Bounds response missing numeric fields: ${JSON.stringify(json)}`);
+  }
+  if (width <= 0 || height <= 0) {
+    throw new Error(
+      `Meridian window has zero size (${width}x${height}). Is the window minimized?`,
+    );
+  }
+  return { x, y, width, height, windowId: Number.isFinite(windowId) ? windowId : null };
 }
 
 /** POST `{screen}` to the running Meridian app's control server. Throws
@@ -136,13 +128,23 @@ async function navigateApp(screen) {
   await new Promise((r) => setTimeout(r, 250));
 }
 
-async function captureWindow(windowId) {
+async function captureMeridian({ windowId, x, y, width, height }) {
   const path = join(tmpdir(), `meridian-screenshot-${randomUUID()}.png`);
-  // -l <id>: capture window by CGWindowID
-  // -t png:  PNG output
-  // -x:      no shutter sound
-  // -o:      no window shadow (smaller image, no fuzzy alpha edge)
-  await exec("screencapture", ["-l", windowId, "-t", "png", "-x", "-o", path]);
+  // Prefer window-id capture: grabs Meridian's content even when
+  // occluded, so we never need to raise focus. Region capture is the
+  // fallback for old builds whose control server doesn't return an id.
+  let args;
+  if (windowId != null) {
+    // -l <id>: capture window by CGWindowID
+    // -o:      no window shadow (smaller image, no fuzzy alpha edge)
+    // -t png:  PNG output
+    // -x:      no shutter sound
+    args = ["-l", String(windowId), "-t", "png", "-x", "-o", path];
+  } else {
+    const rect = `${Math.round(x)},${Math.round(y)},${Math.round(width)},${Math.round(height)}`;
+    args = ["-R", rect, "-t", "png", "-x", path];
+  }
+  await exec("screencapture", args);
   try {
     const bytes = await readFile(path);
     return bytes.toString("base64");
@@ -178,23 +180,15 @@ server.registerTool(
             "Useful when verifying a change on a specific surface. " +
             "Omit to screenshot whatever is currently displayed.",
         ),
-      appName: z
-        .string()
-        .optional()
-        .describe(
-          "macOS app/process name to look for (defaults to 'Meridian'). " +
-            "Override only when running against a renamed build.",
-        ),
     },
   },
-  async ({ navigateTo, appName }) => {
-    const resolvedName = (appName && appName.trim()) || DEFAULT_APP_NAME;
+  async ({ navigateTo }) => {
     try {
       if (navigateTo) {
         await navigateApp(navigateTo);
       }
-      const winId = await findWindowId(resolvedName);
-      const base64 = await captureWindow(winId);
+      const bounds = await fetchWindowBounds();
+      const base64 = await captureMeridian(bounds);
       return {
         content: [
           {

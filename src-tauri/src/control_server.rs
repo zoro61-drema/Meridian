@@ -3,10 +3,20 @@
 //! meridian-screenshot MCP server) to drive the running app
 //! programmatically.
 //!
-//! Currently one endpoint:
-//!   POST /navigate  { "screen": "<id>" }
+//! Endpoints:
+//!   POST /navigate       { "screen": "<id>" }
 //!     → emits the `meridian:navigate` Tauri event with the screen id;
 //!       the frontend's listener in `App.tsx` switches to it.
+//!   GET  /window-bounds
+//!     → returns the main window's CGWindowID alongside its screen rect
+//!       in logical points ({window_id, x, y, width, height}). Used by
+//!       the screenshot MCP tool: it prefers `screencapture -l
+//!       <window_id>` (captures content even when occluded, without
+//!       raising focus), and falls back to `screencapture -R` if the
+//!       id is missing. Tauri exposes this directly via
+//!       `NSWindow.windowNumber`, so we sidestep CGWindowList — which
+//!       on macOS 26 silently returns 0 windows to processes lacking
+//!       a per-binary Screen Recording grant.
 //!
 //! Bound to loopback only — no auth needed, only processes on the same
 //! machine can reach it. The port is fixed; if it's already in use the
@@ -20,7 +30,7 @@
 //! MCP server, nothing more.
 
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -83,6 +93,7 @@ async fn handle_conn(mut stream: TcpStream, app: Arc<AppHandle>) -> std::io::Res
 
     let (status, body_out) = match (method, path) {
         ("POST", "/navigate") => handle_navigate(body, &app),
+        ("GET", "/window-bounds") => handle_window_bounds(&app),
         ("GET", "/health") => ("200 OK", "ok".to_string()),
         _ => ("404 Not Found", "unknown route".to_string()),
     };
@@ -139,6 +150,66 @@ fn handle_navigate(body: &str, app: &AppHandle) -> (&'static str, String) {
         );
     }
     ("200 OK", format!("{{\"ok\":true,\"screen\":\"{}\"}}", req.screen))
+}
+
+fn handle_window_bounds(app: &AppHandle) -> (&'static str, String) {
+    let window = match app.get_webview_window("main") {
+        Some(w) => w,
+        None => return ("500 Internal Server Error", json_error("main window not found")),
+    };
+    let pos = match window.outer_position() {
+        Ok(p) => p,
+        Err(e) => return ("500 Internal Server Error", json_error(&format!("outer_position: {e}"))),
+    };
+    let size = match window.outer_size() {
+        Ok(s) => s,
+        Err(e) => return ("500 Internal Server Error", json_error(&format!("outer_size: {e}"))),
+    };
+    let scale = window.scale_factor().unwrap_or(1.0).max(0.0001);
+    let x = (pos.x as f64) / scale;
+    let y = (pos.y as f64) / scale;
+    let w = (size.width as f64) / scale;
+    let h = (size.height as f64) / scale;
+    let window_id_field = match window_id(&window) {
+        Some(id) => format!(",\"window_id\":{id}"),
+        None => String::new(),
+    };
+    (
+        "200 OK",
+        format!(
+            "{{\"ok\":true{window_id_field},\"x\":{x},\"y\":{y},\"width\":{w},\"height\":{h},\"scale\":{scale}}}"
+        ),
+    )
+}
+
+/// Read the main window's CGWindowID by calling `-[NSWindow windowNumber]`
+/// directly on the NSWindow pointer Tauri hands us. Returns None on
+/// non-macOS or if the FFI call fails — the screenshot tool falls back
+/// to region-capture in that case.
+#[cfg(target_os = "macos")]
+fn window_id(window: &tauri::WebviewWindow) -> Option<i64> {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    let ns_window: *mut std::ffi::c_void = window.ns_window().ok()?;
+    if ns_window.is_null() {
+        return None;
+    }
+    // SAFETY: ns_window is a valid NSWindow* for as long as Tauri owns
+    // the window, and we only call it while the window exists. We're
+    // also on the main thread because the control server runs handlers
+    // on the tauri::async_runtime executor that owns the AppHandle.
+    let win = ns_window as *mut AnyObject;
+    let number: isize = unsafe { msg_send![win, windowNumber] };
+    if number <= 0 {
+        None
+    } else {
+        Some(number as i64)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn window_id(_window: &tauri::WebviewWindow) -> Option<i64> {
+    None
 }
 
 fn json_error(msg: &str) -> String {

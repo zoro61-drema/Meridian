@@ -44,6 +44,13 @@ core-foundation = "0.10"
 # work the same on every macOS the app lands on.
 rusqlite = { version = "0.32", features = ["bundled"] }
 
+# macOS-only — read the main window's CGWindowID for the screenshot
+# control endpoint. Lets `screencapture -l <id>` grab the window's
+# pixels without bringing it to the front (so we don't steal focus
+# from whichever app the user was just in).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+
 [profile.release]
 codegen-units = 1
 lto = true

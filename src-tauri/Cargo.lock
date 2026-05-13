@@ -2899,6 +2899,7 @@ dependencies = [
  "dirs",
  "futures-util",
  "glob",
+ "objc2",
  "regex-lite",
  "reqwest 0.12.28",
  "rusqlite",

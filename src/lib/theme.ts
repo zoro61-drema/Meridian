@@ -59,10 +59,10 @@ export function loadTheme(): ThemeConfig {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { accent: parsed.accent ?? "slate" };
+      return { accent: parsed.accent ?? "blue" };
     }
   } catch { /* ignore */ }
-  return { accent: "slate" };
+  return { accent: "blue" };
 }
 
 export function saveTheme(config: ThemeConfig) {

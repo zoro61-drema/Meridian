@@ -308,10 +308,19 @@ export function ChatWindow({
     return out;
   })();
 
+  // `flex-1 h-full` ensures the container always fills its parent:
+  //   - flex-1 takes effect when the parent is a flex column (the
+  //     common case — sidebar panels) so the messages area can grow
+  //     and push the input to the bottom even when the chat starts
+  //     with zero messages.
+  //   - h-full handles non-flex parents that provide an explicit
+  //     height. Both can sit alongside each other harmlessly.
+  // Without one of these, an empty chat collapses to its intrinsic
+  // content height and the input bunches up at the top.
   const containerClasses = bare
-    ? cn("min-h-0 flex flex-col", className)
+    ? cn("flex-1 h-full min-h-0 flex flex-col", className)
     : cn(
-        "min-h-0 flex flex-col rounded-md border bg-card/40",
+        "flex-1 h-full min-h-0 flex flex-col rounded-md border bg-card/40",
         className,
       );
 

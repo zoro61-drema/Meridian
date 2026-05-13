@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type BitbucketPr } from "@/lib/tauri/bitbucket";
 import { type JiraIssue } from "@/lib/tauri/jira";
+import { cn } from "@/lib/utils";
 import {
     ChevronDown,
     ChevronRight,
@@ -35,11 +36,25 @@ type LoadBadge = "overloaded" | "balanced" | "underloaded";
 
 const LOAD_STYLE: Record<
   LoadBadge,
-  { badge: "destructive" | "success" | "secondary"; icon: React.ElementType; label: string }
+  {
+    badge: "destructive" | "success" | "secondary";
+    /** Optional className to override the variant's colour — used for
+     *  "underloaded" since the badge component doesn't ship a yellow
+     *  variant and we want the row to draw attention. */
+    badgeClassName?: string;
+    icon: React.ElementType;
+    label: string;
+  }
 > = {
-  overloaded: { badge: "destructive", icon: TrendingUp, label: "Overloaded" },
-  balanced:   { badge: "success",     icon: Minus,      label: "Balanced" },
-  underloaded:{ badge: "secondary",   icon: TrendingDown, label: "Underloaded" },
+  overloaded:  { badge: "destructive", icon: TrendingUp, label: "Overloaded" },
+  balanced:    { badge: "success",     icon: Minus,      label: "Balanced" },
+  underloaded: {
+    badge: "secondary",
+    badgeClassName:
+      "border-yellow-500/50 bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300",
+    icon: TrendingDown,
+    label: "Underloaded",
+  },
 };
 
 /** Tickets in "To Do" or "Needs Spec" status — i.e. work the developer
@@ -145,7 +160,13 @@ function DevRow({
           <div className="flex items-center gap-2 mb-1">
             <span className="font-medium truncate">{dev.name}</span>
             {style && Icon && (
-              <Badge variant={style.badge} className="text-[10px] gap-0.5 shrink-0">
+              <Badge
+                variant={style.badge}
+                className={cn(
+                  "text-[10px] gap-0.5 shrink-0",
+                  style.badgeClassName,
+                )}
+              >
                 <Icon className="h-2.5 w-2.5" />
                 {style.label}
               </Badge>
@@ -310,7 +331,10 @@ export function TeamPerformanceCard({
               </Badge>
             )}
             {underloadedCount > 0 && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge
+                variant="secondary"
+                className="gap-1 border-yellow-500/50 bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300"
+              >
                 <TrendingDown className="h-2.5 w-2.5" />
                 {underloadedCount} underloaded
               </Badge>

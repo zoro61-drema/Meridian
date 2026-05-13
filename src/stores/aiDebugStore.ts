@@ -155,7 +155,9 @@ export const useAiDebugStore = create<AiDebugState>()(
     (set) => ({
       events: [],
       enabled: false,
-      dockMode: "bottom",
+      // "hidden" until hydration runs — keeps the panel from flashing
+      // on cold start even if the user's saved pref is also "hidden".
+      dockMode: "hidden",
       lastVisibleDockMode: "bottom",
       panelSize: 320,
       hydrated: false,

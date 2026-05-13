@@ -46,10 +46,13 @@ export const APP_PREFERENCE_DEFAULTS = {
    *  costs IPC bandwidth and only matters when the user is actively
    *  inspecting prompts. */
   aiDebugEnabled: false,
-  /** Where the debug panel docks: edge of the main window or a popped-
-   *  out separate window. Persisted so the layout sticks across
-   *  app restarts. */
-  aiDebugDockMode: "bottom" as AiDebugDockMode,
+  /** Where the debug panel docks: edge of the main window, a popped-
+   *  out separate window, or hidden entirely. Defaults to "hidden" so
+   *  the app doesn't ship a developer panel to the user on first
+   *  launch — they open it on demand from View → AI Debug Panel
+   *  (Cmd/Ctrl+Shift+D), which restores to the last visible mode they
+   *  picked (or "bottom" if they've never picked one). */
+  aiDebugDockMode: "hidden" as AiDebugDockMode,
   /** Ollama embedding model used by the cross-meetings RAG search.
    *  `nomic-embed-text` is a sensible default — 768 dims, English-
    *  optimised, runs on consumer hardware. Users can switch via

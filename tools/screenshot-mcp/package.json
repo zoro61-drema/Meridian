@@ -1,0 +1,20 @@
+{
+  "name": "meridian-screenshot-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tiny MCP server that screenshots Meridian's running macOS window so Claude Code can verify UI changes visually.",
+  "bin": {
+    "meridian-screenshot-mcp": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

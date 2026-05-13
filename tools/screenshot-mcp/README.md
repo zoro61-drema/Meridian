@@ -17,35 +17,19 @@ glancing at the screen.
 
 ## Setup
 
-Run once from the repo root:
+From the repo root:
 
 ```bash
-cd tools/screenshot-mcp
-pnpm install
+pnpm mcp:connect
 ```
 
-Then register the server with Claude Code (run from anywhere):
+That installs the server's deps and registers it with Claude Code in
+one shot — equivalent to `cd tools/screenshot-mcp && pnpm install`
+followed by `claude mcp add meridian-screenshot -- node $PWD/tools/screenshot-mcp/server.js`.
+Restart Claude Code (or `/mcp`) to confirm `meridian-screenshot` is
+listed as **connected**.
 
-```bash
-claude mcp add meridian-screenshot \
-  -- node /Users/isaac/REPOS/Meridian/tools/screenshot-mcp/server.js
-```
-
-Or edit `~/.claude/settings.json` directly:
-
-```json
-{
-  "mcpServers": {
-    "meridian-screenshot": {
-      "command": "node",
-      "args": ["/Users/isaac/REPOS/Meridian/tools/screenshot-mcp/server.js"]
-    }
-  }
-}
-```
-
-Restart Claude Code (or `/mcp` to confirm `meridian-screenshot` is
-listed as **connected**).
+To remove: `pnpm mcp:disconnect`.
 
 ## Usage
 

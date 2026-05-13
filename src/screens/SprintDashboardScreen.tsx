@@ -24,7 +24,7 @@ import {
     TeamPerformanceCard,
     buildDevStats,
 } from "./sprint-dashboard/team-performance-card";
-import { TeamWorkloadSection } from "./sprint-dashboard/team-workload-section";
+import { UnstartedTicketsCard } from "./sprint-dashboard/unstarted-tickets-card";
 
 interface SprintDashboardScreenProps {
   credStatus: CredentialStatus;
@@ -257,14 +257,15 @@ export function SprintDashboardScreen({ credStatus, onBack }: SprintDashboardScr
                   openPrs={data.openPrs}
                   mergedPrs={data.mergedPrs}
                 />
-                <TeamWorkloadSection
+                <BlockersPanel risks={risks} />
+                <TeamPerformanceCard
+                  devStats={devStats}
                   issues={data.issues}
                   openPrs={data.openPrs}
                   ignoredDevs={ignoredDevs}
                   onToggleIgnoredDev={toggleIgnoredDev}
                 />
-                <BlockersPanel risks={risks} />
-                <TeamPerformanceCard devStats={devStats} />
+                <UnstartedTicketsCard issues={data.issues} />
               </>
             )}
           </div>

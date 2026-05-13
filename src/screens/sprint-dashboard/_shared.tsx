@@ -141,7 +141,7 @@ export function SegmentedBar({ segments, total }: { segments: Segment[]; total: 
   );
 }
 
-// ── Workload helpers (shared by TeamWorkloadSection + SprintChatPanel) ────────
+// ── Workload helpers (shared by TeamPerformanceCard + SprintChatPanel) ───────
 
 export type LoadStatus = "overloaded" | "balanced" | "underutilised";
 

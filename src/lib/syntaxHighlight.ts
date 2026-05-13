@@ -9,9 +9,8 @@
  *     layout intact and just inject coloured tokens via dangerouslySetInnerHTML.
  *   - Bundle size: only the languages we explicitly import below ship.
  *
- * The Implement-a-ticket workflow already uses Monaco DiffEditor, which
- * carries its own syntax highlighting; this helper only powers the unified
- * diff in PR Review.
+ * Used by the unified diff in PR Review. Other surfaces that need a
+ * full editor view (e.g. agent skill previews) reach for Monaco directly.
  */
 
 import Prism from "prismjs";

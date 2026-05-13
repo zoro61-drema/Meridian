@@ -4,7 +4,7 @@ import { HeaderRecordButton } from "@/components/HeaderRecordButton";
 import { HeaderTasksButton } from "@/components/HeaderTasksButton";
 import { HeaderTimeTracker } from "@/components/HeaderTimeTracker";
 import { HeaderModelPicker } from "@/components/HeaderModelPicker";
-import type { PanelId, StageId } from "@/stores/aiSelectionStore";
+import type { PanelId } from "@/stores/aiSelectionStore";
 import { cn } from "@/lib/utils";
 
 /** Matches the landing page header chrome (full-width bar). */
@@ -36,8 +36,6 @@ type WorkflowPanelHeaderProps = {
    * invoke any AI agent (e.g. the agent-skills browser).
    */
   panel?: PanelId;
-  /** Implement-Ticket: the stage currently being viewed. */
-  stage?: StageId | null;
 };
 
 /**
@@ -49,7 +47,6 @@ export function WorkflowPanelHeader({
   trailing,
   barClassName,
   panel,
-  stage,
 }: WorkflowPanelHeaderProps) {
   return (
     <header className={cn(APP_HEADER_BAR, barClassName)}>
@@ -66,7 +63,7 @@ export function WorkflowPanelHeader({
         </div>
         <div className="relative z-10 flex shrink-0 items-center gap-2">
           {trailing}
-          {panel ? <HeaderModelPicker panel={panel} stage={stage} /> : null}
+          {panel ? <HeaderModelPicker panel={panel} /> : null}
           <HeaderTimeTracker />
           <HeaderRecordButton />
           <HeaderTasksButton />

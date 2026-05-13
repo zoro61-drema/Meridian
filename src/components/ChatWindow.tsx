@@ -3,14 +3,11 @@
 // streaming-bubble rendering, tool-call inlining, slash-command input,
 // and "queued" bubble UI that used to be duplicated across:
 //
-//   - Plan phase chat (ImplementTicket / plan-panel)
-//   - Build phase chat (ImplementTicket / build-panel)
 //   - Sprint dashboard chat
 //   - Groom Ticket chat
 //   - Meetings chat
 //   - PR Review chat
 //   - Cross-Meetings chat
-//   - Address-PR fix-plan chat
 //
 // Each panel passes its specific data (messages, commands, optional
 // streaming state, optional tool log, optional pause/resume controls)

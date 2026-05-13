@@ -4,13 +4,11 @@ import { APP_PREFERENCE_DEFAULTS } from "@/lib/appPreferences";
 import {
   useAiSelectionStore,
   PANEL_LABELS,
-  STAGE_LABELS,
   PROVIDER_LABELS,
   ALL_PROVIDERS,
 } from "@/stores/aiSelectionStore";
 import type {
   PanelId as AiPanelId,
-  StageId as AiStageId,
   AiProvider,
 } from "@/stores/aiSelectionStore";
 import {
@@ -114,7 +112,7 @@ export function DefaultModelCard() {
         <CardTitle className="text-base">Default model</CardTitle>
         <CardDescription className="text-xs mt-0.5">
           Used by any panel that doesn't have its own override below. Per-panel
-          and per-stage selections still take precedence.
+          selections still take precedence.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -182,7 +180,6 @@ export function DefaultModelCard() {
 
 export function PerPanelAiSection() {
   type PanelId = AiPanelId;
-  type StageId = AiStageId;
 
   const hydrated = useAiSelectionStore((s) => s.hydrated);
   const hydrate = useAiSelectionStore((s) => s.hydrate);
@@ -190,34 +187,20 @@ export function PerPanelAiSection() {
   const loadModels = useAiSelectionStore((s) => s.loadModels);
   const defaultProvider = useAiSelectionStore((s) => s.defaultProvider);
   const panelOverrides = useAiSelectionStore((s) => s.panelOverrides);
-  const stageOverrides = useAiSelectionStore((s) => s.stageOverrides);
   const modelsByProvider = useAiSelectionStore((s) => s.modelsByProvider);
   const providerDefaultModel = useAiSelectionStore(
     (s) => s.providerDefaultModel,
   );
   const setPanelOverride = useAiSelectionStore((s) => s.setPanelOverride);
-  const setStageOverride = useAiSelectionStore((s) => s.setStageOverride);
   const credStatus = useCredentialStatusStore((s) => s.status);
   const authed = useMemo(() => authenticatedProviders(credStatus), [credStatus]);
 
   const PANELS: PanelId[] = [
-    "implement_ticket",
     "pr_review",
     "ticket_quality",
     "sprint_dashboard",
     "retrospectives",
     "meetings",
-  ];
-  const IMPL_STAGES: StageId[] = [
-    "grooming",
-    "impact",
-    "triage",
-    "plan",
-    "implementation",
-    "tests",
-    "review",
-    "pr",
-    "retro",
   ];
 
   useEffect(() => {
@@ -249,15 +232,6 @@ export function PerPanelAiSection() {
   }
   function clearPanel(panel: PanelId) {
     void setPanelOverride(panel, null);
-  }
-
-  function saveStage(stage: StageId, prov: AiProvider, model: string) {
-    const m =
-      model || getModels(prov)[0]?.[0] || providerDefaultModel[prov] || "";
-    void setStageOverride(stage, { provider: prov, model: m });
-  }
-  function clearStage(stage: StageId) {
-    void setStageOverride(stage, null);
   }
 
   function providerOptionLabel(p: AiProvider): string {
@@ -359,9 +333,8 @@ export function PerPanelAiSection() {
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Per-panel AI</CardTitle>
         <CardDescription className="text-xs mt-0.5">
-          Override the AI provider and model for any panel. Stage overrides
-          under <strong>Implement a Ticket</strong> win over the panel setting.
-          Panels with no override use the default model above.
+          Override the AI provider and model for any panel. Panels with no
+          override use the default model above.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-1">
@@ -376,30 +349,6 @@ export function PerPanelAiSection() {
                 onSet={(prov, model) => savePanel(p, prov, model)}
                 onClear={() => clearPanel(p)}
               />
-              {p === "implement_ticket" && (
-                <div className="mt-1">
-                  {IMPL_STAGES.map((s) => {
-                    const stageOv = stageOverrides[s];
-                    const hint = !stageOv
-                      ? panelOv
-                        ? "(panel)"
-                        : "(default)"
-                      : null;
-                    return (
-                      <OverrideRow
-                        key={s}
-                        label={STAGE_LABELS[s]}
-                        indent
-                        hint={hint}
-                        overrideProvider={stageOv?.provider ?? ""}
-                        overrideModel={stageOv?.model ?? ""}
-                        onSet={(prov, model) => saveStage(s, prov, model)}
-                        onClear={() => clearStage(s)}
-                      />
-                    );
-                  })}
-                </div>
-              )}
             </div>
           );
         })}

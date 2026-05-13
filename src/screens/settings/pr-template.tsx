@@ -99,9 +99,8 @@ export function PrTemplateSection() {
           PR Description Template
         </CardTitle>
         <CardDescription>
-          Markdown template the PR Description agent uses when drafting the PR
-          body in the Implement a Ticket workflow. Leave blank to let the agent
-          choose its own structure.
+          Markdown template the PR Description agent uses when drafting a PR
+          body. Leave blank to let the agent choose its own structure.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

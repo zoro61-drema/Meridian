@@ -44,7 +44,7 @@ export const makeIssue = (
   discoveredFieldIds: {},
 });
 
-// ── Demo tickets for testing the Implement a Ticket pipeline from a blank worktree ──
+// ── Demo tickets used by the mock-mode workflows ──
 //
 // DEMO-1: Small program — comprehensive enough to exercise every pipeline stage.
 //   A TypeScript CLI that generates a linked table of contents from a markdown file.

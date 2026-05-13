@@ -1,15 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, Cpu, Loader2, RotateCcw } from "lucide-react";
+import { AlertCircle, Cpu, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   useAiSelectionStore,
   type AiProvider,
   type PanelId,
-  type StageId,
   PROVIDER_LABELS,
-  STAGE_LABELS,
   PANEL_LABELS,
 } from "@/stores/aiSelectionStore";
 import {
@@ -31,8 +29,6 @@ import { getModelContextWindow } from "@/lib/modelContext";
 
 const PROVIDER_OPTIONS: AiProvider[] = ["claude", "gemini", "local", "copilot"];
 
-type Scope = "stage" | "panel";
-
 /** Bridge the aiSelectionStore's PanelId enum to the tokenUsageStore's
  *  PanelKey enum. They share the same set of ids today, so this is a
  *  direct cast — the helper exists to keep one place to add a mapping
@@ -43,11 +39,9 @@ function panelIdToKey(panel: PanelId): PanelKey {
 
 export function HeaderModelPicker({
   panel,
-  stage,
   className,
 }: {
   panel: PanelId;
-  stage?: StageId | null;
   className?: string;
 }) {
   const hydrated = useAiSelectionStore((s) => s.hydrated);
@@ -55,17 +49,14 @@ export function HeaderModelPicker({
   const refresh = useAiSelectionStore((s) => s.refreshFromPrefs);
   const loadModels = useAiSelectionStore((s) => s.loadModels);
   const setPanelOverride = useAiSelectionStore((s) => s.setPanelOverride);
-  const setStageOverride = useAiSelectionStore((s) => s.setStageOverride);
   const modelsByProvider = useAiSelectionStore((s) => s.modelsByProvider);
   const modelsLoading = useAiSelectionStore((s) => s.modelsLoading);
-  const stageOverrides = useAiSelectionStore((s) => s.stageOverrides);
   const resolve = useAiSelectionStore((s) => s.resolve);
 
   // Re-render whenever any selection-relevant slice changes.
   useAiSelectionStore((s) => s.defaultProvider);
   useAiSelectionStore((s) => s.defaultModel);
   useAiSelectionStore((s) => s.panelOverrides);
-  useAiSelectionStore((s) => s.stageOverrides);
   useAiSelectionStore((s) => s.providerDefaultModel);
 
   const credStatus = useCredentialStatusStore((s) => s.status);
@@ -82,15 +73,6 @@ export function HeaderModelPicker({
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(
     null,
   );
-
-  const stageScopable = panel === "implement_ticket" && !!stage;
-  const [scope, setScope] = useState<Scope>(
-    stageScopable ? "stage" : "panel",
-  );
-
-  useEffect(() => {
-    setScope(stageScopable ? "stage" : "panel");
-  }, [stageScopable, stage]);
 
   useEffect(() => {
     if (!hydrated) void hydrate();
@@ -136,8 +118,7 @@ export function HeaderModelPicker({
     };
   }, [open]);
 
-  const resolved = resolve(panel, stage ?? undefined);
-  const stageHasOverride = stage ? !!stageOverrides[stage] : false;
+  const resolved = resolve(panel);
   // Pick out the active provider's rate-limit snapshot from the live
   // map. Parsed from the standard `anthropic-ratelimit-*` response
   // headers and forwarded by the sidecar's streaming.ts whenever a
@@ -167,18 +148,8 @@ export function HeaderModelPicker({
   const loadingModels = !!modelsLoading[draftProvider];
 
   async function selectModel(modelId: string) {
-    const value = { provider: draftProvider, model: modelId };
-    if (scope === "stage" && stage) {
-      await setStageOverride(stage, value);
-    } else {
-      await setPanelOverride(panel, value);
-    }
+    await setPanelOverride(panel, { provider: draftProvider, model: modelId });
     setOpen(false);
-  }
-
-  async function clearStageOverride() {
-    if (!stage) return;
-    await setStageOverride(stage, null);
   }
 
   const buttonLabel = (() => {
@@ -381,16 +352,11 @@ export function HeaderModelPicker({
             className="w-96 rounded-lg border bg-popover text-popover-foreground shadow-lg"
           >
             <div className="px-3 py-2.5 border-b">
-              <p className="text-xs font-semibold">
-                {PANEL_LABELS[panel]}
-                {stage ? ` · ${STAGE_LABELS[stage]}` : ""}
-              </p>
+              <p className="text-xs font-semibold">{PANEL_LABELS[panel]}</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {resolved.source === "stage"
-                  ? "Using stage override."
-                  : resolved.source === "panel"
-                    ? "Using panel override."
-                    : "Using default model."}
+                {resolved.source === "panel"
+                  ? "Using panel override."
+                  : "Using default model."}
               </p>
               {!authed.has(resolved.provider) && (
                 <button
@@ -495,40 +461,6 @@ export function HeaderModelPicker({
 
             {rateLimitSnapshot && (
               <RateLimitsSection snapshot={rateLimitSnapshot} />
-            )}
-
-            {stageScopable && (
-              <div className="px-3 pt-2.5 pb-2 border-b">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                  Apply selection to
-                </p>
-                <div className="grid grid-cols-2 gap-1">
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded px-2 py-1.5 text-xs",
-                      scope === "stage"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted hover:bg-muted/70",
-                    )}
-                    onClick={() => setScope("stage")}
-                  >
-                    This stage
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded px-2 py-1.5 text-xs",
-                      scope === "panel"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted hover:bg-muted/70",
-                    )}
-                    onClick={() => setScope("panel")}
-                  >
-                    Whole panel
-                  </button>
-                </div>
-              </div>
             )}
 
             <div className="px-3 pt-2.5 pb-2 border-b">
@@ -636,16 +568,6 @@ export function HeaderModelPicker({
               )}
             </div>
 
-            {stageHasOverride && stage && (
-              <button
-                type="button"
-                onClick={() => void clearStageOverride()}
-                className="w-full px-3 py-2 border-t text-xs text-muted-foreground hover:bg-muted/60 flex items-center justify-center gap-1.5 rounded-b-lg"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Reset stage to panel default
-              </button>
-            )}
           </div>,
           document.body,
         )}

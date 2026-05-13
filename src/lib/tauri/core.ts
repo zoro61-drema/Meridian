@@ -17,7 +17,6 @@ import {
  *  the AI selection store doesn't manage (e.g. `trends`) — those
  *  reports won't be bucketed by model. */
 const PANEL_TO_AI: Record<PanelKey, AiPanelId | null> = {
-  implement_ticket: "implement_ticket",
   pr_review: "pr_review",
   ticket_quality: "ticket_quality",
   sprint_dashboard: "sprint_dashboard",

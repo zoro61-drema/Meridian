@@ -25,7 +25,6 @@ import { getAppPreferences } from "@/lib/appPreferences";
  *  typo at a call site shows up in TS rather than silently bucketing
  *  into a stray key. */
 export type PanelKey =
-  | "implement_ticket"
   | "pr_review"
   | "ticket_quality"
   | "sprint_dashboard"
@@ -206,7 +205,6 @@ function todayIso(): string {
 
 function emptyPanels(): Record<PanelKey, PanelState> {
   return {
-    implement_ticket: emptyPanel(),
     pr_review: emptyPanel(),
     ticket_quality: emptyPanel(),
     sprint_dashboard: emptyPanel(),

@@ -1,18 +1,17 @@
 /**
- * Per-panel and per-stage AI provider/model selection.
+ * Per-panel AI provider/model selection.
  *
  * The user picks ONE default provider+model (settable in Settings → Models or
- * seeded by the first authenticated provider during onboarding). Any panel or
- * stage may override that default with its own provider+model. There is no
- * fallback chain — if the resolved provider isn't authenticated, the app
- * surfaces a "needs auth" badge in the header model picker rather than
- * silently substituting another provider.
+ * seeded by the first authenticated provider during onboarding). Any panel may
+ * override that default with its own provider+model. There is no fallback
+ * chain — if the resolved provider isn't authenticated, the app surfaces a
+ * "needs auth" badge in the header model picker rather than silently
+ * substituting another provider.
  *
  * Pref keys:
- *   ai_default_provider — "claude" | "gemini" | "local"
+ *   ai_default_provider — "claude" | "gemini" | "local" | "copilot"
  *   ai_default_model    — the model id for the default provider
  *   panel_ai_overrides  — flat JSON `{ pr_review: {provider,model}, … }`
- *   stage_ai_overrides  — flat JSON keyed by StageId
  *
  * Migration: an earlier version stored overrides nested by an "AI Provider
  * Priority" mode (auto / claude / gemini / local) and used that
@@ -35,23 +34,11 @@ import { create } from "zustand";
 export type AiProvider = "claude" | "gemini" | "local" | "copilot";
 
 export type PanelId =
-  | "implement_ticket"
   | "pr_review"
   | "ticket_quality"
   | "sprint_dashboard"
   | "retrospectives"
   | "meetings";
-
-export type StageId =
-  | "grooming"
-  | "impact"
-  | "triage"
-  | "plan"
-  | "implementation"
-  | "tests"
-  | "review"
-  | "pr"
-  | "retro";
 
 export interface AiOverride {
   provider: AiProvider;
@@ -59,24 +46,11 @@ export interface AiOverride {
 }
 
 export const PANEL_LABELS: Record<PanelId, string> = {
-  implement_ticket: "Implement a Ticket",
   pr_review: "PR Review",
   ticket_quality: "Groom Ticket",
   sprint_dashboard: "Sprint Dashboard",
   retrospectives: "Retrospectives",
   meetings: "Meetings",
-};
-
-export const STAGE_LABELS: Record<StageId, string> = {
-  grooming: "Grooming",
-  impact: "Impact Analysis",
-  triage: "Triage",
-  plan: "Implementation Plan",
-  implementation: "Implementation",
-  tests: "Test Generation",
-  review: "Code Review",
-  pr: "PR Description",
-  retro: "Retrospective",
 };
 
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
@@ -94,13 +68,12 @@ type OverrideMap<K extends string> = Partial<Record<K, AiOverride>>;
 
 interface State {
   hydrated: boolean;
-  /** Default provider used by panels/stages with no explicit override. */
+  /** Default provider used by panels with no explicit override. */
   defaultProvider: AiProvider | undefined;
   /** Default model paired with `defaultProvider`. May be empty if the
    *  user hasn't picked one yet — workflows error in that case. */
   defaultModel: string;
   panelOverrides: OverrideMap<PanelId>;
-  stageOverrides: OverrideMap<StageId>;
   /** Provider-default model preferences (set at the global Settings
    *  level — separate from `defaultModel` because each provider has its
    *  own "preferred model" pref that fills the picker dropdown's first
@@ -121,18 +94,13 @@ interface Actions {
   invalidateModels: (provider: AiProvider) => void;
   /** Set or clear a panel-level override. */
   setPanelOverride: (panel: PanelId, value: AiOverride | null) => Promise<void>;
-  /** Set or clear a stage-level override. */
-  setStageOverride: (stage: StageId, value: AiOverride | null) => Promise<void>;
   /** Replace the global default provider+model. */
   setDefault: (value: AiOverride) => Promise<void>;
-  /** Resolve the active provider+model for a (panel, stage?) pair. */
-  resolve: (
-    panel: PanelId,
-    stage?: StageId | null,
-  ) => {
+  /** Resolve the active provider+model for a panel. */
+  resolve: (panel: PanelId) => {
     provider: AiProvider;
     model: string;
-    source: "stage" | "panel" | "default";
+    source: "panel" | "default";
   };
 }
 
@@ -158,7 +126,7 @@ function parseFlatOverrideMap<K extends string>(obj: unknown): OverrideMap<K> {
 }
 
 /**
- * Parse `panel_ai_overrides` / `stage_ai_overrides`. Handles both the new
+ * Parse `panel_ai_overrides`. Handles both the new
  * flat `{panel: AiOverride}` shape and the legacy nested
  * `{auto: {panel: AiOverride}, claude: {…}}` shape (taking either the
  * provided `legacyMode`'s slice or — when null — the first non-empty mode
@@ -222,7 +190,6 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
   defaultProvider: undefined,
   defaultModel: "",
   panelOverrides: {},
-  stageOverrides: {},
   providerDefaultModel: {},
   modelsByProvider: {},
   modelsLoading: {},
@@ -250,8 +217,6 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
 
       const { map: panelOverrides, needsRewrite: panelLegacy } =
         parseOverridesAnyShape<PanelId>(prefs.panel_ai_overrides, legacyAiProvider);
-      const { map: stageOverrides, needsRewrite: stageLegacy } =
-        parseOverridesAnyShape<StageId>(prefs.stage_ai_overrides, legacyAiProvider);
 
       // Resolve default provider+model. Order of preference:
       //   1. New keys ai_default_provider + ai_default_model (post-migration).
@@ -284,7 +249,6 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
         defaultProvider,
         defaultModel,
         panelOverrides,
-        stageOverrides,
         providerDefaultModel,
       });
 
@@ -292,9 +256,6 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
       // failing pref write doesn't keep the user staring at a spinner.
       if (panelLegacy) {
         void setPreference("panel_ai_overrides", JSON.stringify(panelOverrides));
-      }
-      if (stageLegacy) {
-        void setPreference("stage_ai_overrides", JSON.stringify(stageOverrides));
       }
       const needsDefaultWrite =
         defaultProvider !== undefined && !PROVIDER_VALUES.has(newDefProv);
@@ -354,27 +315,14 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
     await setPreference("panel_ai_overrides", JSON.stringify(next));
   },
 
-  setStageOverride: async (stage, value) => {
-    const { stageOverrides } = get();
-    const next = { ...stageOverrides };
-    if (value === null) delete next[stage];
-    else next[stage] = value;
-    set({ stageOverrides: next });
-    await setPreference("stage_ai_overrides", JSON.stringify(next));
-  },
-
   setDefault: async (value) => {
     set({ defaultProvider: value.provider, defaultModel: value.model });
     await setPreference("ai_default_provider", value.provider);
     await setPreference("ai_default_model", value.model);
   },
 
-  resolve: (panel, stage) => {
+  resolve: (panel) => {
     const s = get();
-    const stageOv = stage ? s.stageOverrides[stage] : undefined;
-    if (stageOv) {
-      return { provider: stageOv.provider, model: stageOv.model, source: "stage" };
-    }
     const panelOv = s.panelOverrides[panel];
     if (panelOv) {
       return { provider: panelOv.provider, model: panelOv.model, source: "panel" };

@@ -22,7 +22,7 @@
  * with the new flat shape so subsequent loads skip the migration path.
  */
 
-import { getPreferences, setPreference } from "@/lib/preferences";
+import { deletePreference, getPreferences, setPreference } from "@/lib/preferences";
 import {
   getClaudeModels,
   getCopilotModels,
@@ -264,6 +264,16 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
         if (defaultModel) {
           void setPreference("ai_default_model", defaultModel);
         }
+      }
+
+      // One-time cleanup of the dead `stage_ai_overrides` key. Implement-a-
+      // Ticket was the only feature that used stage-level overrides, and it
+      // was removed in 2026-05; leftover entries from before that date sit
+      // in the prefs file unread. Best-effort delete on first hydrate per
+      // session — `prefs.stage_ai_overrides === undefined` skips it for
+      // users who never had Implement-a-Ticket configured.
+      if (prefs.stage_ai_overrides !== undefined) {
+        void deletePreference("stage_ai_overrides");
       }
     } catch {
       /* leave defaults */

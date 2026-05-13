@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { WorkflowId } from "@/screens/WorkflowScreen";
 import type { LandingLayoutProps } from "@/lib/landingLayouts";
 import { CardBadge } from "./CardBadge";
@@ -156,14 +156,63 @@ export function OrbitalLayout({ cards, onNavigate }: LandingLayoutProps) {
   const [hoveredId, setHoveredId] = useState<WorkflowId | null>(null);
   const hovered = cards.find((c) => c.id === hoveredId) ?? null;
 
+  // We want the orbital frame to be the largest 5:4 rectangle inscribed
+  // within whatever space the parent gives us. The previous approach
+  // used `min(100cqw, 100cqh * 5/4)` with a `container-type: size`
+  // parent — clean CSS, worked great in WebKit (Tauri's WKWebView).
+  // But Chrome resolves `100cqh` to 0 when the container's height
+  // comes from a flex-1/min-h-0 chain (the height isn't "definite" in
+  // CSS spec terms, even though it renders at a definite pixel value).
+  // Measure with ResizeObserver and apply the inscribed size inline —
+  // cross-browser, no CSS gymnastics. See `LandingScreen.tsx` for the
+  // parent's flex chain.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [frame, setFrame] = useState<{ w: number; h: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      // Inscribed 5:4 box — take the smaller of (parent width) and
+      // (parent height × 5/4) for the width, then derive height.
+      const w = Math.min(r.width, r.height * (5 / 4));
+      const h = w * (4 / 5);
+      setFrame({ w, h });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div
-      className="max-w-7xl w-full mx-auto p-4 sm:p-6 flex-1 min-h-0 flex items-center justify-center"
-      style={{ containerType: "size" }}
+      ref={outerRef}
+      className="max-w-7xl w-full mx-auto p-4 sm:p-6 flex-1 min-h-0 relative"
     >
+      {/* The inscribed frame is positioned absolutely + centred so its
+       *  size doesn't feed back into the outer's flex sizing. With
+       *  `flex items-center justify-center` the parent fits content,
+       *  which means setting an inline width/height on this inner
+       *  would push the parent to grow and our ResizeObserver would
+       *  re-measure the larger box and loop. Absolute positioning
+       *  breaks that cycle: the outer's height stays driven purely
+       *  by the flex chain. */}
       <div
-        className="relative aspect-[5/4]"
-        style={{ width: "min(100cqw, calc(100cqh * 5 / 4))" }}
+        className="absolute aspect-[5/4]"
+        style={
+          frame
+            ? {
+                width: `${frame.w}px`,
+                height: `${frame.h}px`,
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%, -50%)",
+              }
+            : { visibility: "hidden" }
+        }
       >
         <svg
           viewBox={`0 0 ${VBOX_W} ${VBOX_H}`}

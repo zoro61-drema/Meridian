@@ -1,16 +1,11 @@
 // IPC bridge to the TypeScript sidecar.
 //
-// The sidecar runs LangGraph workflows. Rust sends `workflow.start` requests
+// The sidecar runs the LLM workflows. Rust sends `workflow.start` requests
 // over the sidecar's stdin and receives a stream of newline-delimited JSON
 // events back over stdout. This module manages the sidecar process lifecycle,
 // correlates concurrent workflow runs by id, and exposes a high-level
 // `run_workflow` that drives a single run to its terminal `result`/`error`
 // event while emitting intermediate progress to the Tauri frontend.
-//
-// Workflows can also request tool callbacks (filesystem reads/writes against
-// the configured worktree). The sidecar emits `tool.callback.request`; this
-// module dispatches to the existing repo Tauri commands and writes
-// `tool.callback.response` back over stdin.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,9 +17,6 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, ChildStdin, ChildStdout};
 use tokio::sync::{mpsc, Mutex};
 
-use crate::commands::repo::{
-    get_repo_diff, glob_repo_files, grep_repo_files, read_repo_file, write_repo_file,
-};
 use crate::storage::preferences::{ai_debug_enabled, append_ai_debug_log_line};
 
 const DEV_BUNDLE: &str = concat!(
@@ -243,14 +235,6 @@ pub enum SidecarOutboundEvent {
         #[serde(default)]
         cause: Option<serde_json::Value>,
     },
-    #[serde(rename = "tool.callback.request")]
-    ToolCallbackRequest {
-        id: String,
-        #[serde(rename = "callbackId")]
-        callback_id: String,
-        tool: String,
-        input: serde_json::Value,
-    },
     AiTraffic {
         id: String,
         #[serde(flatten)]
@@ -292,7 +276,6 @@ impl SidecarOutboundEvent {
             | Self::Interrupt { id, .. }
             | Self::Result { id, .. }
             | Self::Error { id, .. }
-            | Self::ToolCallbackRequest { id, .. }
             | Self::AiTraffic { id, .. } => id,
         }
     }
@@ -472,136 +455,6 @@ impl WorkflowResult {
     }
 }
 
-// ── Tool callback dispatch ────────────────────────────────────────────────────
-
-async fn execute_tool_callback(
-    tool: &str,
-    input: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let take_str = |obj: &serde_json::Value, key: &str| -> Result<String, String> {
-        obj.get(key)
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .ok_or_else(|| format!("Tool '{tool}' missing required '{key}' (string)"))
-    };
-
-    match tool {
-        "glob_repo_files" => {
-            let pattern = take_str(&input, "pattern")?;
-            let files = glob_repo_files(pattern).await?;
-            Ok(serde_json::json!({ "files": files }))
-        }
-        "grep_repo_files" => {
-            let pattern = take_str(&input, "pattern")?;
-            let path = input
-                .get("path")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            let matches = grep_repo_files(pattern, path).await?;
-            Ok(serde_json::json!({ "matches": matches }))
-        }
-        "read_repo_file" => {
-            let path = take_str(&input, "path")?;
-            let contents = read_repo_file(path).await?;
-            Ok(serde_json::json!({ "contents": contents }))
-        }
-        "stat_repo_file" => {
-            let path = take_str(&input, "path")?;
-            let stat = crate::commands::repo::stat_repo_file_internal(&path)?;
-            Ok(serde_json::json!({
-                "exists": stat.exists,
-                "sizeBytes": stat.size_bytes,
-            }))
-        }
-        "write_repo_file" => {
-            let path = take_str(&input, "path")?;
-            let content = take_str(&input, "content")?;
-            write_repo_file(path, content).await?;
-            Ok(serde_json::json!({ "ok": true }))
-        }
-        "get_repo_diff" => {
-            let diff = get_repo_diff().await?;
-            Ok(serde_json::json!({ "diff": diff }))
-        }
-        "exec_in_worktree" => {
-            let command = take_str(&input, "command")?;
-            let timeout_secs = input
-                .get("timeoutSecs")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(180);
-            let (exit_code, output) =
-                crate::commands::repo::exec_in_worktree_internal(&command, timeout_secs)
-                    .await?;
-            Ok(serde_json::json!({
-                "exitCode": exit_code,
-                "output": output,
-            }))
-        }
-        // Pseudo-tool: re-resolve provider credentials from the keychain,
-        // refreshing OAuth tokens as needed. Long-running tool loops (e.g.
-        // implementation iterating per file) call this between iterations
-        // so the access token doesn't expire mid-stage.
-        "refresh_credentials" => {
-            let provider = take_str(&input, "provider")?;
-            let creds = crate::commands::workflows::resolve_credentials(&provider).await?;
-            serde_json::to_value(&creds)
-                .map_err(|e| format!("Failed to serialise refreshed credentials: {e}"))
-        }
-        // Pseudo-tool: re-resolve the *entire* ModelSelection (provider +
-        // model name + fresh credentials) for a given panel/stage context.
-        // Used so long-running stages pick up provider/model changes the user
-        // makes via the header dropdown without restarting the workflow.
-        "refresh_model" => {
-            use crate::agents::dispatch::AiContext;
-            let panel = take_str(&input, "panel")?;
-            let stage = input
-                .get("stage")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            let ctx = match stage {
-                Some(s) => AiContext::stage(&panel, &s),
-                None => AiContext::panel(&panel),
-            };
-            let model = crate::commands::workflows::resolve_model_for_context(&ctx).await?;
-            serde_json::to_value(&model)
-                .map_err(|e| format!("Failed to serialise refreshed model: {e}"))
-        }
-        other => Err(format!("Unknown tool: {other}")),
-    }
-}
-
-async fn write_callback_response(
-    stdin: &Arc<Mutex<BufWriter<ChildStdin>>>,
-    workflow_id: &str,
-    callback_id: &str,
-    result: Result<serde_json::Value, String>,
-) {
-    let payload = match result {
-        Ok(v) => serde_json::json!({
-            "id": workflow_id,
-            "type": "tool.callback.response",
-            "callbackId": callback_id,
-            "result": v,
-        }),
-        Err(err) => serde_json::json!({
-            "id": workflow_id,
-            "type": "tool.callback.response",
-            "callbackId": callback_id,
-            "error": err,
-        }),
-    };
-    let mut line = serde_json::to_string(&payload).unwrap_or_default();
-    line.push('\n');
-    let mut w = stdin.lock().await;
-    if let Err(e) = w.write_all(line.as_bytes()).await {
-        eprintln!("[sidecar] failed to write tool.callback.response: {e}");
-        return;
-    }
-    if let Err(e) = w.flush().await {
-        eprintln!("[sidecar] failed to flush tool.callback.response: {e}");
-    }
-}
-
 #[derive(Serialize)]
 struct WorkflowCancelRequest<'a> {
     id: &'a str,
@@ -692,12 +545,11 @@ pub async fn run_workflow(
             .map_err(|e| format!("Stdin flush error: {e}"))?;
     }
 
-    drive_workflow_loop(app, &stdin, &pending, &id, event_name, &mut rx).await
+    drive_workflow_loop(app, &pending, &id, event_name, &mut rx).await
 }
 
 async fn drive_workflow_loop(
     app: &tauri::AppHandle,
-    stdin: &Arc<Mutex<BufWriter<ChildStdin>>>,
     pending: &PendingMap,
     id: &str,
     event_name: &str,
@@ -771,18 +623,6 @@ async fn drive_workflow_loop(
                     },
                     SidecarUsage::default(),
                 ));
-            }
-            SidecarOutboundEvent::ToolCallbackRequest {
-                id: req_id,
-                callback_id,
-                tool,
-                input,
-            } => {
-                let stdin_clone = stdin.clone();
-                tokio::spawn(async move {
-                    let result = execute_tool_callback(&tool, input).await;
-                    write_callback_response(&stdin_clone, &req_id, &callback_id, result).await;
-                });
             }
             SidecarOutboundEvent::Result { output, usage, .. } => {
                 return Ok(WorkflowResult::from_output(output, usage));

@@ -12,7 +12,6 @@ export default defineConfig({
       "**/node_modules/**",
       "**/src-tauri/**",
       "**/src-sidecar/**",
-      "**/evals/**",
       "**/.claude/**",
     ],
   },

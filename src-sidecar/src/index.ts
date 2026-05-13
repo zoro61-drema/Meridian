@@ -1,7 +1,6 @@
 import * as readline from "node:readline";
 import { Agent, setGlobalDispatcher } from "undici";
 import type { InboundMessage, OutboundEvent } from "./protocol.js";
-import { resolveToolCallback } from "./tools/bridge.js";
 import { cancelWorkflow, runWorkflow } from "./workflows/registry/lifecycle.js";
 
 // Replace Node's default fetch dispatcher with one tuned for slow local-LLM
@@ -76,9 +75,6 @@ rl.on("line", (line) => {
       break;
     case "workflow.cancel":
       cancelWorkflow(msg.id);
-      break;
-    case "tool.callback.response":
-      resolveToolCallback(msg);
       break;
     default: {
       const _exhaustive: never = msg;

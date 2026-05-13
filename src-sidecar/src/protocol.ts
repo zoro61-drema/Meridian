@@ -50,18 +50,7 @@ export type WorkflowCancel = {
   type: "workflow.cancel";
 };
 
-export type ToolCallbackResponse = {
-  id: string;
-  type: "tool.callback.response";
-  callbackId: string;
-  result?: unknown;
-  error?: string;
-};
-
-export type InboundMessage =
-  | WorkflowStart
-  | WorkflowCancel
-  | ToolCallbackResponse;
+export type InboundMessage = WorkflowStart | WorkflowCancel;
 
 // ── Outbound events (sidecar → Rust) ──────────────────────────────────────────
 
@@ -78,14 +67,6 @@ export type StreamEvent = {
   type: "stream";
   node: string;
   delta: string;
-};
-
-export type ToolCallbackRequest = {
-  id: string;
-  type: "tool.callback.request";
-  callbackId: string;
-  tool: string;
-  input: unknown;
 };
 
 export type ResultEvent = {
@@ -157,7 +138,6 @@ export type AiTrafficEvent = {
 export type OutboundEvent =
   | ProgressEvent
   | StreamEvent
-  | ToolCallbackRequest
   | ResultEvent
   | ErrorEvent
   | AiTrafficEvent;

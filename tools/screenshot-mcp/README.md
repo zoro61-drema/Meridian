@@ -45,19 +45,22 @@ From the repo root:
 pnpm mcp:connect
 ```
 
-That installs this server's deps and registers all three MCP servers
-Meridian uses for development — `meridian-screenshot`, `context7`,
-and `chrome-devtools` (the latter two are pulled in on demand via
-`npx`, no local install needed). See the **MCP servers used while
+That installs this server's deps and registers the two project-scope
+MCP servers Meridian uses for development — `meridian-screenshot`
+and `chrome-devtools` (the latter is pulled in on demand via `npx`,
+no local install needed). See the **MCP servers used while
 developing Meridian** section in the repo-root `CLAUDE.md` for what
-each does and when to reach for it.
+each does and when to reach for it. `context7` is also useful while
+developing Meridian, but it now lives at user scope (installed via
+the official Claude Code marketplace as
+`context7@claude-plugins-official`) rather than per-project.
 
 For screenshot only: `pnpm mcp:connect:screenshot`.
 
 Restart Claude Code (or `/mcp`) to confirm `meridian-screenshot` is
 listed as **connected**.
 
-To remove all three: `pnpm mcp:disconnect`.
+To remove both: `pnpm mcp:disconnect`.
 
 ## Usage
 

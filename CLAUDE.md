@@ -102,7 +102,7 @@ docs/                   supplementary architecture docs
 
 ## MCP servers used while developing Meridian
 
-Three MCP servers, all registered together by `pnpm mcp:connect`:
+Two MCP servers, registered together by `pnpm mcp:connect`:
 
 ### meridian-screenshot (local, `tools/screenshot-mcp/`)
 Two tools:
@@ -118,13 +118,6 @@ Renders against the real Tauri WKWebView window, so Tauri commands
 is included. Valid screen ids: `landing`, `onboarding`, `settings`,
 `agent-skills`, `review-pr`, `sprint-dashboard`, `retrospectives`,
 `ticket-quality`, `meetings`, `time-tracking`.
-
-### context7 (npm `@upstash/context7-mcp`)
-Pulls up-to-date library docs on demand. Useful when verifying
-current API surface for the things Meridian touches — Tauri 2.10,
-React 18, `@modelcontextprotocol/sdk`, Zod, etc. — without burning
-WebFetch round-trips. Reach for it whenever an API call's behaviour
-or signature is in doubt.
 
 ### chrome-devtools (npm `chrome-devtools-mcp`)
 Full Chromium devtools surface: DOM, computed CSS, console, network
@@ -156,9 +149,56 @@ canned data instead of erroring. See `App.tsx` for the wiring and
   console / network.
 - **API behaviour or signature in doubt**: ask context7 first.
 
-Skip gracefully if any of the three isn't listed — the user may not
-have run `pnpm mcp:connect`, Meridian may not be running, or the
-vite dev URL may not be up.
+Skip gracefully if either isn't listed — the user may not have run
+`pnpm mcp:connect`, Meridian may not be running, or the vite dev
+URL may not be up.
+
+---
+
+## Code intelligence MCP servers
+
+Three MCP servers go beyond the dev MCPs above — they're general
+code-intelligence tools, useful for any task. All are registered
+at user scope (not via `pnpm mcp:connect`), so they're always
+available.
+
+### serena (semantic LSP)
+On the first turn of every session, call `initial_instructions`
+before any read/edit. After that, prefer Serena's symbolic tools
+over `Read`/`Edit` for any code file:
+- `get_symbols_overview` / `find_symbol` for understanding a file
+- `find_referencing_symbols` before renaming or changing signatures
+- `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol`
+  / `replace_content` for edits — Serena's editing tools refuse to
+  edit symbols you haven't read, so always traverse with a Serena
+  read before a Serena write
+- Treat `Read`/`Grep` as discovery-only — never as the read step.
+
+Serena carries project memories (`list_memories` / `read_memory`)
+that describe Meridian's structure, conventions, suggested
+commands, and a task-completion checklist. Read the relevant
+memory whenever a task hits its scope rather than re-deriving from
+files. The `.claude/settings.json` hooks (committed) keep Serena's
+session reminder injected and auto-approve its MCP calls.
+
+### codesight (project shape map)
+Before diving into unfamiliar areas of the repo, call
+`codesight_get_summary` for a ~500-token stack overview, or
+`codesight_get_blast_radius` to gauge change scope. Useful for
+the first prompt of a workflow, not for every step. Other tools
+(`codesight_get_routes`, `codesight_get_schema`,
+`codesight_get_hot_files`) drill into specific dimensions.
+
+Codesight is mostly read-only — it doesn't edit code, only
+describes structure. Pair it with Serena for the actual work.
+
+### context7 (live library docs)
+Pulls up-to-date docs for the libraries Meridian touches — Tauri
+2.10, React 18, `@modelcontextprotocol/sdk`, Zod, etc. — without
+burning WebFetch round-trips. Reach for it whenever an API call's
+behaviour or signature is in doubt. User-scope plugin
+(`context7@claude-plugins-official`), so it's available regardless
+of whether Meridian is open or `pnpm mcp:connect` has been run.
 
 ---
 

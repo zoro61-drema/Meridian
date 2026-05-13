@@ -28,7 +28,6 @@ import {
     X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { AiDebugSection } from "./settings/ai-debug";
 import {
     DefaultModelCard,
     MaxOutputTokensSection,
@@ -374,7 +373,6 @@ export function SettingsScreen({ onClose, onNavigate }: SettingsScreenProps) {
                   Development
                 </h2>
                 <OnboardingPreviewSection />
-                <AiDebugSection />
                 <MockModeSection onToggle={handleMockToggle} />
                 <MockClaudeModeSection onToggle={handleMockToggle} />
               </section>

@@ -58,7 +58,7 @@ export function ChatPanel({
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col flex-1 min-h-0 pt-3 pb-3">
+      <CardContent className="flex flex-col flex-1 min-h-0 px-0 py-3">
         <ChatWindow
           bare
           headerLabel=""

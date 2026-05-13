@@ -51,7 +51,7 @@ function BubbleHeader({
 export function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex w-full justify-end">
-      <div className="max-w-[92%] space-y-1 rounded-md bg-primary/10 px-3 py-2">
+      <div className="space-y-1 rounded-md bg-primary/10 px-3 py-2">
         <BubbleHeader label="You" />
         <p className="text-sm whitespace-pre-wrap">{text}</p>
       </div>
@@ -62,7 +62,7 @@ export function UserBubble({ text }: { text: string }) {
 export function QueuedBubble({ text }: { text: string }) {
   return (
     <div className="flex w-full justify-end">
-      <div className="max-w-[92%] space-y-1 rounded-md bg-primary/5 border border-dashed border-primary/30 px-3 py-2 text-foreground/70 italic">
+      <div className="space-y-1 rounded-md bg-primary/5 border border-dashed border-primary/30 px-3 py-2 text-foreground/70 italic">
         <p className="not-italic text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           You · queued
         </p>
@@ -97,7 +97,7 @@ export function AgentBubble({
     <div className="flex w-full justify-start">
       <div
         className={cn(
-          "max-w-[92%] space-y-2 rounded-md border px-3 py-2",
+          "space-y-2 rounded-md border px-3 py-2",
           isQuestion
             ? "border-amber-300/60 bg-amber-50/60 dark:border-amber-700/50 dark:bg-amber-950/30"
             : "bg-card/60",
@@ -143,7 +143,7 @@ export function ToolActivityBubble({
     <div className="flex w-full justify-start">
       <div
         className={cn(
-          "max-w-[92%] rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5",
+          "rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5",
           "flex items-center gap-2",
         )}
       >

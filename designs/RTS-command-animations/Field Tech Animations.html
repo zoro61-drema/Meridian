@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Field Tech — Animation pilot (Variant C)</title>
+  <style>
+    :root {
+      --bg: #0a0d12;
+      --panel: #11161d;
+      --panel-2: #161c25;
+      --border: #1f2630;
+      --border-2: #2a323d;
+      --text: #d6dde6;
+      --muted: #6b7480;
+      --dim: #4a525c;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); }
+    body {
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 28px 36px 80px;
+      min-height: 100vh;
+    }
+    .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+    .pixelated { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+    header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 4px; }
+    h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; margin: 0; color: var(--text); }
+    .crumb { color: var(--muted); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .subtitle { color: var(--muted); margin: 0 0 28px; font-size: 12px; max-width: 760px; }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 28px;
+      padding: 14px 18px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 24px;
+    }
+    .toolGroup { display: flex; align-items: center; gap: 10px; }
+    .toolGroup .label { color: var(--muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+    .accentRow { display: flex; gap: 6px; }
+    .swatch {
+      width: 22px; height: 22px; border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer; padding: 0;
+      position: relative;
+    }
+    .swatch.active { box-shadow: 0 0 0 2px var(--text); }
+    .swatch span {
+      position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
+      font-size: 9px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .bgRow { display: flex; gap: 6px; }
+    .bgBtn {
+      width: 26px; height: 22px; border-radius: 4px;
+      border: 1px solid var(--border-2);
+      cursor: pointer; padding: 0;
+    }
+    .bgBtn.active { box-shadow: 0 0 0 2px var(--text); }
+
+    .sectionLabel {
+      font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--muted); margin: 8px 0 14px; font-weight: 600;
+    }
+
+    .grid { display: grid; gap: 18px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 18px 18px 16px;
+      display: flex; flex-direction: column;
+    }
+    .cardHead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+    .cardLabel { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    .cardLabel b { color: var(--text); font-weight: 600; }
+    .cardSub { font-size: 11.5px; color: var(--muted); margin: 0 0 14px; min-height: 52px; line-height: 1.5; }
+
+    .stage {
+      background: #070a0e;
+      border-radius: 4px; overflow: hidden;
+      border: 1px solid var(--border-2);
+      display: grid; place-items: center;
+      padding: 12px;
+      min-height: 220px;
+    }
+
+    .footer { margin-top: 36px; color: var(--muted); font-size: 11.5px; max-width: 880px; }
+    .footer code { background: #1a1f27; padding: 1px 5px; border-radius: 3px; color: #c2cad4; font-size: 10.5px; }
+    .notes h3 { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; font-weight: 600; }
+    .notes h3:first-child { margin-top: 0; }
+    .notes p { color: var(--text); margin: 0 0 10px; font-size: 12.5px; line-height: 1.6; }
+    .notes ul { margin: 6px 0 14px; padding-left: 18px; }
+    .notes li { margin: 5px 0; font-size: 12.5px; line-height: 1.55; color: var(--text); }
+    .notes li b { color: var(--text); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="crumb">Meridian · Command · Sprites</div>
+    <span class="crumb" style="color:var(--dim)">/</span>
+    <h1>Field Tech — Animation pilot (Variant C · Forward observer)</h1>
+  </header>
+  <p class="subtitle">
+    All nine animations on the chosen Forward-observer Field Tech: 7 persistent states + 2 transient one-shots.
+    Component shipped at <code style="font-family:ui-monospace,monospace;background:#1a1f27;padding:1px 5px;border-radius:3px;color:#c2cad4;font-size:11.5px">src/lib/commandSprites/FieldTech.tsx</code>.
+    Accent tints binocular lenses + pauldron outer edges + chest indicator + belt buckle.
+  </p>
+
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="Marine.jsx"></script>
+  <script type="text/babel" src="Engineer.jsx"></script>
+  <script type="text/babel" src="FieldTech.jsx"></script>
+  <script type="text/babel" src="field-tech-app.jsx"></script>
+</body>
+</html>

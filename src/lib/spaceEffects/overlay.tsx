@@ -26,6 +26,7 @@ import { type Pulsar, PulsarEl, mkPulsar } from "./pulsar";
 import { type Meteor, MeteorEl, mkMeteors } from "./meteor";
 import { type WH, WormholeEl, mkWH } from "./wormhole";
 import { type SStar, ShootingStarEl, mkShootingStars } from "./shootingStar";
+import { isAppActive } from "@/lib/windowFocus";
 
 // ── SpaceEffectsOverlay ───────────────────────────────────────────────────────
 
@@ -203,19 +204,25 @@ export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
       timers.push(setTimeout(tick, minMs + r() * (maxMs - minMs)));
     };
 
-    sched(() => { if (kindsRef.current.comets) addComet(); }, 18_000, 55_000);
-    sched(() => { if (kindsRef.current.pulsars) addPulsar(); }, 55_000, 160_000);
-    sched(() => { if (kindsRef.current.meteors) addMeteors(); }, 80_000, 220_000);
-    sched(() => { if (kindsRef.current.wormholes) addWH(); }, 3_600_000, 7_200_000);
+    // Background-tick guard — don't spawn new effects while the window
+    // is unfocused or hidden. Without this, hours of unfocused time
+    // queue dozens of shooting stars / comets that all paint at once
+    // the moment the user clicks back into Meridian.
+    const ok = () => isAppActive();
+
+    sched(() => { if (ok() && kindsRef.current.comets) addComet(); }, 18_000, 55_000);
+    sched(() => { if (ok() && kindsRef.current.pulsars) addPulsar(); }, 55_000, 160_000);
+    sched(() => { if (ok() && kindsRef.current.meteors) addMeteors(); }, 80_000, 220_000);
+    sched(() => { if (ok() && kindsRef.current.wormholes) addWH(); }, 3_600_000, 7_200_000);
     // Shooting stars: every 2.5–8 s, occasionally 2 at once
     sched(() => {
-      if (!kindsRef.current.shootingStars) return;
+      if (!ok() || !kindsRef.current.shootingStars) return;
       addShootingStars(Math.random() < 0.25 ? 2 : 1);
     }, 2_500, 8_000);
 
     // Black hole: random cadence; addBH no-ops if one is already active
     sched(() => {
-      if (kindsRef.current.blackHole) addBH();
+      if (ok() && kindsRef.current.blackHole) addBH();
     }, 5 * 60_000, 18 * 60_000);
 
     return () => timers.forEach(clearTimeout);

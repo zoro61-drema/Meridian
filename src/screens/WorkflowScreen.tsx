@@ -8,12 +8,13 @@ export type WorkflowId =
   | "retrospectives"
   | "ticket-quality"
   | "meetings"
-  | "time-tracking";
+  | "time-tracking"
+  | "command";
 
 const WORKFLOW_META: Record<WorkflowId, { title: string; description: string; step: number }> = {
   "review-pr": {
-    title: "Review a Pull Request",
-    description: "AI-assisted code review across four analysis lenses.",
+    title: "PR Dashboard",
+    description: "Pipelined PR review queue — agents run in embedded terminals.",
     step: 11,
   },
   "sprint-dashboard": {
@@ -40,6 +41,11 @@ const WORKFLOW_META: Record<WorkflowId, { title: string; description: string; st
     title: "Time Tracking",
     description: "Automatic work-hours tracker with idle detection, midnight rollover, and weekly overtime balance.",
     step: 15,
+  },
+  "command": {
+    title: "Commander",
+    description: "Multi-agent tactical field — deploy Claude / Gemini / Codex / Qwen units, watch them work, and coordinate cross-agent messaging.",
+    step: 16,
   },
 };
 

@@ -23,6 +23,20 @@ export const ACTIVE_SPRINT_2: JiraSprint = {
   goal: "Improve observability, reduce p99 latency, and address top error-budget burn alerts.",
 };
 
+/** Dedicated grooming sprint targeting tj/commander.js. The user
+ *  checks the commander.js repo out locally and points the
+ *  ticket-groomer agent at it; tickets are intentionally rough so
+ *  there's something for the groomer to actually surface. */
+export const ACTIVE_SPRINT_3: JiraSprint = {
+  id: 25,
+  name: "Commander.js Grooming",
+  state: "active",
+  startDate: "2020-01-01T09:00:00.000Z",
+  endDate: "2040-01-01T17:00:00.000Z",
+  completeDate: null,
+  goal: "Triage feature requests + bug reports against tj/commander.js. Each ticket needs grounding in the actual codebase before refining.",
+};
+
 // ── Completed sprints ─────────────────────────────────────────────────────────
 
 export const COMPLETED_SPRINTS: JiraSprint[] = [

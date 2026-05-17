@@ -44,339 +44,158 @@ export const makeIssue = (
   discoveredFieldIds: {},
 });
 
-// ── Demo tickets used by the mock-mode workflows ──
+// ── Commander.js grooming tickets ─────────────────────────────────────────────
 //
-// DEMO-1: Small program — comprehensive enough to exercise every pipeline stage.
-//   A TypeScript CLI that generates a linked table of contents from a markdown file.
-//   ~4 files, clear AC, real edge cases, good fit for a single sitting end-to-end run.
+// Six intentionally-rough tickets targeting tj/commander.js. The
+// user checks out the commander.js repo locally and launches the
+// ticket-groomer agent against this batch (sprint id 25). Each
+// ticket has at least one obvious flaw the groomer should surface
+// — missing AC on stories, missing repro/observed/expected on
+// bugs, vague titles that read as multiple tickets in disguise,
+// performance claims with no metrics, etc.
 //
-// DEMO-2: Medium program — stress-tests the pipeline with more files and complexity.
-//   A Node.js/TypeScript in-memory REST API for managing tasks with CRUD + filtering.
-//   ~10 files, multiple layers (routes, services, models, middleware, tests).
-//
-// DEMO-3: Real-codebase ticket — exists to A/B-test token usage against Claude Code
-//   on a representative monorepo-like task. Worktree must be a fresh clone of
-//   https://github.com/tj/commander.js on a feature branch. Adds an
-//   `.optionDefaultsFromFile(path)` method to the Command class, with tests +
-//   typings updates. Forces the build agent to grep around a multi-file class
-//   hierarchy before writing — the workflow shape the eventual user actually has.
+// Skipping the previous DEMO_ISSUE_1/2/3 tickets — they targeted
+// the old single-ticket workflows that have since been replaced.
 
-export const DEMO_ISSUE_1: JiraIssue = {
-  id: "DEMO1",
-  key: "DEMO-1",
-  url: "https://example.atlassian.net/browse/DEMO-1",
-  summary: "CLI tool: generate a linked table of contents from a markdown file",
-  description: null,
-  descriptionSections: [
-    {
-      heading: "Overview",
-      content:
-        "Build a small TypeScript CLI tool (`md-toc`) that reads a markdown file and outputs a linked table of contents. " +
-        "The tool is invoked as `npx ts-node src/cli.ts <file.md>` (or compiled to `dist/cli.js`). " +
-        "It scans the file for ATX-style headings (`# h1`, `## h2`, `### h3`) and prints a nested markdown list " +
-        "where each item links to the corresponding anchor. The tool must also support an `--in-place` flag that " +
-        "rewrites the source file, replacing any existing `<!-- TOC -->…<!-- /TOC -->` block with the fresh TOC.\n\n" +
-        "This is a **greenfield** project — the worktree directory is empty. You will need to create all files from scratch.",
-    },
-    {
-      heading: "Acceptance Criteria",
-      content:
-        "- Running `ts-node src/cli.ts <file>` prints the TOC to stdout\n" +
-        "- Each TOC entry is an indented markdown list item: `- [Heading Text](#anchor-slug)` (h2 indented 2 spaces, h3 indented 4)\n" +
-        "- Anchor slugs are lowercase, spaces replaced by hyphens, all non-alphanumeric chars (except hyphens) removed\n" +
-        "- Headings deeper than h3 are ignored\n" +
-        "- If the input file does not exist, exit with code 1 and print an error to stderr\n" +
-        "- If no headings are found, output exactly `<!-- No headings found -->`\n" +
-        "- `--in-place` flag rewrites the file: replaces a `<!-- TOC -->…<!-- /TOC -->` block if present, " +
-        "or inserts one immediately after the first heading if no block exists\n" +
-        "- A `package.json` with `ts-node` and `typescript` as devDependencies is included\n" +
-        "- A `tsconfig.json` targeting Node 18 is included\n" +
-        "- Unit tests (using Node's built-in `node:test` module) cover: slug generation, heading parsing, " +
-        "TOC formatting, missing-file error, no-headings output, and in-place rewrite",
-    },
-    {
-      heading: "Technical Notes",
-      content:
-        "Keep dependencies minimal — `ts-node`, `typescript`, and nothing else (no external markdown parsers). " +
-        "Parse headings with a single regex pass. The slug function should match GitHub's anchor algorithm. " +
-        "Structure: `src/cli.ts` (entry point + arg parsing), `src/parser.ts` (heading extraction + slug), " +
-        "`src/toc.ts` (TOC string assembly + in-place rewrite), `tests/parser.test.ts`, `tests/toc.test.ts`.",
-    },
-    {
-      heading: "Related",
-      content:
-        "Spec follow-up: [https://example.atlassian.net/wiki/spaces/ENG/pages/55102/Markdown+Tooling+Spec](https://example.atlassian.net/wiki/spaces/ENG/pages/55102/Markdown+Tooling+Spec)\n" +
-        "GitHub anchor algorithm reference: [https://github.com/Flet/github-slugger](https://github.com/Flet/github-slugger)",
-    },
-  ],
-  status: "To Do",
-  statusCategory: "new",
-  assignee: ME,
-  reporter: ME,
-  issueType: "Story",
-  priority: "Medium",
-  storyPoints: 5,
-  labels: ["demo", "greenfield", "cli"],
-  epicKey: null,
-  epicSummary: null,
-  created: "2026-04-14T09:00:00.000Z",
-  updated: "2026-04-14T09:00:00.000Z",
-  resolutionDate: null,
-  completedInSprint: null,
+export const CMD_ISSUE_1: JiraIssue = {
+  ...makeIssue(
+    "CMD-1",
+    "Support --no-help flag to disable built-in help",
+    "To Do",
+    "new",
+    ME,
+    3,
+    "Story",
+    "Medium",
+    `Some teams ship commander.js-based CLIs where the built-in --help / -h output isn't appropriate (e.g. a wrapper that proxies a different help surface). Today the helpOption can be customised but not fully disabled. Expose a way to turn it off entirely so callers can register their own --help if they want, or surface help via a different command.
+
+Probably lives next to helpOption() in lib/command.js. Should also handle the case where -h shadows another short flag the user wanted.`,
+    ["commander-js", "feature"],
+  ),
   acceptanceCriteria:
-    "- Running `ts-node src/cli.ts <file>` prints the TOC to stdout\n" +
-    "- Each entry is an indented markdown list item with anchor link\n" +
-    "- Anchor slugs: lowercase, spaces → hyphens, non-alphanumeric stripped\n" +
-    "- Headings deeper than h3 are ignored\n" +
-    "- Non-existent file → exit 1, error to stderr\n" +
-    "- No headings found → output `<!-- No headings found -->`\n" +
-    "- `--in-place` flag rewrites the file with a `<!-- TOC -->…<!-- /TOC -->` block\n" +
-    "- `package.json`, `tsconfig.json`, and unit tests (`node:test`) are included",
-  stepsToReproduce: null,
-  observedBehavior: null,
-  expectedBehavior: null,
-  namedFields: {},
-  discoveredFieldIds: {},
+    "- Calling `.helpOption(false)` disables the auto-registered help option.\n" +
+    "- After disabling, `program.parse(['--help'])` does NOT exit or print help — it falls through to the unknown-option handler.\n" +
+    "- The change is documented in the README's Custom help section.",
 };
 
-export const DEMO_ISSUE_2: JiraIssue = {
-  id: "DEMO2",
-  key: "DEMO-2",
-  url: "https://example.atlassian.net/browse/DEMO-2",
-  summary: "REST API: in-memory task tracker with CRUD, filtering, and pagination",
-  description: null,
-  descriptionSections: [
-    {
-      heading: "Overview",
-      content:
-        "Build a standalone Node.js/TypeScript REST API server for managing tasks. " +
-        "The server runs on port 3000 and exposes a `/tasks` resource. It uses an in-memory store " +
-        "(no database — a plain `Map` or array) so the project is fully self-contained and runnable from a blank worktree. " +
-        "The API must follow REST conventions, return JSON, and handle all error cases gracefully.\n\n" +
-        "This is a **greenfield** project — the worktree directory is empty. Create all files from scratch.",
-    },
-    {
-      heading: "Acceptance Criteria",
-      content:
-        "**Endpoints**\n" +
-        "- `POST /tasks` — create a task; body: `{ title: string, description?: string, priority?: 'low'|'medium'|'high', tags?: string[] }`\n" +
-        "- `GET /tasks` — list tasks with optional query params: `status`, `priority`, `tag`, `page` (1-based), `limit` (default 20, max 100)\n" +
-        "- `GET /tasks/:id` — fetch single task by UUID\n" +
-        "- `PATCH /tasks/:id` — partial update (any subset of writable fields)\n" +
-        "- `DELETE /tasks/:id` — delete task; return 204\n" +
-        "- `POST /tasks/:id/complete` — mark task complete; sets `completedAt` timestamp\n\n" +
-        "**Task schema**\n" +
-        "- `id`: UUID v4 (generated on create)\n" +
-        "- `title`: required string (1–200 chars)\n" +
-        "- `description`: optional string\n" +
-        "- `priority`: `'low' | 'medium' | 'high'` (default `'medium'`)\n" +
-        "- `status`: `'todo' | 'in_progress' | 'done'` (default `'todo'`)\n" +
-        "- `tags`: string array (default `[]`)\n" +
-        "- `createdAt`, `updatedAt`: ISO 8601 timestamps (auto-managed)\n" +
-        "- `completedAt`: ISO 8601 timestamp or `null`\n\n" +
-        "**Validation & errors**\n" +
-        "- Missing/invalid `title` on create → 400 with `{ error: string, field: 'title' }`\n" +
-        "- Invalid `priority` or `status` values → 400 with descriptive message\n" +
-        "- Unknown task ID → 404 with `{ error: 'Task not found' }`\n" +
-        "- All 5xx errors return `{ error: 'Internal server error' }` (never expose stack traces)\n\n" +
-        "**Pagination**\n" +
-        "- Response envelope: `{ data: Task[], total: number, page: number, limit: number, totalPages: number }`\n" +
-        "- Out-of-range page returns empty `data` array (not 404)\n\n" +
-        "**Project structure**\n" +
-        "- `package.json` with `express`, `uuid` as dependencies; `typescript`, `@types/express`, `@types/node`, `ts-node` as devDependencies\n" +
-        "- `tsconfig.json` targeting Node 18\n" +
-        "- `src/server.ts` — Express app setup and `listen()`\n" +
-        "- `src/app.ts` — Express app factory (exported without `listen` for testing)\n" +
-        "- `src/routes/tasks.ts` — route handlers\n" +
-        "- `src/services/taskService.ts` — business logic and in-memory store\n" +
-        "- `src/models/task.ts` — TypeScript interfaces and type guards\n" +
-        "- `src/middleware/errorHandler.ts` — centralised error handler\n" +
-        "- `src/middleware/validateTask.ts` — request body validation\n" +
-        "- `tests/tasks.test.ts` — integration tests using Node's built-in `node:test` + `fetch`\n\n" +
-        "**Tests must cover**\n" +
-        "- Create task (valid and invalid inputs)\n" +
-        "- List with each filter type and pagination\n" +
-        "- Get single task (found and not found)\n" +
-        "- Update and complete task\n" +
-        "- Delete task\n" +
-        "- Error response shape consistency",
-    },
-    {
-      heading: "Technical Notes",
-      content:
-        "Use Express 4.x. For UUID generation use the `uuid` npm package (v4 only). " +
-        "The in-memory store should be a `Map<string, Task>` in `taskService.ts`. " +
-        "Do not add authentication, rate limiting, or persistence — keep scope tight. " +
-        "The app factory pattern (`app.ts` vs `server.ts`) is required so integration tests can " +
-        "import the app without starting a listener. " +
-        "Tests use `node:test` with the built-in test runner (`node --test`) — no Jest or Mocha.",
-    },
-    {
-      heading: "Out of Scope",
-      content:
-        "- Authentication or authorisation\n" +
-        "- Database persistence\n" +
-        "- WebSocket or streaming endpoints\n" +
-        "- Rate limiting\n" +
-        "- File uploads",
-    },
-    {
-      heading: "Related",
-      content:
-        "API design doc: [https://example.atlassian.net/wiki/spaces/ENG/pages/55180/Task+API+v1+Design](https://example.atlassian.net/wiki/spaces/ENG/pages/55180/Task+API+v1+Design)\n" +
-        "Sibling spike on persistence options: [https://example.atlassian.net/browse/PROJ-205](https://example.atlassian.net/browse/PROJ-205)",
-    },
-  ],
-  status: "To Do",
-  statusCategory: "new",
-  assignee: ME,
-  reporter: ME,
-  issueType: "Story",
-  priority: "High",
-  storyPoints: 8,
-  labels: ["demo", "greenfield", "api", "stress-test"],
-  epicKey: null,
-  epicSummary: null,
-  created: "2026-04-14T09:00:00.000Z",
-  updated: "2026-04-14T09:00:00.000Z",
-  resolutionDate: null,
-  completedInSprint: null,
-  acceptanceCriteria:
-    "- `POST /tasks` creates a task with UUID, timestamps, and defaults\n" +
-    "- `GET /tasks` supports filtering by `status`, `priority`, `tag` + pagination\n" +
-    "- `GET /tasks/:id` returns 404 for unknown IDs\n" +
-    "- `PATCH /tasks/:id` performs partial updates\n" +
-    "- `DELETE /tasks/:id` returns 204\n" +
-    "- `POST /tasks/:id/complete` sets `completedAt` and `status=done`\n" +
-    "- All validation errors return 400 with descriptive message\n" +
-    "- Response envelope includes `total`, `page`, `limit`, `totalPages`\n" +
-    "- `package.json`, `tsconfig.json`, and integration tests (`node:test`) included\n" +
-    "- App factory pattern: `app.ts` (no listen) + `server.ts` (entry point)",
-  stepsToReproduce: null,
-  observedBehavior: null,
-  expectedBehavior: null,
-  namedFields: {},
-  discoveredFieldIds: {},
+// Bug ticket — intentionally missing steps/observed/expected.
+// Description thin. Groomer should call out the missing fields.
+export const CMD_ISSUE_2: JiraIssue = {
+  ...makeIssue(
+    "CMD-2",
+    "Bug: option default value not applied when env var is empty string",
+    "To Do",
+    "new",
+    ME,
+    2,
+    "Bug",
+    "Medium",
+    `When an option has both .default() and .env(), passing an empty string in the env var causes the default to be skipped — option value ends up as "" instead of the declared default. Reported by a user on Discord; we don't have a written repro.`,
+    ["commander-js", "bug"],
+  ),
 };
 
-export const DEMO_ISSUE_3: JiraIssue = {
-  id: "DEMO3",
-  key: "DEMO-3",
-  url: "https://example.atlassian.net/browse/DEMO-3",
-  summary:
-    "commander.js: load option defaults from a JSON config file",
-  description: null,
-  descriptionSections: [
-    {
-      heading: "Overview",
-      content:
-        "Add a `.optionDefaultsFromFile(path)` method to commander.js's `Command` " +
-        "class. It reads a JSON file and, for each key matching a registered option's " +
-        "`attributeName()`, replaces that option's default value with the value from " +
-        "the file. CLI arguments still take precedence — the file just changes the " +
-        "default, it doesn't override what the user typed.\n\n" +
-        "Use case: teams want to ship a `.toolrc.json` alongside their CLI so " +
-        "developers don't have to remember the right flags every time. The current " +
-        "default-handling pipeline already supports per-option `.default()` calls " +
-        "and env-var fallbacks — this slots a JSON file in between them and the " +
-        "schema-level default.\n\n" +
-        "**Worktree setup:** this ticket assumes the worktree is a fresh clone of " +
-        "https://github.com/tj/commander.js, checked out to a feature branch from " +
-        "the current `master`. No greenfield bootstrapping required.",
-    },
-    {
-      heading: "Acceptance Criteria",
-      content:
-        "- New method `Command.optionDefaultsFromFile(path)` is chainable (returns `this`)\n" +
-        "- For each key in the JSON file that matches a registered option's " +
-        "`attributeName()` (camelCased flag name), the option's default value is " +
-        "replaced with the file's value\n" +
-        "- Keys in the file that don't match any registered option are silently ignored\n" +
-        "- File path is resolved relative to `process.cwd()`, not the script location\n" +
-        "- Missing file: throws `CommanderError` with code `commander.optionDefaultsFile` " +
-        "and a clear message naming the path\n" +
-        "- Unparseable JSON: throws `CommanderError` with code " +
-        "`commander.optionDefaultsFile` and includes the underlying parse error message\n" +
-        "- Precedence is preserved: CLI args > env vars > file defaults > schema defaults\n" +
-        "- `--help` output shows the file-loaded value as the default when one was " +
-        "loaded (the existing default-display logic should already pick this up if " +
-        "the option's `defaultValue` is updated in-place)\n" +
-        "- TypeScript typings in `typings/index.d.ts` include the new method signature\n" +
-        "- Tests cover: chainability, key matching, ignored unknown keys, missing " +
-        "file, malformed JSON, CLI override, help integration, and a full `.parse()` " +
-        "round-trip",
-    },
-    {
-      heading: "Technical Notes",
-      content:
-        "Read these before writing — the existing structure tells you where the " +
-        "new method belongs and how it should interact with the existing default " +
-        "machinery:\n" +
-        "- `lib/command.js` — main `Command` class. The new method lives here, " +
-        "next to existing default-related helpers like `.opts()` and the option " +
-        "lookup loops in `.parseOptions()`\n" +
-        "- `lib/option.js` — `Option` class. Note `defaultValue`, " +
-        "`defaultValueDescription`, and `attributeName()`. Updating `defaultValue` " +
-        "in-place is the cleanest hook point\n" +
-        "- `lib/error.js` — `CommanderError` constructor signature for the new " +
-        "error code\n" +
-        "- `tests/` — existing tests use Jest. Conventions: one `.test.js` per " +
-        "concept, file named after what's under test. Add " +
-        "`tests/options.defaultsFromFile.test.js`. Match the assertion style " +
-        "(`.toBe`, `.toThrow`) used in `tests/options.default.test.js`\n\n" +
-        "Implementation hints:\n" +
-        "- `option.attributeName()` is the lookup key, not the raw flag string. " +
-        "For `-p, --port <number>`, the key is `port`\n" +
-        "- Use `fs.readFileSync` synchronously — the method is called during " +
-        "command setup, before `.parse()`, so async loading would force callers " +
-        "to await before parsing argv, which is a worse API\n" +
-        "- Don't try to coerce types from the JSON file — if the option has a " +
-        "custom argument parser registered, it's only applied to CLI args; file " +
-        "values land verbatim. The existing schema-default behaviour does the same",
-    },
-    {
-      heading: "Related",
-      content:
-        "Repo: [https://github.com/tj/commander.js](https://github.com/tj/commander.js)\n" +
-        "Existing default-option docs: [https://github.com/tj/commander.js/blob/master/Readme.md#default-option-value](https://github.com/tj/commander.js/blob/master/Readme.md#default-option-value)\n" +
-        "Prior art (yargs `.config()`): [https://github.com/yargs/yargs/blob/main/docs/api.md#config](https://github.com/yargs/yargs/blob/main/docs/api.md#config)",
-    },
-  ],
-  status: "To Do",
-  statusCategory: "new",
-  assignee: ME,
-  reporter: ME,
-  issueType: "Story",
-  priority: "Medium",
-  storyPoints: 5,
-  labels: ["demo", "feature", "cli"],
-  epicKey: null,
-  epicSummary: null,
-  created: "2026-05-10T09:00:00.000Z",
-  updated: "2026-05-10T09:00:00.000Z",
-  resolutionDate: null,
-  completedInSprint: null,
+export const CMD_ISSUE_3: JiraIssue = {
+  ...makeIssue(
+    "CMD-3",
+    "Async action handlers: propagate errors instead of swallowing",
+    "To Do",
+    "new",
+    ME,
+    5,
+    "Story",
+    "High",
+    `Action handlers passed as async functions to .action() currently have their rejections swallowed when called via .parse() (not .parseAsync()). This leads to silent failures in production where developers forgot to use parseAsync.
+
+We should either (a) throw a clearer error when an async action is registered on a sync parse path, or (b) auto-await on .parse() too. Need to pick one and ship it consistently. The change touches the parse loop in lib/command.js around _actionHandler.`,
+    ["commander-js", "bug", "ergonomics"],
+  ),
   acceptanceCriteria:
-    "- `Command.optionDefaultsFromFile(path)` is chainable\n" +
-    "- File keys matching `attributeName()` replace option defaults\n" +
-    "- Unknown keys are silently ignored\n" +
-    "- Precedence preserved: CLI > env > file > schema default\n" +
-    "- Missing file or unparseable JSON throws `CommanderError`\n" +
-    "- `--help` shows file-loaded values as defaults\n" +
-    "- TypeScript typings in `typings/index.d.ts` updated\n" +
-    "- Jest tests cover happy path, error cases, CLI precedence, and help integration",
-  stepsToReproduce: null,
-  observedBehavior: null,
-  expectedBehavior: null,
-  namedFields: {},
-  discoveredFieldIds: {},
+    "- Async action handlers no longer silently swallow rejections.\n" +
+    "- A clear error or stack trace surfaces when an action handler throws.\n" +
+    "- Existing sync action handlers continue to work unchanged.\n" +
+    "- Tests cover both `.parse()` and `.parseAsync()` paths.",
 };
+
+// Intentionally vague — title doesn't say which shell, description
+// is hand-wavy, NO AC. Strong target for the groomer.
+export const CMD_ISSUE_4: JiraIssue = {
+  ...makeIssue(
+    "CMD-4",
+    "Generate completions",
+    "To Do",
+    "new",
+    ME,
+    5,
+    "Task",
+    "Medium",
+    `It would be nice if commander could generate shell completions for the commands it knows about. Users keep asking. Some other CLI tools do this with a hidden subcommand that prints a script.`,
+    ["commander-js", "feature"],
+  ),
+};
+
+// Bug — intentionally missing metrics. "Feels slow" is the only
+// observation. Groomer should ask for hard numbers.
+export const CMD_ISSUE_5: JiraIssue = {
+  ...makeIssue(
+    "CMD-5",
+    "parseAsync is slow when a program has many subcommands",
+    "To Do",
+    "new",
+    ME,
+    3,
+    "Bug",
+    "Low",
+    `On programs with 100+ subcommands registered, parseAsync feels noticeably slow on startup. Profiling needed. Suspect the linear scans in lib/command.js when resolving the matched subcommand.`,
+    ["commander-js", "performance"],
+  ),
+  observedBehavior:
+    "Startup feels sluggish. No measurements taken.",
+};
+
+// Scope creep — reads like 3 tickets bundled into one.
+export const CMD_ISSUE_6: JiraIssue = {
+  ...makeIssue(
+    "CMD-6",
+    "Refactor option parsing to support custom types and validation",
+    "To Do",
+    "new",
+    ME,
+    8,
+    "Story",
+    "Low",
+    `commander.js's option parsing is hard to extend. We should rework it so users can:
+
+- Register custom argument types (e.g. "duration", "url", "path") with their own parse + validate hooks
+- Replace the current argParser callback with a more composable validator chain
+- Support optional type coercion at the schema level so help text auto-shows the type
+- Provide a built-in set of common types (int, float, url, path, date)
+- Make the typings infer the parsed value's TypeScript type from the option declaration
+
+This will require rewriting lib/option.js and a chunk of lib/command.js. Probably a multi-week effort.`,
+    ["commander-js", "refactor"],
+  ),
+  acceptanceCriteria:
+    "- Users can register their own option types.\n" +
+    "- Built-in types cover common cases.\n" +
+    "- TypeScript types are inferred from option declarations.\n" +
+    "- Existing options keep working without changes.",
+};
+
+
+/** Sprint 25 (Commander.js Grooming) contents — the six CMD
+ *  tickets in display order. Used by the ticket-groomer launch
+ *  flow when the user picks this sprint from the dropdown. */
+export const COMMANDER_SPRINT_ISSUES: JiraIssue[] = [
+  CMD_ISSUE_1,
+  CMD_ISSUE_2,
+  CMD_ISSUE_3,
+  CMD_ISSUE_4,
+  CMD_ISSUE_5,
+  CMD_ISSUE_6,
+];
 
 export const MY_SPRINT_ISSUES: JiraIssue[] = [
-  // Demo tickets — appear first so they're easy to find during pipeline testing
-  DEMO_ISSUE_1,
-  DEMO_ISSUE_2,
-  DEMO_ISSUE_3,
   makeIssue(
     "PROJ-142",
     "Add dark mode and accent colour support to user settings",
@@ -892,6 +711,11 @@ const SPRINT_23_ISSUES: JiraIssue[] = ALL_SPRINT_ISSUES;
 export const SPRINT_ISSUES_BY_ID: Record<number, JiraIssue[]> = {
   23: SPRINT_23_ISSUES,
   24: SPRINT_24_ISSUES,
+  // Sprint 25 — Commander.js grooming batch. Six rough tickets,
+  // each with at least one obvious flaw the groomer should
+  // surface (missing AC, vague title, no metrics, scope creep,
+  // missing bug-repro fields, …).
+  25: COMMANDER_SPRINT_ISSUES,
   22: makeSprintIssues(22, 9, 11),
   21: makeSprintIssues(21, 8, 10),
   20: makeSprintIssues(20, 10, 12),
@@ -903,10 +727,5 @@ export const SPRINT_ISSUES_BY_ID: Record<number, JiraIssue[]> = {
 
 export const ALL_ISSUES_BY_KEY: Record<string, JiraIssue> = {
   ...Object.fromEntries(ALL_SPRINT_ISSUES.map((i) => [i.key, i])),
-  // Demo issues are in MY_SPRINT_ISSUES (which is part of ALL_SPRINT_ISSUES)
-  // but also registered here explicitly so getIssue("DEMO-1") always works
-  // even if the sprint lookup changes.
-  [DEMO_ISSUE_1.key]: DEMO_ISSUE_1,
-  [DEMO_ISSUE_2.key]: DEMO_ISSUE_2,
-  [DEMO_ISSUE_3.key]: DEMO_ISSUE_3,
+  ...Object.fromEntries(COMMANDER_SPRINT_ISSUES.map((i) => [i.key, i])),
 };

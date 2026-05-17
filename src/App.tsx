@@ -19,9 +19,13 @@ import { SpaceEffectsOverlay } from "@/lib/spaceEffects/overlay";
 import { isMockMode, setJiraBaseUrlCache, setLocalLlmUrlCache, setMockClaudeMode, setMockMode } from "@/lib/tauri/core";
 import { bitbucketComplete, credentialStatusComplete, getCredentialStatus, getNonSecretConfig, jiraComplete, type CredentialStatus } from "@/lib/tauri/credentials";
 import { cancelAllAgents } from "@/lib/cancelAllAgents";
+import { setCurrentScreen } from "@/lib/currentScreen";
+import { installWindowFocusTracker } from "@/lib/windowFocus";
+import { attachPrReviewToasts } from "@/lib/prReviewNotifications";
 import { setRuntimeOverloadPct } from "@/lib/workloadClassifier";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AgentSkillsScreen } from "@/screens/AgentSkillsScreen";
+import { CommandScreen } from "@/screens/CommandScreen";
 import { GroomTicketScreen } from "@/screens/GroomTicketScreen";
 import { LandingScreen } from "@/screens/LandingScreen";
 import { MeetingsScreen } from "@/screens/MeetingsScreen";
@@ -35,7 +39,9 @@ import { WorkflowScreen, type WorkflowId } from "@/screens/WorkflowScreen";
 import { useAiDebugStore } from "@/stores/aiDebugStore";
 import { useCredentialStatusStore } from "@/stores/credentialStatusStore";
 import { hydrateMeetingsStore } from "@/stores/meetings/listeners";
-import { hydratePrReviewStore } from "@/stores/prReview/listeners";
+import { attachCommandListeners, hydrateCommandStore } from "@/stores/command/listeners";
+import { attachPrQueueListeners } from "@/stores/prQueue/listeners";
+import { usePrQueueStore } from "@/stores/prQueue/store";
 import { usePrTasksStore } from "@/stores/prTasksStore";
 import { hydrateTasksStore, useTasksStore } from "@/stores/tasksStore";
 import { hydrateTimeTrackingStore } from "@/stores/timeTrackingStore";
@@ -64,6 +70,7 @@ const EXTERNAL_NAV_SCREENS: ReadonlySet<Screen> = new Set<Screen>([
   "ticket-quality",
   "meetings",
   "time-tracking",
+  "command",
 ]);
 
 function LoadingScreen() {
@@ -81,6 +88,7 @@ const WORKFLOW_IDS: WorkflowId[] = [
   "ticket-quality",
   "meetings",
   "time-tracking",
+  "command",
 ];
 
 function isWorkflowId(s: Screen): s is WorkflowId {
@@ -89,6 +97,9 @@ function isWorkflowId(s: Screen): s is WorkflowId {
 
 function AppInner() {
   const [screen, setScreen] = useState<Screen>("loading");
+  useEffect(() => {
+    setCurrentScreen(screen);
+  }, [screen]);
   const [credStatus, setCredStatusLocal] = useState<CredentialStatus | null>(null);
   const setCredentialStatusInStore = useCredentialStatusStore((s) => s.setStatus);
   const setCredStatus = useCallback(
@@ -123,7 +134,6 @@ function AppInner() {
 
     // Hydrate persisted stores from file cache before loading credentials
     Promise.allSettled([
-      hydratePrReviewStore(),
       hydrateMeetingsStore(),
       hydrateTasksStore(),
       hydrateTimeTrackingStore(),
@@ -131,7 +141,36 @@ function AppInner() {
       // applies them on the very first render — otherwise the user
       // sees noise tasks flash in for a moment before the filter loads.
       usePrTasksStore.getState().hydrateFilters(),
+      // Eagerly hydrate the PR Review queue + start its event listeners
+      // so toasts and background pane state work even before the user
+      // visits the PR Review screen.
+      usePrQueueStore.getState().init(),
     ]);
+    // PR Review queue listeners + cross-screen toast — session-long so
+    // background agents continue to surface state when the user is on
+    // other screens.
+    void attachPrQueueListeners();
+    void attachPrReviewToasts();
+    // Command listener stays attached for the app lifetime so units
+    // keep accumulating state and transcript when the user navigates
+    // away from the Command screen. Fire-and-forget matches the
+    // prQueue pattern; React StrictMode's double-mount is safe
+    // because the listener guards against re-attach.
+    void attachCommandListeners();
+    // Restore previously-persisted units from SQLite. Hydrated
+    // units start in `isLive: false`; the chat panel surfaces a
+    // Resume button per unit.
+    void hydrateCommandStore();
+
+    // Mirror the existing localStorage mock-mode flag into the Rust
+    // pref store on boot — covers the case where the user had mock
+    // mode enabled before the Rust mirror existed.
+    setMockMode(isMockMode());
+
+    // Pause star twinkling + space-FX spawns while the window is
+    // unfocused / hidden so animations don't pile up off-screen and
+    // stutter the first frame after refocus.
+    installWindowFocusTracker();
 
     // Hydrate runtime flags driven by user preferences. These map to
     // module-level toggles in their respective stores so the listeners
@@ -364,6 +403,8 @@ function AppInner() {
         <TimeTrackingScreen onBack={() => setScreen("landing")} />
       ) : screen === "agent-skills" ? (
         <AgentSkillsScreen onBack={() => setScreen("landing")} />
+      ) : screen === "command" ? (
+        <CommandScreen onBack={() => setScreen("landing")} />
       ) : isWorkflowId(screen) ? (
         <WorkflowScreen workflowId={screen} onBack={() => setScreen("landing")} />
       ) : credStatus ? (

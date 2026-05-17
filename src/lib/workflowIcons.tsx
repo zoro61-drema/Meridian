@@ -159,6 +159,20 @@ export function MeetingsIcon(props: IconProps) {
   );
 }
 
+// Commander — three small unit dots on a tactical-field square with
+// a connecting tether line, evoking the multi-agent dashboard.
+export function CommanderIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="4" y="4" width="24" height="24" rx="2" opacity="0.55" />
+      <path d="M10 22 L16 14 L22 19" opacity="0.5" />
+      <circle cx="10" cy="22" r="2" fill="currentColor" />
+      <circle cx="16" cy="14" r="2" fill="currentColor" />
+      <circle cx="22" cy="19" r="2" fill="currentColor" />
+    </IconBase>
+  );
+}
+
 // ── Map from WorkflowId → Icon component ───────────────────────────────────────
 
 import type { WorkflowId } from "@/screens/WorkflowScreen";
@@ -170,4 +184,5 @@ export const WORKFLOW_ICONS: Record<WorkflowId, React.FC<IconProps>> = {
   "ticket-quality": GroomTicketIcon,
   meetings: MeetingsIcon,
   "time-tracking": TimeTrackingIcon,
+  command: CommanderIcon,
 };

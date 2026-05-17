@@ -76,8 +76,12 @@ export async function getActiveSprint(): Promise<JiraSprint | null> {
 
 export async function getAllActiveSprints(): Promise<JiraSprint[]> {
   if (isMockMode()) {
-    const { ACTIVE_SPRINT } = await import("../mockData/sprints");
-    return ACTIVE_SPRINT ? [ACTIVE_SPRINT] : [];
+    const { ACTIVE_SPRINT, ACTIVE_SPRINT_2, ACTIVE_SPRINT_3 } = await import(
+      "../mockData/sprints"
+    );
+    return [ACTIVE_SPRINT, ACTIVE_SPRINT_2, ACTIVE_SPRINT_3].filter(
+      (s): s is JiraSprint => !!s,
+    );
   }
   return invoke<JiraSprint[]>("get_all_active_sprints");
 }
@@ -252,6 +256,14 @@ export async function updateJiraIssue(
   summary: string | null,
   description: string,
 ): Promise<void> {
+  if (isMockMode()) {
+    console.info(
+      "[mock] updateJiraIssue",
+      issueKey,
+      { summary, descriptionPreview: description.slice(0, 80) },
+    );
+    return;
+  }
   return invoke("update_jira_issue", { issueKey, summary, description });
 }
 
@@ -264,5 +276,9 @@ export async function updateJiraFields(
   issueKey: string,
   fieldsJson: string,
 ): Promise<void> {
+  if (isMockMode()) {
+    console.info("[mock] updateJiraFields", issueKey, fieldsJson);
+    return;
+  }
   return invoke("update_jira_fields", { issueKey, fieldsJson });
 }

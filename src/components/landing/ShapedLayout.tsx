@@ -42,6 +42,10 @@ const SHAPES: Record<WorkflowId, ShapeDef> = {
     d: "M 90 4 H 110 V 12 A 54 54 0 0 1 100 116 A 54 54 0 0 1 100 12 V 12 Z",
     inset: { top: 4, bottom: 4 },
   },
+  // Commander — angular tactical-field silhouette with notched corners
+  "command": {
+    d: "M 4 16 L 16 4 H 184 L 196 16 V 104 L 184 116 H 16 L 4 104 Z",
+  },
 };
 
 function ShapedTile({

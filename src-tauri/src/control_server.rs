@@ -231,4 +231,5 @@ const VALID_SCREENS: &[&str] = &[
     "ticket-quality",
     "meetings",
     "time-tracking",
+    "command",
 ];

@@ -5,10 +5,21 @@ description = "Meridian — Personal productivity desktop app for engineering te
 authors = ["Isaac Harries"]
 license = "Apache-2.0"
 edition = "2021"
+default-run = "meridian"
 
 [lib]
 name = "meridian_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Mock ACP server used by `src/command/acp_client.rs` unit tests.
+# Cargo exposes the built path via `CARGO_BIN_EXE_mock_acp` so the
+# test code can spawn it without hardcoding a target dir.
+[[bin]]
+name = "mock_acp"
+path = "tests/fixtures/mock_acp.rs"
+test = false
+bench = false
+doc = false
 
 [build-dependencies]
 tauri-build = { version = "2.5", features = [] }
@@ -20,7 +31,7 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "multipart", "native-tls", "stream"] }
-tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "net", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "net", "time", "macros", "sync"] }
 futures-util = "0.3"
 base64 = "0.22.1"
 dirs = "6.0.0"
@@ -43,6 +54,10 @@ core-foundation = "0.10"
 # don't depend on the platform's sqlite version — meetings indexing has to
 # work the same on every macOS the app lands on.
 rusqlite = { version = "0.32", features = ["bundled"] }
+# Cross-platform PTY for the PR Review embedded-terminal workflow. Used by
+# `integrations::pty` to spawn interactive `claude` sessions in per-pane git
+# worktrees and pipe their I/O to xterm.js on the frontend.
+portable-pty = "0.9"
 
 # macOS-only — read the main window's CGWindowID for the screenshot
 # control endpoint. Lets `screencapture -l <id>` grab the window's

@@ -71,6 +71,10 @@ export function Stars({
         return (
           <circle
             key={i}
+            // The `bg-twinkle` class lets `body.app-bg-suspended` pause
+            // these animations via `animation-play-state: paused` while
+            // the window is unfocused. See `src/lib/windowFocus.ts`.
+            className="bg-twinkle"
             cx={s.x.toFixed(1)}
             cy={s.y.toFixed(1)}
             r={s.r.toFixed(2)}

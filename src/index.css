@@ -303,3 +303,15 @@ input[type="number"] {
   0%, 100% { opacity: var(--star-opacity, 0.6); }
   50%      { opacity: 0.1; }
 }
+
+/* When the Meridian window is unfocused or hidden, freeze every
+   background animation. Without this the WKWebView keeps running the
+   keyframes (hundreds of star <circle>s on the space themes), eating
+   GPU cycles for no visible benefit; worse, the rendering catch-up on
+   regaining focus stutters the first second of interaction. Scoped via
+   the `app-bg-suspended` body class — `windowFocus.ts` toggles it on
+   `blur`/`visibilitychange`. */
+body.app-bg-suspended .bg-twinkle,
+body.app-bg-suspended .space-fx-anim {
+  animation-play-state: paused !important;
+}

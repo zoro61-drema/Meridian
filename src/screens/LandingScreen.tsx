@@ -19,7 +19,7 @@ import { type JiraIssue, type JiraSprint, getAllActiveSprintIssues } from "@/lib
 import { WORKFLOW_ICONS } from "@/lib/workflowIcons";
 import type { WorkflowId } from "@/screens/WorkflowScreen";
 import { useMeetingsStore } from "@/stores/meetings/store";
-import { usePrQueueStore } from "@/stores/prQueue/store";
+import { usePrReviewStore } from "@/stores/prReview/store";
 import { useWorkloadAlertStore } from "@/stores/workloadAlertStore";
 import { AlertTriangle, CheckSquare, GitPullRequest, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -177,8 +177,8 @@ function StatPill({
 function SprintSummary({ credStatus }: { credStatus: CredentialStatus }) {
   const [data, setData] = useState<SprintData | null>(null);
   const [error, setError] = useState(false);
-  // (PR-review store removed — fast-path falls back to the freshly fetched
-  // value below.)
+  // Also read from the store as a fast-path if it's already been loaded
+  const myAccountIdFromStore = usePrReviewStore((s) => s.myAccountId);
 
   const canFetch = jiraComplete(credStatus) && bitbucketComplete(credStatus);
 
@@ -218,7 +218,9 @@ function SprintSummary({ credStatus }: { credStatus: CredentialStatus }) {
 
   const { sprintIssues, openPrs, prsForReview, myAccountId: myAccountIdFromData } = data;
 
-  const myAccountId = myAccountIdFromData;
+  // Prefer the freshly fetched account id; fall back to the store value if the
+  // config fetch somehow returned empty (e.g. credential not yet set).
+  const myAccountId = myAccountIdFromData || myAccountIdFromStore;
 
   // Exclude draft PRs — drafts are not ready for review.
   const nonDraftOpenPrs = openPrs.filter((pr) => !pr.draft);
@@ -290,8 +292,8 @@ const WORKFLOW_CARDS: {
 }[] = [
   {
     id: "review-pr",
-    title: "PR Dashboard",
-    description: "Pipelined PR review queue — agents run in embedded terminals",
+    title: "Review a Pull Request",
+    description: "AI-assisted code review across 5 analysis lenses",
   },
   {
     id: "sprint-dashboard",
@@ -336,14 +338,14 @@ export function LandingScreen({ credStatus, onNavigate }: LandingScreenProps) {
   const allComplete =
     jiraComplete(credStatus) && bitbucketComplete(credStatus);
 
-  // PR Review queue counts — shown as a small badge on the workflow tile.
-  const prQueueEntries = usePrQueueStore((s) => s.snapshot.entries);
-  const prActive = prQueueEntries.some((e) => e.status !== "done");
-  const pendingCount = prQueueEntries.filter((e) => e.status === "pending").length;
-  const inReviewCount = prQueueEntries.filter((e) => e.status === "in_progress").length;
-  const prBadgeLabel = inReviewCount > 0
-    ? `${inReviewCount} in review`
-    : pendingCount > 0 ? `${pendingCount} pending` : null;
+  const prSessions = usePrReviewStore((s) => s.sessions);
+  const prSelectedPr = usePrReviewStore((s) => s.selectedPr);
+  // Show badge if any PR has a cached review, or one is actively open
+  const prActive = prSessions.size > 0;
+  const reviewedCount = [...prSessions.values()].filter(s => s.report || s.rawError).length;
+  const prBadgeLabel = reviewedCount > 0
+    ? `${reviewedCount} reviewed`
+    : prSelectedPr ? `#${prSelectedPr.id}` : null;
 
   const overloadedDevs = useWorkloadAlertStore((s) => s.overloadedDevs);
   const underutilisedDevs = useWorkloadAlertStore((s) => s.underutilisedDevs);

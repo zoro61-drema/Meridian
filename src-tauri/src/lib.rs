@@ -8,24 +8,11 @@ pub mod llms;
 pub mod storage;
 
 use commands::{
-    pr_queue_add_entry,
-    pr_queue_clear,
-    pr_queue_list,
-    pr_queue_requeue,
-    pr_queue_pane_advance,
-    pr_queue_pane_count,
-    pr_queue_pane_skip,
-    pr_queue_refresh,
-    PrQueueState,
-    pty_kill,
-    pty_resize,
-    pty_spawn,
-    pty_write,
-    PtyManager,
     start_time_tracking_poller,
     active_meeting_id,
     add_custom_gemini_model,
     approve_pr,
+    cancel_review,
     checkout_pr_review_branch,
     checkout_worktree_branch,
     clear_all_store_caches,
@@ -152,6 +139,7 @@ use commands::{
     update_pr_task,
     run_grooming_chat_workflow,
     run_grooming_workflow,
+    run_pr_review_workflow,
     run_sprint_retrospective_workflow,
     run_workload_suggestions_workflow,
     run_meeting_summary_workflow,
@@ -159,6 +147,7 @@ use commands::{
     run_sprint_dashboard_chat_workflow,
     run_meeting_chat_workflow,
     run_cross_meetings_chat_workflow,
+    run_pr_review_chat_workflow,
     run_grooming_file_probe_workflow,
     exec_in_worktree,
     run_in_terminal,
@@ -308,8 +297,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(crate::integrations::sidecar::SidecarState::new())
-        .manage(PtyManager::new())
-        .manage(PrQueueState::new())
         .manage(crate::command::sessions::CommandState::new())
         .setup(|app| {
             storage::credentials::init_store_path(app.handle());
@@ -326,15 +313,6 @@ pub fn run() {
             // events that the frontend's time-tracking store consumes to
             // open and close work segments.
             start_time_tracking_poller(app.handle().clone());
-
-            // Bitbucket PR-review poller — periodically fetches
-            // assigned-to-me PRs, enriches with JIRA, persists the queue
-            // to disk, and emits `pr-queue:update`.
-            crate::integrations::pr_poller::spawn_pr_poller(app.handle().clone());
-            // pty://exit reconciliation — when a pane's CLI exits we
-            // need to flip the queue entry to Done regardless of whether
-            // the frontend pane is still mounted.
-            crate::commands::pr_queue::register_pty_exit_listener(app.handle());
 
             // Start the local control server on 127.0.0.1:31415 so the
             // screenshot MCP tool can drive navigation programmatically
@@ -356,9 +334,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Claude
             generate_multi_sprint_trends,
+            run_pr_review_workflow,
             run_sprint_retrospective_workflow,
             run_workload_suggestions_workflow,
             run_sprint_dashboard_chat_workflow,
+            run_pr_review_chat_workflow,
+            cancel_review,
             get_claude_models,
             get_gemini_models,
             get_custom_gemini_models,
@@ -544,25 +525,19 @@ pub fn run() {
             get_system_activity_state,
             save_time_tracking_state,
             load_time_tracking_state,
-            // PTY (PR Review embedded terminal)
-            pty_spawn,
-            pty_write,
-            pty_resize,
-            pty_kill,
-            // PR Review queue
-            pr_queue_list,
-            pr_queue_refresh,
-            pr_queue_pane_count,
-            pr_queue_pane_advance,
-            pr_queue_pane_skip,
-            pr_queue_add_entry,
-            pr_queue_clear,
-            pr_queue_requeue,
             // Command (Phase 1 smoke test entries; replaced in Phase 4)
             crate::command::command_smoke_launch,
             crate::command::command_smoke_prompt,
             crate::command::command_smoke_cancel,
             crate::command::command_smoke_kill,
+            crate::command::command_open_in_native_app,
+            crate::command::command_fetch_context7_prompt,
+            crate::command::command_list_skills,
+            crate::command::command_save_skill,
+            crate::command::command_delete_skill,
+            crate::command::command_save_grooming_proposal,
+            crate::command::command_list_grooming_proposals,
+            crate::command::command_delete_grooming_proposal,
             crate::command::command_smoke_list,
             crate::command::command_grant_permission,
             crate::command::command_save_session,

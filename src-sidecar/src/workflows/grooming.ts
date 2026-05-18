@@ -2,6 +2,15 @@ import { z } from "zod";
 import { buildModel } from "../models/factory.js";
 import type { ModelSelection, OutboundEvent } from "../protocol.js";
 import { streamLLMJson } from "./streaming.js";
+import {
+  BUG_RULES as SHARED_BUG_RULES,
+  CONTENT_PRESERVATION_RULE,
+  IMPORTANT_RULES,
+  PER_EDIT_GUIDANCE,
+  STYLE_CLOSING,
+  TITLE_CASE_RULE,
+  buildFormatTemplatesBlock,
+} from "../../../src/lib/groomingPromptBlocks.js";
 
 // ── Input / output schemas ────────────────────────────────────────────────────
 
@@ -103,22 +112,17 @@ export type GroomingOutput = z.infer<typeof GroomingOutputSchema>;
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-// Core system prompt — applies to every ticket type. Stays cache-stable
-// across runs so the prompt-cache hit rate doesn't get fragmented by the
-// optional bug-rules block below.
-const BASE_SYSTEM_CORE = `You are a grooming agent helping a senior engineer understand and refine a JIRA ticket. \
+// Sidecar-specific scaffolding (role intro, JSON schema definition, file-block
+// fallback). Quality rules and bug rules are imported from the shared module
+// so the Command panel's Ticket Groomer role and the sidecar workflow stay in
+// sync — edit `src/lib/groomingPromptBlocks.ts` to change behaviour in both.
+const SIDECAR_PREAMBLE = `You are a grooming agent helping a senior engineer understand and refine a JIRA ticket. \
 You have been given the ticket details and relevant source code from the codebase. \
 Your job is twofold:
 1. Analyse the ticket and produce a structured grooming summary
-2. Identify any gaps, inaccuracies, or missing sections in the ticket and suggest concrete improvements
+2. Identify any gaps, inaccuracies, or missing sections in the ticket and suggest concrete improvements`;
 
-For each suggested edit:
-- Compare what the ticket currently says against what the code actually does
-- Propose a specific, concrete replacement (not vague advice)
-- For missing sections (e.g. no Acceptance Criteria on a Story, no Steps to Reproduce on a Bug), \
-draft what should be there based on the code context — or raise a clarifying_question if you genuinely cannot determine it
-
-Return ONLY valid JSON (no markdown fences) with this schema:
+const JSON_SCHEMA_BLOCK = `Return ONLY valid JSON (no markdown fences) with this schema:
 {
   "ticket_summary": "<2-3 sentence summary of what the ticket is asking for>",
   "ticket_type": "story|task|bug|spike|epic|subtask",
@@ -142,103 +146,25 @@ Return ONLY valid JSON (no markdown fences) with this schema:
   "clarifying_questions": [
     "<question or unclear ticket detail the engineer needs to address before grooming finalises — phrased as a question>"
   ]
-}
+}`;
 
-Important:
-- Use clarifying_questions for BOTH genuine questions AND ambiguities in the ticket text. If something in the ticket reads unclear, phrase it as a question (e.g. \"Is X expected to do Y or Z?\") rather than emitting a separate \"ambiguity\" — the engineer answers it the same way either way.
-- Only raise a clarifying_question when you genuinely cannot determine the answer from the code or ticket
-- Prefer drafting a concrete suggestion (even if tentative) over asking a question
-- Evaluate the ticket title (the JIRA \`summary\` field) as a first-class \
-review target on EVERY analysis. Emit a \`summary\` suggested_edit whenever \
-the current title would benefit from being more specific, scoped, or \
-descriptive — the bar is "would a reader of just this title know what \
-this ticket is about?". Common triggers: vague verbs without an object \
-("Fix bug", "Update code"), missing the affected component or behaviour \
-("Pagination not working" → which endpoint? what symptom?), generic \
-language a search couldn't disambiguate ("Improve performance"), titles \
-longer than ~80 characters that bury the lede. When the title is already \
-specific and scannable, omit the \`summary\` edit. The \`suggested\` value \
-must be Title Cased: capitalise every word except articles (a, an, the), \
-conjunctions (and, but, or, nor, for, so, yet), and short prepositions \
-(in, on, at, to, of, by, with, from, as, into) — UNLESS the small word is \
-the first or last word of the title, in which case it's also capitalised. \
-Acronyms and identifier-shaped tokens (e.g. \`GET /users/:id\`, \`JWT\`, \
-\`HS256\`, \`N+1\`, \`gRPC\`, file paths, version numbers) keep their original \
-casing. Examples: ✅ "Fix N+1 Query in User Profile Endpoint", ✅ "Migrate \
-Auth Middleware from HS256 to RS256", ❌ "fix pagination bug under high \
-load". The client normalises casing on save automatically, so don't \
-propose a \`summary\` edit purely to fix casing — only when the title's \
-*content* would genuinely improve
-- If the ticket is a Story/Task and has no Acceptance Criteria, always suggest them
-- Keep each suggested text concise and actionable
-- Only include ONE suggested_edit per field value — if you have multiple improvements for \
-the same field (e.g. multiple acceptance criteria points), consolidate them into a single \
-edit with all content merged. Never produce two suggested_edits with the same \`field\`.
-
-=== CONTENT PRESERVATION (STRICT) ===
-When you suggest a replacement for an existing field, you MUST preserve every \
-non-prose artifact already present in that field's text. Your edits should \
-ONLY change plain prose — never silently drop:
-- URL links (raw \`https://…\` URLs, markdown \`[text](url)\` links, JIRA wiki \
-\`[text|url]\` links, autolinks, attached-file links)
-- Image embeds (markdown \`![alt](src)\` images, JIRA wiki \`!image.png|...!\` \
-embeds, inline data URIs)
-- @user mentions, JIRA ticket references (\`PROJ-123\`), commit / PR links
-- Code blocks, inline code, and pre-formatted snippets
-- Tables, numbered or bulleted lists' bullet markers, and existing structural \
-formatting
-
-If a URL or image is in the wrong section of a field (e.g. a screenshot link \
-sitting in the description that belongs in steps_to_reproduce), MOVE it to the \
-appropriate field's suggested_edit — never delete it. If you genuinely cannot \
-tell where an artifact belongs, keep it in place rather than dropping it.
-
-The goal is that anyone diffing your \`suggested\` against the original \`current\` \
-should see only prose changes; every artifact must reappear in some \
-suggested_edit, with its URL/path/anchor unchanged. Treat this as a hard \
-constraint — losing a link is never acceptable, even if the surrounding prose \
-is being rewritten.
-
-When you cannot determine a field's content from the ticket text alone, draft \
+const CODE_GROUNDING_NOTE = `When you cannot determine a field's content from the ticket text alone, draft \
 a plausible value from the relevant source code provided below — only fall \
 back to a clarifying_question if even the code does not give enough context.`;
 
-// Optional block appended only when grooming a Bug. Carries the
-// description/steps/observed/expected discipline the bug workflow
-// needs but which is dead weight (~1k tokens) on Story/Task/Spike runs.
-const BUG_RULES = `
-
-=== BUG-SPECIFIC RULES (ticket_type == "bug") ===
-When the ticket is a Bug, the following fields MUST all be populated. For \
-every one that is missing OR empty, emit a suggested_edit:
-- \`description\` — a concise summary of the bug (what is broken, where it shows up). \
-NOT the reproduction steps and NOT the observed/expected behaviour — those \
-belong in their own fields. Aim for 2–4 sentences.
-- \`steps_to_reproduce\` — a numbered list of actions a reader can follow to \
-reliably trigger the bug
-- \`observed_behavior\` — what actually happens when those steps are followed
-- \`expected_behavior\` — what the user/system should see instead
-- \`acceptance_criteria\` — bugs need AC just like stories and tasks. Phrase \
-each criterion as a verifiable post-fix condition (typically the inverse of \
-the bug: the broken behaviour now works as expected, no regression in adjacent \
-flows, etc.). If AC is missing or empty, ALWAYS emit a suggested_edit — never \
-skip it on the assumption that "expected_behavior covers it".
-
-If the existing \`description\` field contains content that belongs in another \
-bug field, MOVE it rather than duplicate it:
-- If the description has a "Steps to Reproduce" section (or a numbered list of \
-reproduction steps), extract those steps into a suggested_edit for \
-\`steps_to_reproduce\` and emit a suggested_edit for \`description\` whose \
-\`suggested\` value is the description WITHOUT those steps (replaced by a \
-summary of the bug).
-- If the description contains "Observed Behavior" / "Actual Result" / similar \
-content, extract it into \`observed_behavior\` and remove it from the description.
-- If the description contains "Expected Behavior" / "Expected Result" / \
-similar, extract it into \`expected_behavior\` and remove it from the description.
-
-In short: after your suggested edits are applied, the description should read \
-as a summary of the bug, and each of steps_to_reproduce / observed_behavior / \
-expected_behavior should hold its own dedicated content.`;
+// Cache-stable core: all callers get the same string regardless of ticket
+// type or template config, so the prompt-cache hit rate stays high across
+// runs. Bug rules and format templates are appended below and treated as
+// suffix-only deltas.
+const BASE_SYSTEM_CORE = [
+  SIDECAR_PREAMBLE,
+  PER_EDIT_GUIDANCE,
+  JSON_SCHEMA_BLOCK,
+  IMPORTANT_RULES,
+  TITLE_CASE_RULE,
+  CONTENT_PRESERVATION_RULE,
+  CODE_GROUNDING_NOTE,
+].join("\n\n");
 
 /** Decide whether to attach the bug-specific rules block. Returns true
  *  when the caller-supplied type identifies the ticket as a bug, OR
@@ -250,33 +176,16 @@ function shouldIncludeBugRules(ticketType: string | null | undefined): boolean {
   return ticketType.trim().toLowerCase() === "bug";
 }
 
-function templatesBlock(templates?: GroomingInput["templates"]): string {
-  if (!templates) return "";
-  const ac = templates.acceptance_criteria;
-  const str = templates.steps_to_reproduce;
-  if (!ac && !str) return "";
-
-  let out =
-    "\n\n=== FORMAT TEMPLATES ===\n" +
-    "When you draft text for the `suggested` field of an edit, follow the " +
-    "format shown below for the matching `field`. Match the structure, " +
-    "bullet style, numbering, and line breaks exactly — the user relies on " +
-    "a consistent format across tickets.\n";
-  if (ac) {
-    out += "\n--- Format for field `acceptance_criteria` ---\n" + ac.trimEnd() + "\n";
-  }
-  if (str) {
-    out += "\n--- Format for field `steps_to_reproduce` ---\n" + str.trimEnd() + "\n";
-  }
-  return out;
-}
-
 export function buildSystemPrompt(
   templates?: GroomingInput["templates"],
   ticketType?: string | null,
 ): string {
-  const bugBlock = shouldIncludeBugRules(ticketType) ? BUG_RULES : "";
-  return BASE_SYSTEM_CORE + bugBlock + templatesBlock(templates);
+  const parts: string[] = [BASE_SYSTEM_CORE];
+  if (shouldIncludeBugRules(ticketType)) parts.push(SHARED_BUG_RULES);
+  parts.push(STYLE_CLOSING);
+  const fmt = buildFormatTemplatesBlock(templates);
+  if (fmt) parts.push(fmt);
+  return parts.join("\n\n");
 }
 
 export function buildUserPrompt(input: GroomingInput): string {

@@ -53,6 +53,19 @@ struct SessionEntry {
     /// before each user prompt (prepended as system context); the
     /// frontend's inbox card surfaces them in the meantime.
     inbox: Vec<A2AMessageEvent>,
+    /// Ticket-groomer queue. Each entry is a pre-formatted markdown
+    /// block (key + summary + the six editable fields) that the
+    /// agent receives one at a time via the `get_next_ticket` MCP
+    /// tool. Populated at launch when role=ticket-groomer; empty
+    /// for all other roles. Stored at the SessionEntry level (not
+    /// SQLite) because the queue is ephemeral — once tickets are
+    /// dispensed they live on in `groomingQueue` on the frontend
+    /// proposal, and a fresh launch is a fresh batch.
+    pending_grooming_tickets: Vec<String>,
+    /// How many tickets the queue started with — used to format
+    /// "Ticket N of M" in the get_next_ticket response so the
+    /// agent has progress context.
+    grooming_total: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,12 +111,20 @@ impl CommandState {
     /// `display_name` is what other agents see in `list_agents` and
     /// in A2A message arc events; the frontend computes it before
     /// the launch call (e.g. "Claude 1").
+    ///
+    /// `extra_mcp_servers` is the user-configured MCP server list
+    /// (already filtered for this backend by the frontend) — each
+    /// entry is forwarded as-is in the `mcpServers` array sent to
+    /// `session/new`, alongside the auto-attached Meridian A2A server.
     pub async fn launch(
         &self,
         app: AppHandle,
         backend: BackendKind,
         project_dir: PathBuf,
         display_name: String,
+        extra_mcp_servers: Vec<serde_json::Value>,
+        grooming_tickets: Vec<String>,
+        model_override: Option<String>,
     ) -> Result<LaunchedSession, String> {
         // Generate the Meridian session id upfront so we can build
         // the MCP server URL with it before calling session/new —
@@ -111,7 +132,7 @@ impl CommandState {
         // server uses the path segment to identify the sender.
         let session_id = new_session_id();
         let mcp_url = super::mcp_server::session_url(&session_id);
-        let mcp_servers = mcp_url
+        let mut mcp_servers: Vec<serde_json::Value> = mcp_url
             .map(|url| {
                 // The Zed/agentclientprotocol wrapper's Zod schema
                 // requires `headers` to be present (as an empty
@@ -126,8 +147,12 @@ impl CommandState {
                 })]
             })
             .unwrap_or_default();
+        // User-configured servers (filtered for this backend on the
+        // frontend) get appended after the A2A server so the wrapper
+        // sees a single combined list.
+        mcp_servers.extend(extra_mcp_servers);
 
-        let config = launch_config(backend, project_dir.clone())?;
+        let config = launch_config(backend, project_dir.clone(), model_override.as_deref())?;
         let (client, notif_rx) = AcpClient::spawn(config).await?;
         let client = Arc::new(client);
 
@@ -181,6 +206,7 @@ impl CommandState {
             },
         );
 
+        let grooming_total = grooming_tickets.len();
         self.sessions.lock().await.insert(
             session_id.clone(),
             SessionEntry {
@@ -190,6 +216,8 @@ impl CommandState {
                 acp_session_id: acp_session_id.clone(),
                 spawned_at_ms,
                 inbox: Vec::new(),
+                pending_grooming_tickets: grooming_tickets,
+                grooming_total,
             },
         );
 
@@ -244,7 +272,15 @@ impl CommandState {
             .ok_or_else(|| format!("no persisted session: {meridian_session_id}"))?;
 
         let project_dir = PathBuf::from(&stored.project_id);
-        let config = super::acp_spawn::launch_config(stored.backend, project_dir.clone())?;
+        // Resume reuses the wrapper's default model — there's no
+        // user-typed override to thread in. If we ever want to
+        // remember a per-unit model across restarts it has to come
+        // from SQLite, not None.
+        let config = super::acp_spawn::launch_config(
+            stored.backend,
+            project_dir.clone(),
+            None,
+        )?;
         let (client, notif_rx) = AcpClient::spawn(config).await?;
         let client = Arc::new(client);
 
@@ -326,6 +362,8 @@ impl CommandState {
                 acp_session_id,
                 spawned_at_ms,
                 inbox: Vec::new(),
+                pending_grooming_tickets: Vec::new(),
+                grooming_total: 0,
             },
         );
         Ok(())
@@ -341,11 +379,16 @@ impl CommandState {
     /// persist (they're store state, not wrapper state); only the
     /// agent's internal turn-by-turn context is lost — analogous
     /// to the resume fallback path.
+    ///
+    /// `extra_mcp_servers` carries the user's globally-configured
+    /// MCP servers, filtered for `new_backend` by the frontend.
     pub async fn switch_backend(
         &self,
         app: AppHandle,
         meridian_session_id: &str,
         new_backend: BackendKind,
+        extra_mcp_servers: Vec<serde_json::Value>,
+        model_override: Option<String>,
     ) -> Result<String, String> {
         // 1. Shutdown the existing wrapper if it's live.
         let prev = {
@@ -364,13 +407,17 @@ impl CommandState {
 
         // 3. Spawn the new wrapper.
         let project_dir = PathBuf::from(&stored.project_id);
-        let config = super::acp_spawn::launch_config(new_backend, project_dir.clone())?;
+        let config = super::acp_spawn::launch_config(
+            new_backend,
+            project_dir.clone(),
+            model_override.as_deref(),
+        )?;
         let (client, notif_rx) = AcpClient::spawn(config).await?;
         let client = Arc::new(client);
         client.initialize().await?;
 
         let mcp_url = super::mcp_server::session_url(meridian_session_id);
-        let mcp_servers = mcp_url
+        let mut mcp_servers: Vec<serde_json::Value> = mcp_url
             .map(|url| {
                 vec![serde_json::json!({
                     "name": "meridian-a2a",
@@ -380,6 +427,7 @@ impl CommandState {
                 })]
             })
             .unwrap_or_default();
+        mcp_servers.extend(extra_mcp_servers);
 
         let acp_session_id = match client.session_new(&project_dir, mcp_servers).await {
             Ok(id) => id,
@@ -429,6 +477,8 @@ impl CommandState {
                 acp_session_id: acp_session_id.clone(),
                 spawned_at_ms,
                 inbox: Vec::new(),
+                pending_grooming_tickets: Vec::new(),
+                grooming_total: 0,
             },
         );
         Ok(acp_session_id)
@@ -518,6 +568,28 @@ impl CommandState {
                 backend: e.backend,
             })
             .collect()
+    }
+
+
+    /// Pop the next pending grooming ticket for a session. Returns
+    /// (current_index, total, content_block) — index is 1-based for
+    /// human-friendly "Ticket N of M" framing, total is the
+    /// queue size at launch. Returns None when the queue is empty.
+    pub async fn pop_next_grooming_ticket(
+        &self,
+        session_id: &str,
+    ) -> Option<(usize, usize, String)> {
+        let mut guard = self.sessions.lock().await;
+        let entry = guard.get_mut(session_id)?;
+        if entry.pending_grooming_tickets.is_empty() {
+            return None;
+        }
+        let total = entry.grooming_total.max(1);
+        // 1-based: tickets already dispensed = total - remaining;
+        // the one we're about to hand out is dispensed + 1.
+        let current = total - entry.pending_grooming_tickets.len() + 1;
+        let block = entry.pending_grooming_tickets.remove(0);
+        Some((current, total, block))
     }
 
     pub async fn respond_permission(

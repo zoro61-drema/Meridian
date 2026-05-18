@@ -13,8 +13,8 @@ export type WorkflowId =
 
 const WORKFLOW_META: Record<WorkflowId, { title: string; description: string; step: number }> = {
   "review-pr": {
-    title: "PR Dashboard",
-    description: "Pipelined PR review queue — agents run in embedded terminals.",
+    title: "Review a Pull Request",
+    description: "AI-assisted code review across four analysis lenses.",
     step: 11,
   },
   "sprint-dashboard": {

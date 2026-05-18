@@ -8,6 +8,9 @@
 
 import {
   Bug,
+  ChevronRight,
+  ClipboardList,
+  ExternalLink,
   FileText,
   Mail,
   Plug,
@@ -23,12 +26,36 @@ import { toast } from "sonner";
 
 import { DebugTab } from "@/components/command/DebugTab";
 import { SessionBreadcrumb } from "@/components/command/SessionBreadcrumb";
+import { TicketsTab } from "@/components/command/TicketsTab";
+import {
+  SlashCommandMenu,
+  useSlashCommandState,
+} from "@/components/command/SlashCommandMenu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  filterServersForBackend,
+  toWrapperPayload,
+} from "@/lib/commandMcpServers";
+import {
+  CLAUDE_REVIEW_PROMPT_FALLBACK,
+  SLASH_COMMANDS_BY_BACKEND,
+  fetchClaudeReviewPrompt,
+} from "@/lib/commandSlashCommands";
+
+/** Discriminated result for a typed slash command:
+ *  - consumed    → command handled locally, don't forward
+ *  - rewrite     → forward this replacement prompt to the wrapper
+ *  - passthrough → not ours; let the input flow as a normal prompt */
+type LocalSlashResult =
+  | { kind: "consumed" }
+  | { kind: "rewrite"; prompt: string }
+  | { kind: "passthrough" };
+import {
   commandDrainInbox,
   commandGrantPermission,
+  commandOpenInNativeApp,
   commandResumeSession,
   commandSmokeCancel,
   commandSmokeKill,
@@ -81,6 +108,167 @@ export function UnitChatPanel() {
     (s) => s.setSuppressNotifications,
   );
   const switchBackend = useCommandStore((s) => s.switchBackend);
+  const setUnitModel = useCommandStore((s) => s.setUnitModel);
+  const clearTranscript = useCommandStore((s) => s.clearTranscript);
+
+  // Tickets tab is role-gated — only ticket-groomer units have a
+  // grooming queue worth surfacing. Matches the role.title stored
+  // on the unit at launch ("Ticket Groomer") rather than the
+  // RoleId enum so a future "Bulk Groomer" or similar role can
+  // opt in by sharing the same title prefix.
+  const isGroomerRole = unit?.role?.toLowerCase().includes("groomer") ?? false;
+
+  // Local interceptor for slash commands the CLI's interactive
+  // REPL would normally handle. Returns true if the command was
+  // handled locally (don't forward to the wrapper); false to
+  // let the prompt go through as a normal user message.
+  const handleLocalSlashCommand = useCallback(
+    async (prompt: string, unitId: string): Promise<LocalSlashResult> => {
+      if (!prompt.startsWith("/")) return { kind: "passthrough" };
+      const [name, ...rest] = prompt.slice(1).split(/\s+/);
+      const args = rest.join(" ").trim();
+      void args;
+      switch ((name ?? "").toLowerCase()) {
+        case "clear": {
+          // Matches Claude Code's /clear semantics: clear the
+          // local transcript AND restart the wrapper session so
+          // the agent's own context is reset. Without the
+          // wrapper restart, opening the native CLI via
+          // `--resume <id>` would still show the prior history
+          // (the unit's acpSessionId would still point to
+          // claude's stored session). Reusing switch_backend
+          // with the same backend gives us the full reset
+          // (kill wrapper → fresh session/new → new acp id).
+          if (!unit) return { kind: "consumed" };
+          appendTranscript(unitId, "system", "Clearing session…", {
+            newEntry: true,
+          });
+          try {
+            const filteredServers = filterServersForBackend(
+              useCommandStore.getState().mcpServers,
+              unit.backend,
+            ).map(toWrapperPayload);
+            const newAcpId = await commandSwitchBackend(
+              unitId,
+              unit.backend,
+              filteredServers,
+            );
+            switchBackend(unitId, unit.backend, newAcpId);
+            clearTranscript(unitId);
+            appendTranscript(unitId, "system", "Session cleared.", {
+              newEntry: true,
+            });
+            toast.success("Session cleared (transcript + agent context)");
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            appendTranscript(unitId, "error", `Clear failed: ${msg}`, {
+              newEntry: true,
+            });
+            toast.error(`Clear failed: ${msg}`);
+          }
+          return { kind: "consumed" };
+        }
+        case "help": {
+          const list = SLASH_COMMANDS_BY_BACKEND[unit?.backend ?? "claudeAcp"]
+            .map((c) => `/${c.name} — ${c.description}`)
+            .join("\n");
+          appendTranscript(
+            unitId,
+            "system",
+            `Available commands for this backend:\n${list}`,
+            { newEntry: true },
+          );
+          return { kind: "consumed" };
+        }
+        case "model": {
+          // Restart the wrapper with a different model env var.
+          // Implemented as a switch-to-same-backend with a model
+          // override — Rust's switch_backend tears down the old
+          // wrapper and spawns a fresh one with the right env.
+          if (!unit) return { kind: "consumed" };
+          const newModel = args;
+          if (!newModel) {
+            appendTranscript(
+              unitId,
+              "error",
+              "/model needs an argument. Try `/model claude-opus-4-7`.",
+              { newEntry: true },
+            );
+            return { kind: "consumed" };
+          }
+          appendTranscript(
+            unitId,
+            "system",
+            `Switching model to ${newModel}…`,
+            { newEntry: true },
+          );
+          try {
+            const filteredServers = filterServersForBackend(
+              useCommandStore.getState().mcpServers,
+              unit.backend,
+            ).map(toWrapperPayload);
+            const newAcpId = await commandSwitchBackend(
+              unitId,
+              unit.backend,
+              filteredServers,
+              newModel,
+            );
+            switchBackend(unitId, unit.backend, newAcpId);
+            setUnitModel(unitId, newModel);
+            appendTranscript(
+              unitId,
+              "system",
+              `Model swapped to ${newModel}. Agent context restarted; transcript preserved.`,
+              { newEntry: true },
+            );
+            toast.success(`Switched to ${newModel}`);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            appendTranscript(unitId, "error", `Model switch failed: ${msg}`, {
+              newEntry: true,
+            });
+            toast.error(`Model switch failed: ${msg}`);
+          }
+          return { kind: "consumed" };
+        }
+        case "review": {
+          // Fetch the canonical prompt from context7 each invocation
+          // so changes upstream propagate without a Meridian release.
+          // On failure (offline, anchor miss, …) fall back to the
+          // baked-in copy and tell the user.
+          let reviewPrompt = CLAUDE_REVIEW_PROMPT_FALLBACK;
+          let source = "context7";
+          try {
+            reviewPrompt = await fetchClaudeReviewPrompt();
+          } catch (err) {
+            source = "fallback";
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn("[command] /review context7 fetch failed:", msg);
+            toast.warning(
+              "/review: context7 fetch failed — using baked-in copy",
+            );
+          }
+          appendTranscript(
+            unitId,
+            "system",
+            `Running /review with the canonical Claude Code prompt (source: ${source}).`,
+            { newEntry: true },
+          );
+          return { kind: "rewrite", prompt: reviewPrompt };
+        }
+        default:
+          // Unrecognized — let the wrapper see it.
+          return { kind: "passthrough" };
+      }
+    },
+    [
+      clearTranscript,
+      appendTranscript,
+      switchBackend,
+      setUnitModel,
+      unit,
+    ],
+  );
 
   const [text, setText] = useState("");
   const [resuming, setResuming] = useState(false);
@@ -99,7 +287,15 @@ export function UnitChatPanel() {
       if (!unit || switching !== null || target === unit.backend) return;
       setSwitching(target);
       try {
-        const newAcpId = await commandSwitchBackend(unit.id, target);
+        const filteredServers = filterServersForBackend(
+          useCommandStore.getState().mcpServers,
+          target,
+        ).map(toWrapperPayload);
+        const newAcpId = await commandSwitchBackend(
+          unit.id,
+          target,
+          filteredServers,
+        );
         switchBackend(unit.id, target, newAcpId);
         appendTranscript(
           unit.id,
@@ -152,8 +348,23 @@ export function UnitChatPanel() {
       if (!unit || unit.promptInFlight || !unit.isLive) return;
       const prompt = text.trim();
       if (!prompt) return;
+      // Local slash-command interception. The native CLIs' slash
+      // commands are an interactive-REPL feature — they don't pass
+      // through the ACP wrapper's headless mode, so commands the
+      // user expects (like /clear) need Meridian-side handlers.
+      // `/review` is a rewrite: we forward Claude Code's canonical
+      // review prompt fetched live from context7.
+      const local = await handleLocalSlashCommand(prompt, unit.id);
+      if (local.kind === "consumed") {
+        setText("");
+        return;
+      }
       setText("");
+      // Always show the user's typed text in the transcript — the
+      // rewritten prompt only travels to the wrapper.
       appendTranscript(unit.id, "user", prompt, { newEntry: true });
+      const wrapperPrompt =
+        local.kind === "rewrite" ? local.prompt : prompt;
       setPromptInFlight(unit.id, true);
       setUnitState(unit.id, "thinking");
       // Drain any A2A inbox first — the messages get prepended as
@@ -183,8 +394,8 @@ export function UnitChatPanel() {
       const prefixParts = [rolePrefix, inboxPrefix].filter(Boolean);
       const fullPrompt =
         prefixParts.length > 0
-          ? `${prefixParts.join("\n\n---\n\n")}\n\n---\n\nUser request:\n${prompt}`
-          : prompt;
+          ? `${prefixParts.join("\n\n---\n\n")}\n\n---\n\nUser request:\n${wrapperPrompt}`
+          : wrapperPrompt;
       try {
         await commandSmokePrompt(unit.id, fullPrompt);
         setUnitState(unit.id, "idle");
@@ -240,7 +451,7 @@ export function UnitChatPanel() {
         {unit.usage && (
           <div
             className="mt-1 inline-flex items-center gap-2 rounded border border-white/10 bg-black/30 px-1.5 py-0.5 font-mono text-[10px] text-white/60"
-            title={`Tokens used vs context window${unit.usage.costUsd != null ? " · estimated USD spend" : ""}`}
+            title="Tokens used vs context window · input/output split when reported"
           >
             <span>
               {formatTokens(unit.usage.tokens)}
@@ -256,10 +467,17 @@ export function UnitChatPanel() {
                 · {Math.round((unit.usage.tokens / unit.usage.contextSize) * 100)}%
               </span>
             )}
-            {unit.usage.costUsd != null && (
-              <span className="text-emerald-300/80">
-                · ${unit.usage.costUsd.toFixed(unit.usage.costUsd >= 1 ? 2 : 3)}
-              </span>
+            {(unit.usage.inputTokens != null || unit.usage.outputTokens != null) && (
+              <>
+                <span className="text-white/30">·</span>
+                <span title="Input / prompt tokens">
+                  in {formatTokens(unit.usage.inputTokens ?? 0)}
+                </span>
+                <span className="text-white/30">·</span>
+                <span title="Output / completion tokens">
+                  out {formatTokens(unit.usage.outputTokens ?? 0)}
+                </span>
+              </>
             )}
           </div>
         )}
@@ -311,6 +529,26 @@ export function UnitChatPanel() {
           >
             Kill unit
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[10px] text-white/70 hover:bg-white/10"
+            onClick={() => {
+              const bin = NATIVE_BIN_FOR_BACKEND[unit.backend];
+              const args = resumeArgsFor(unit.backend, unit.acpSessionId);
+              void commandOpenInNativeApp(bin, unit.projectId, args).catch(
+                (err: unknown) => {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  toast.error(`Open in ${bin} failed: ${msg}`);
+                },
+              );
+            }}
+            title={`Open this project in the native ${BACKEND_LABEL[unit.backend]} CLI (new Terminal window)`}
+            aria-label={`Open in ${BACKEND_LABEL[unit.backend]} CLI`}
+          >
+            <ExternalLink className="mr-1 h-3 w-3" />
+            Open in {BACKEND_LABEL[unit.backend]}
+          </Button>
         </div>
       </div>
 
@@ -327,6 +565,12 @@ export function UnitChatPanel() {
             <Terminal className="mr-1 h-3 w-3" />
             Commands {unit.commands.length > 0 ? `(${unit.commands.length})` : ""}
           </TabsTrigger>
+          {isGroomerRole && (
+            <TabsTrigger value="tickets" className="h-6 px-2 text-[11px]">
+              <ClipboardList className="mr-1 h-3 w-3" />
+              Tickets {unit.groomingQueue.length > 0 ? `(${unit.groomingQueue.length})` : ""}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="debug" className="h-6 px-2 text-[11px]">
             <Bug className="mr-1 h-3 w-3" />
             Debug
@@ -364,6 +608,14 @@ export function UnitChatPanel() {
         >
           <CommandsTab commands={unit.commands} />
         </TabsContent>
+        {isGroomerRole && (
+          <TabsContent
+            value="tickets"
+            className="flex-1 min-h-0 overflow-hidden focus-visible:outline-none"
+          >
+            <TicketsTab unit={unit} />
+          </TabsContent>
+        )}
         <TabsContent
           value="debug"
           className="flex-1 min-h-0 overflow-hidden focus-visible:outline-none"
@@ -372,36 +624,137 @@ export function UnitChatPanel() {
         </TabsContent>
       </Tabs>
 
-      <div className="border-t border-white/10 p-2">
-        <form className="flex gap-2" onSubmit={(e) => void onSubmit(e)}>
-          <Input
-            disabled={unit.promptInFlight || !unit.isLive}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={
-              !unit.isLive
-                ? "Disconnected — click Resume to reconnect"
-                : unit.promptInFlight
-                  ? "Awaiting agent response…"
-                  : "Send a prompt…"
-            }
-            className="flex-1 bg-black/30"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={unit.promptInFlight || !unit.isLive || text.trim().length === 0}
-            aria-label="Send prompt"
-          >
-            {unit.promptInFlight ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        </form>
+      <div className="relative border-t border-white/10 p-2">
+        <SlashAwareInputForm
+          text={text}
+          setText={setText}
+          backend={unit.backend}
+          disabled={unit.promptInFlight || !unit.isLive}
+          inFlight={unit.promptInFlight}
+          isLive={unit.isLive}
+          onSubmit={onSubmit}
+        />
       </div>
     </div>
+  );
+}
+
+/** Chat input wrapper that overlays the slash-command autocomplete
+ *  popover. Keyboard handling: ↑/↓ navigate the menu when open,
+ *  Tab/Enter accepts the highlighted command (without submitting),
+ *  Enter submits when the menu is closed, Esc closes the menu. */
+function SlashAwareInputForm({
+  text,
+  setText,
+  backend,
+  disabled,
+  inFlight,
+  isLive,
+  onSubmit,
+}: {
+  text: string;
+  setText: (s: string) => void;
+  backend: BackendKind;
+  disabled: boolean;
+  inFlight: boolean;
+  isLive: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+}) {
+  const commands = SLASH_COMMANDS_BY_BACKEND[backend];
+  const { open, filtered } = useSlashCommandState(text, commands);
+  const [highlight, setHighlight] = useState(0);
+
+  // Reset highlight whenever the visible list changes so we don't
+  // point past the end of a freshly-filtered shorter list.
+  useEffect(() => {
+    setHighlight(0);
+  }, [filtered.length, open]);
+
+  const accept = (idx: number) => {
+    const cmd = filtered[idx];
+    if (!cmd) return;
+    // Trailing space when the command takes args so the user can
+    // start typing them immediately; no trailing space otherwise
+    // so Enter sends as-is.
+    const filled = `/${cmd.name}${cmd.argsHint ? " " : ""}`;
+    setText(filled);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => (h + 1) % Math.max(1, filtered.length));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight(
+        (h) => (h - 1 + Math.max(1, filtered.length)) % Math.max(1, filtered.length),
+      );
+    } else if (e.key === "Tab" || (e.key === "Enter" && filtered.length > 0)) {
+      e.preventDefault();
+      accept(highlight);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      // Closing the menu without losing the typed text — easiest
+      // is to keep the text but signal the menu it's dismissed by
+      // appending a trailing space (which falls outside the
+      // prefix region). Less hacky alternative would be a separate
+      // dismissed flag; keeping it minimal for now.
+      setText(text + " ");
+    }
+  };
+
+  return (
+    <form
+      className="relative flex gap-2"
+      onSubmit={(e) => {
+        // If the menu is open with results, Enter is handled by
+        // onKeyDown for accept; the form's submit only fires when
+        // the menu is closed.
+        if (open && filtered.length > 0) {
+          e.preventDefault();
+          return;
+        }
+        onSubmit(e);
+      }}
+    >
+      <SlashCommandMenu
+        open={open}
+        commands={filtered}
+        highlight={highlight}
+        onHighlightChange={setHighlight}
+        onPick={(c) => {
+          const filled = `/${c.name}${c.argsHint ? " " : ""}`;
+          setText(filled);
+        }}
+      />
+      <Input
+        disabled={disabled}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={
+          !isLive
+            ? "Disconnected — click Resume to reconnect"
+            : inFlight
+              ? "Awaiting agent response…"
+              : "Send a prompt — try / for commands…"
+        }
+        className="flex-1 bg-black/30"
+      />
+      <Button
+        type="submit"
+        size="icon"
+        disabled={disabled || text.trim().length === 0}
+        aria-label="Send prompt"
+      >
+        {inFlight ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Send className="h-4 w-4" />
+        )}
+      </Button>
+    </form>
   );
 }
 
@@ -543,6 +896,46 @@ const BACKEND_LABEL: Record<BackendKind, string> = {
   qwenAcp: "Qwen",
 };
 
+// CLI binary names per backend. Matches the convention in CLAUDE.md
+// (use the binary name `claude` / `codex` / `gemini` / `qwen`, not
+// the package name). Constrained to [A-Za-z0-9_-] by the Rust side.
+const NATIVE_BIN_FOR_BACKEND: Record<BackendKind, string> = {
+  claudeAcp: "claude",
+  geminiAcp: "gemini",
+  codexAcp: "codex",
+  qwenAcp: "qwen",
+};
+
+/** Args appended to the native CLI invocation so it resumes the
+ *  same session the user was running inside Meridian. The session
+ *  ID here is the wrapper's ACP session id, which (at least for
+ *  Claude Code) corresponds to claude's own session storage so
+ *  `--resume <id>` lands on the right transcript. For backends
+ *  without a known resume-by-id flag, fall back to the bare binary
+ *  and let the user navigate manually. */
+function resumeArgsFor(
+  backend: BackendKind,
+  acpSessionId: string,
+): string[] | undefined {
+  switch (backend) {
+    case "claudeAcp":
+      // `claude --resume <session-id>` jumps straight into the
+      // transcript with the wrapper's id. If the id doesn't match
+      // a stored session, claude shows the picker instead — still
+      // useful behavior.
+      return acpSessionId ? ["--resume", acpSessionId] : ["--resume"];
+    case "codexAcp":
+      // codex `resume` subcommand opens the session picker (codex
+      // CLI doesn't take a session id positionally).
+      return ["resume"];
+    case "geminiAcp":
+    case "qwenAcp":
+      // No known resume-by-id flag — launch bare and let the user
+      // continue interactively.
+      return undefined;
+  }
+}
+
 function BackendSwitcher({
   current,
   busy,
@@ -553,41 +946,79 @@ function BackendSwitcher({
   onSwitch: (target: BackendKind) => void;
 }) {
   const targets: BackendKind[] = ["claudeAcp", "geminiAcp", "codexAcp", "qwenAcp"];
+  const others = targets.filter((b) => b !== current);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Collapse when the user clicks outside the switcher. Mid-switch
+  // (busy !== null) stays expanded so the spinner remains visible.
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (busy !== null) return;
+      const el = rootRef.current;
+      if (el && !el.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open, busy]);
+
+  const onPick = (target: BackendKind) => {
+    onSwitch(target);
+    // Optimistically collapse; the parent's switching spinner is
+    // visible via the chip's own loading state until completion.
+    setOpen(false);
+  };
+
   return (
-    <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-white/10 bg-black/30 px-1 py-0.5">
-      <span className="px-1 text-[9px] uppercase tracking-wider text-white/40">
-        switch
-      </span>
-      {targets.map((b) => {
-        const isCurrent = b === current;
-        const isBusy = busy === b;
-        return (
-          <button
-            key={b}
-            type="button"
-            disabled={isCurrent || busy !== null}
-            onClick={() => onSwitch(b)}
-            className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
-              isCurrent
-                ? "bg-white/15 text-white/90 cursor-default"
-                : "text-white/60 hover:bg-white/10 hover:text-white/90"
-            } ${busy !== null && !isCurrent ? "opacity-40" : ""}`}
-            title={
-              isCurrent
-                ? `Current: ${BACKEND_LABEL[b]}`
-                : `Switch to ${BACKEND_LABEL[b]} (agent context resets)`
-            }
-            aria-label={
-              isCurrent
-                ? `Current backend: ${BACKEND_LABEL[b]}`
-                : `Switch to ${BACKEND_LABEL[b]}`
-            }
-            aria-pressed={isCurrent}
-          >
-            {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : BACKEND_LABEL[b]}
-          </button>
-        );
-      })}
+    <div
+      ref={rootRef}
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/10 bg-black/30 px-1 py-0.5"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        title={`Current backend: ${BACKEND_LABEL[current]} — click to switch`}
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-white/70 transition-colors hover:bg-white/10 hover:text-white/90"
+      >
+        <span className="text-[9px] uppercase tracking-wider text-white/40">
+          switch
+        </span>
+        <span className="font-medium">{BACKEND_LABEL[current]}</span>
+        <ChevronRight
+          className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+      {/* Options slide in to the right of the trigger. `max-w` +
+          `overflow-hidden` collapse the drawer when closed without
+          requiring layout shift — the trigger stays anchored. */}
+      <div
+        className={`flex items-center gap-0.5 overflow-hidden transition-[max-width,opacity] duration-200 ${
+          open ? "max-w-[260px] opacity-100" : "max-w-0 opacity-0"
+        }`}
+        aria-hidden={!open}
+      >
+        {others.map((b) => {
+          const isBusy = busy === b;
+          return (
+            <button
+              key={b}
+              type="button"
+              disabled={busy !== null}
+              onClick={() => onPick(b)}
+              className={`rounded px-1.5 py-0.5 text-[10px] transition-colors text-white/60 hover:bg-white/10 hover:text-white/90 ${
+                busy !== null ? "opacity-40" : ""
+              }`}
+              title={`Switch to ${BACKEND_LABEL[b]} (agent context resets)`}
+              aria-label={`Switch to ${BACKEND_LABEL[b]}`}
+            >
+              {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : BACKEND_LABEL[b]}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

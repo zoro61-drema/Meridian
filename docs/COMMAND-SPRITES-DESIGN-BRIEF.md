@@ -26,7 +26,7 @@ Five things worth knowing before you start:
 
 Command is Meridian's tactical multi-agent dashboard. Each running Claude Code / Codex / Gemini session is a **unit** deployed to a tactical field — a planet-surface terrain viewed from above. Users pick a unit type at agent creation; the unit becomes that agent's persistent visual identity across the dashboard, archive, and chat panel.
 
-Each unit has **seven persistent state animations** plus **two transient one-shots** (§6) corresponding to what its agent is currently doing. The unit's own animation is the state communication; nothing renders around it.
+Each unit has **seven persistent state animations**, **two transient one-shots**, and **one locomotion loop** (§6) corresponding to what its agent is currently doing. The unit's own animation is the state communication; nothing renders around it. Stationary units (Sentinel Turret, Siege Walker) skip the locomotion loop since they don't wander.
 
 The dashboard is **read at-a-glance**. Up to 20 units may be on the field at once. The mood is **commander's display, retro RTS** — late-90s strategy game viewed from orbit. Players surveyed StarCraft battlefields by glancing at unit sprites and reading their behavior. Same paradigm here: glance at the unit, read what it's doing, drill in only when needed.
 
@@ -142,9 +142,9 @@ You can surprise us. If a fourth direction reveals itself while designing, inclu
 
 ---
 
-## 6. State animations — seven persistent states + two transients
+## 6. State animations — seven persistent states + two transients + one locomotion
 
-These define the animation vocabulary. Each unit must convincingly express seven persistent states (§6.1–§6.7) plus two transient one-shots (§6.8). The *means* by which a Marine expresses "thinking" will differ from how a Starfighter or Bio-Construct expresses it — but each should be unmistakable for its state when viewed from above.
+These define the animation vocabulary. Each unit must convincingly express seven persistent states (§6.1–§6.7), two transient one-shots (§6.8), and one locomotion loop (§6.9). The *means* by which a Marine expresses "thinking" will differ from how a Starfighter or Bio-Construct expresses it — but each should be unmistakable for its state when viewed from above. Stationary units (Sentinel Turret, Siege Walker) skip §6.9 since they don't move.
 
 **Top-down motion principle.** Vertical motion (chest rising, body bobbing forward) is largely invisible from above. Lean instead on **rotational motion** (turning, swiveling), **lateral shifts** (weight rocking side to side), **limb extensions** (arms reaching outward, weapons protruding further), **shadow size changes** (a small dilation/contraction reads as hovering or breathing), and **integral light pulses** (visor, vents, engines).
 
@@ -254,6 +254,18 @@ These are **one-shot** animations layered on top of whichever persistent state t
 - Engineering Walker → Sentinel Turret, Probe Drone
 - Bio-Construct → a smaller Bio-Construct
 - Assault Mech / Light Walker → Combat Drone
+
+### 6.9 Locomotion — `walk`
+
+**Purpose.** Plays during cosmetic idle wander (see SPEC §2.4). Units occasionally shift position by a few pixels during downtime to keep the field reading as a living battle scene rather than a static dashboard. The `walk` animation is the locomotion loop used during these wander moves.
+
+**Motion vocabulary.** Unit-appropriate forward locomotion. Humanoids (Marine, Engineer, Field Tech, Recon Scout) use a two-step gait with alternating legs. Mechs and walkers use slower, heavier multi-leg cycles appropriate to their leg count. Spacecraft and drones glide forward (no legs to animate — body translates with engine glow trail). Bio-Construct creeps with organic asymmetric limb articulation.
+
+**Loop.** 6–8 frames, ~8 fps, fully looping. Direction-of-travel matches facing — a unit walking east plays the walk loop with east-facing sprites.
+
+**Stationary exception.** Sentinel Turret and Siege Walker do not get a `walk` animation. Sentinel Turret has no legs and is permanently anchored. Siege Walker has legs but is rooted artillery by spec — its anchored personality is core to the unit's identity. Both skip `walk` entirely; the wander system excludes them via the `canWander: false` flag.
+
+**Avoid.** Running, sprinting, urgent motion — wander is slow and deliberate. Walks should read as "ambient repositioning," not "moving with purpose."
 
 ---
 
@@ -595,27 +607,27 @@ Update this section as work progresses. It serves as persistent memory across Cl
 For each unit: track variants → direction → animations → ship.
 
 #### Infantry
-- [ ] **Engineer** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Field Tech** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Recon Scout** (variants → chosen: ___ → 9 animations → shipped)
+- [ ] **Engineer** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Field Tech** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Recon Scout** (variants → chosen: ___ → 10 animations → shipped)
 
 #### Mechs
-- [ ] **Light Walker** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Assault Mech** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Siege Walker** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Engineering Walker** (variants → chosen: ___ → 9 animations → shipped)
+- [ ] **Light Walker** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Assault Mech** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Siege Walker** (variants → chosen: ___ → 9 animations → shipped — stationary, no walk)
+- [ ] **Engineering Walker** (variants → chosen: ___ → 10 animations → shipped)
 
 #### Spacecraft
-- [ ] **Starfighter** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Interceptor** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Dropship** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Capital Ship** (variants → chosen: ___ → 9 animations → shipped)
+- [ ] **Starfighter** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Interceptor** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Dropship** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Capital Ship** (variants → chosen: ___ → 10 animations → shipped)
 
 #### Drones & Constructs
-- [ ] **Probe Drone** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Combat Drone** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Bio-Construct** (variants → chosen: ___ → 9 animations → shipped)
-- [ ] **Sentinel Turret** (variants → chosen: ___ → 9 animations → shipped)
+- [ ] **Probe Drone** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Combat Drone** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Bio-Construct** (variants → chosen: ___ → 10 animations → shipped)
+- [ ] **Sentinel Turret** (variants → chosen: ___ → 9 animations → shipped — stationary, no walk)
 
 ### Wrap-up
 

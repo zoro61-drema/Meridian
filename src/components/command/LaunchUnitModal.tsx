@@ -27,9 +27,32 @@ import {
   COMMAND_ROLES,
   type CommandRole,
   type RoleId,
+  effectiveRolePrompt,
   roleById,
 } from "@/lib/commandRoles";
-import { commandSmokeLaunch, type BackendKind } from "@/lib/tauri/command";
+import {
+  formatIssueBlock,
+  parseTicketKeyList,
+} from "@/lib/commandGroomerLaunch";
+import { loadGroomingTemplate } from "@/lib/tauri/templates";
+import type { GroomingFormatTemplates } from "@/lib/groomingPromptBlocks";
+import {
+  filterServersForBackend,
+  toWrapperPayload,
+} from "@/lib/commandMcpServers";
+import {
+  getAllActiveSprints,
+  getFutureSprints,
+  getIssue,
+  getSprintIssuesById,
+  type JiraIssue,
+  type JiraSprint,
+} from "@/lib/tauri/jira";
+import {
+  commandSmokeLaunch,
+  commandSmokePrompt,
+  type BackendKind,
+} from "@/lib/tauri/command";
 import { scheduleSpawnSettle } from "@/stores/command/listeners";
 import {
   computeNextUnitName,
@@ -53,6 +76,25 @@ const BACKEND_OPTIONS: Array<{
   },
   { id: "qwenAcp", label: "Qwen", hint: "qwen --acp — run `qwen` once to set up auth" },
 ];
+
+/** Suggested model id per backend — purely a placeholder hint
+ *  in the launch modal's Model input. The field is freeform so
+ *  the user can paste whatever id their CLI accepts. */
+const MODEL_PLACEHOLDER: Record<BackendKind, string> = {
+  claudeAcp: "claude-opus-4-7 / claude-sonnet-4-6 / claude-haiku-4-5",
+  codexAcp: "gpt-5 / gpt-4o / o3",
+  geminiAcp: "gemini-2.5-pro / gemini-2.5-flash",
+  qwenAcp: "qwen3-coder / qwen3-turbo",
+};
+
+/** Env var the wrapper inherits — used in the modal's helper copy
+ *  + by the Rust spawn code (mirrored in `acp_spawn::build_model_env`). */
+const MODEL_ENV_VAR: Record<BackendKind, string> = {
+  claudeAcp: "ANTHROPIC_MODEL",
+  codexAcp: "OPENAI_MODEL",
+  geminiAcp: "GEMINI_MODEL",
+  qwenAcp: "QWEN_MODEL",
+};
 
 const SPRITE_OPTIONS: Array<{ id: SpriteId; label: string }> = [
   { id: "marine", label: "Marine" },
@@ -79,7 +121,21 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
   const [projectDir, setProjectDir] = useState(defaultProjectDir);
   const [customName, setCustomName] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
+  /** Optional model override. Empty string = wrapper default
+   *  (whatever the native CLI is configured to use). Passed as
+   *  the appropriate env var per backend (`ANTHROPIC_MODEL`,
+   *  `OPENAI_MODEL`, …) at spawn time. */
+  const [modelOverride, setModelOverride] = useState("");
   const [launching, setLaunching] = useState(false);
+
+  // Ticket-groomer batch picker state. Only meaningful when
+  // role.id === "ticket-groomer" but kept declared at component
+  // scope so resets don't have to dance around conditional hooks.
+  const [groomerMode, setGroomerMode] = useState<"sprint" | "manual">("sprint");
+  const [sprints, setSprints] = useState<JiraSprint[]>([]);
+  const [sprintsLoading, setSprintsLoading] = useState(false);
+  const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
+  const [manualTicketsRaw, setManualTicketsRaw] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -87,8 +143,39 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
     setBackend(role.defaultBackend);
     setCustomPrompt("");
     setCustomName("");
+    setModelOverride("");
     setProjectDir(defaultProjectDir);
+    setGroomerMode("sprint");
+    setSelectedSprintId(null);
+    setManualTicketsRaw("");
   }, [open, role, defaultProjectDir]);
+
+  // Fetch the sprint list once when the ticket-groomer role is
+  // selected. Active + future sprints get concatenated; the future-
+  // sprint cap of 10 is arbitrary but generous for typical teams.
+  useEffect(() => {
+    if (!open || role.id !== "ticket-groomer") return;
+    let alive = true;
+    setSprintsLoading(true);
+    void Promise.all([getAllActiveSprints(), getFutureSprints(10)])
+      .then(([active, future]) => {
+        if (!alive) return;
+        const combined = [...active, ...future];
+        setSprints(combined);
+        if (combined.length > 0 && selectedSprintId == null) {
+          setSelectedSprintId(combined[0]!.id);
+        }
+      })
+      .catch((err: unknown) => {
+        console.warn("[command] sprint fetch failed", err);
+      })
+      .finally(() => {
+        if (alive) setSprintsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, role.id, selectedSprintId]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,17 +184,148 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
       toast.error("Project directory is required.");
       return;
     }
-    setLaunching(true);
+
+    // For the ticket-groomer role, fetch the batch BEFORE spawning
+    // the agent — if there are no tickets to groom or the JIRA
+    // fetch fails, we don't want a half-launched unit on the field.
+    // `groomerHeader` is a tiny metadata block prepended to the
+    // role prompt; the actual per-ticket data lands in the Rust
+    // pending-queue and is dispensed one at a time via the
+    // `get_next_ticket` MCP tool.
+    let groomerHeader: string | null = null;
+    let groomerTickets: string[] = [];
+    if (role.id === "ticket-groomer") {
+      setLaunching(true);
+      try {
+        let sprint: JiraSprint | null = null;
+        let issues: JiraIssue[] = [];
+        if (groomerMode === "sprint") {
+          if (selectedSprintId == null) {
+            toast.error("Pick a sprint to groom.");
+            setLaunching(false);
+            return;
+          }
+          sprint = sprints.find((s) => s.id === selectedSprintId) ?? null;
+          issues = await getSprintIssuesById(selectedSprintId);
+        } else {
+          const { keys, invalid } = parseTicketKeyList(manualTicketsRaw);
+          if (invalid.length > 0) {
+            toast.error(
+              `Invalid ticket keys: ${invalid.slice(0, 3).join(", ")}${
+                invalid.length > 3 ? "…" : ""
+              }`,
+            );
+            setLaunching(false);
+            return;
+          }
+          if (keys.length === 0) {
+            toast.error("Add at least one ticket key (e.g. PROJ-1234).");
+            setLaunching(false);
+            return;
+          }
+          const fetched = await Promise.allSettled(keys.map((k) => getIssue(k)));
+          const missing: string[] = [];
+          fetched.forEach((r, i) => {
+            if (r.status === "fulfilled") issues.push(r.value);
+            else missing.push(keys[i]!);
+          });
+          if (missing.length > 0) {
+            toast.error(
+              `Could not fetch: ${missing.slice(0, 3).join(", ")}${
+                missing.length > 3 ? "…" : ""
+              }`,
+            );
+            setLaunching(false);
+            return;
+          }
+        }
+        if (issues.length === 0) {
+          toast.error("No tickets to groom — sprint is empty.");
+          setLaunching(false);
+          return;
+        }
+        // Header: small metadata block, NOT the full ticket data —
+        // tickets get dispensed one at a time via get_next_ticket.
+        const headerLines = [
+          sprint
+            ? `Grooming batch — Sprint: ${sprint.name} (id ${sprint.id})${
+                sprint.goal ? ` · goal: ${sprint.goal}` : ""
+              }`
+            : "Grooming batch — manual selection",
+          `Count: ${issues.length} ticket${issues.length === 1 ? "" : "s"}`,
+          `Keys: ${issues.map((i) => i.key).join(", ")}`,
+        ];
+        groomerHeader = headerLines.join("\n");
+        groomerTickets = issues.map(formatIssueBlock);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`JIRA fetch failed: ${msg}`);
+        setLaunching(false);
+        return;
+      }
+    } else {
+      setLaunching(true);
+    }
+
     try {
       const displayName =
         customName.trim() || computeNextUnitName(useCommandStore.getState(), backend);
+      const storeSnap = useCommandStore.getState();
+      const filteredServers = filterServersForBackend(
+        storeSnap.mcpServers,
+        backend,
+      ).map(toWrapperPayload);
       const { sessionId, acpSessionId } = await commandSmokeLaunch(
         backend,
         projectDir,
         displayName,
+        filteredServers,
+        groomerTickets,
+        modelOverride.trim(),
       );
-      const systemPrompt =
-        role.id === "custom" ? customPrompt.trim() : role.systemPrompt;
+      // For the Custom role the user types the prompt directly in
+      // the modal; everything else goes through `effectiveRolePrompt`
+      // so per-role overrides + attached skill bodies (from
+      // CommanderSettings) compose into the launch prompt.
+      const storeNow = useCommandStore.getState();
+      const skillsById: Record<string, string> = {};
+      for (const s of storeNow.skills) skillsById[s.id] = s.body;
+      const selectedSkillIds = storeNow.roleSkills[role.id] ?? [];
+      // For the Ticket Groomer role only, load the user's per-field format
+      // templates so the prompt includes them — same templates the sidecar
+      // grooming workflow uses. `loadGroomingTemplate` returns "" when not
+      // configured, which `buildFormatTemplatesBlock` treats as absent.
+      let groomingTemplates: GroomingFormatTemplates | null = null;
+      if (role.id === "ticket-groomer") {
+        const [ac, str] = await Promise.all([
+          loadGroomingTemplate("acceptance_criteria").catch(() => ""),
+          loadGroomingTemplate("steps_to_reproduce").catch(() => ""),
+        ]);
+        if (ac.trim() || str.trim()) {
+          groomingTemplates = {
+            acceptance_criteria: ac.trim() ? ac : null,
+            steps_to_reproduce: str.trim() ? str : null,
+          };
+        }
+      }
+      let systemPrompt =
+        role.id === "custom"
+          ? customPrompt.trim()
+          : effectiveRolePrompt(
+              role.id,
+              storeNow.roleOverrides,
+              selectedSkillIds,
+              skillsById,
+              groomingTemplates,
+            );
+      // Append the batch header AFTER the base role prompt so the
+      // agent sees the directive first and the batch metadata second.
+      // Per-ticket content is delivered on demand via get_next_ticket.
+      if (groomerHeader) {
+        systemPrompt = systemPrompt
+          ? `${systemPrompt}\n\n---\n\n${groomerHeader}`
+          : groomerHeader;
+      }
       addUnit({
         sessionId,
         backend,
@@ -117,10 +335,53 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
         role: role.title,
         rolePrompt: systemPrompt || undefined,
         projectId: projectDir,
+        modelId: modelOverride.trim() || undefined,
       });
       scheduleSpawnSettle(sessionId);
       toast.success(`Launched ${role.title}`);
       onOpenChange(false);
+
+      // Ticket-groomer kickoff: the role prompt tells the agent to
+      // start calling get_next_ticket immediately, but ACP agents
+      // only act after they receive a session/prompt. Fire one
+      // automatically so the user doesn't have to type "go".
+      // Consumes the role-prompt prefix in the same way a normal
+      // user message would, then drives the unit to "thinking"
+      // until the wrapper acks the turn.
+      if (groomerTickets.length > 0) {
+        const store = useCommandStore.getState();
+        const rolePrefix = store.consumeRolePrompt(sessionId) ?? "";
+        const kickoff =
+          "Begin grooming the queue. Call get_next_ticket now to fetch the first ticket.";
+        const fullPrompt = rolePrefix
+          ? `${rolePrefix}\n\n---\n\nUser request:\n${kickoff}`
+          : kickoff;
+        store.appendTranscript(
+          sessionId,
+          "system",
+          `Auto-starting grooming queue (${groomerTickets.length} ticket${
+            groomerTickets.length === 1 ? "" : "s"
+          }).`,
+          { newEntry: true },
+        );
+        store.setPromptInFlight(sessionId, true);
+        store.setUnitState(sessionId, "thinking");
+        void commandSmokePrompt(sessionId, fullPrompt)
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            const s = useCommandStore.getState();
+            s.appendTranscript(
+              sessionId,
+              "error",
+              `Auto-kickoff failed: ${msg}`,
+              { newEntry: true },
+            );
+            s.setUnitState(sessionId, "error");
+          })
+          .finally(() => {
+            useCommandStore.getState().setPromptInFlight(sessionId, false);
+          });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Launch failed: ${msg}`);
@@ -234,6 +495,30 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
 
           <div className="space-y-1.5">
             <Label
+              htmlFor="launch-model"
+              className="text-xs uppercase tracking-wider text-muted-foreground"
+            >
+              Model (optional)
+            </Label>
+            <Input
+              id="launch-model"
+              value={modelOverride}
+              onChange={(e) => setModelOverride(e.target.value)}
+              placeholder={MODEL_PLACEHOLDER[backend]}
+              className="bg-black/30 font-mono text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Set via{" "}
+              <code className="rounded bg-black/30 px-1 py-0.5 font-mono">
+                {MODEL_ENV_VAR[backend]}
+              </code>
+              {" "}at spawn time. Leave blank to use the CLI's configured
+              default.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label
               htmlFor="launch-unit-name"
               className="text-xs uppercase tracking-wider text-muted-foreground"
             >
@@ -247,6 +532,69 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
               className="bg-black/30"
             />
           </div>
+
+          {role.id === "ticket-groomer" && (
+            <div className="space-y-2 rounded-md border border-amber-700/40 bg-amber-900/10 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs uppercase tracking-wider text-amber-200/80">
+                  Grooming batch
+                </Label>
+                <div className="flex gap-1 rounded border border-white/10 bg-black/30 p-0.5">
+                  {(["sprint", "manual"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setGroomerMode(m)}
+                      className={`rounded px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors ${
+                        groomerMode === m
+                          ? "bg-amber-500/20 text-amber-100"
+                          : "text-white/60 hover:bg-white/5"
+                      }`}
+                    >
+                      {m === "sprint" ? "From sprint" : "Manual"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {groomerMode === "sprint" ? (
+                <select
+                  value={selectedSprintId ?? ""}
+                  onChange={(e) =>
+                    setSelectedSprintId(
+                      e.target.value === "" ? null : Number(e.target.value),
+                    )
+                  }
+                  disabled={sprintsLoading || sprints.length === 0}
+                  className="w-full rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs"
+                >
+                  {sprintsLoading && <option value="">Loading sprints…</option>}
+                  {!sprintsLoading && sprints.length === 0 && (
+                    <option value="">No active or future sprints found</option>
+                  )}
+                  {sprints.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {s.state ? ` (${s.state})` : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Textarea
+                  value={manualTicketsRaw}
+                  onChange={(e) => setManualTicketsRaw(e.target.value)}
+                  placeholder="PROJ-1234, PROJ-1235, PROJ-1240"
+                  rows={3}
+                  className="bg-black/30 font-mono text-xs"
+                />
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                The agent receives every ticket's current fields in its
+                launch prompt and submits per-ticket recommendations as it
+                works through the batch. Review them in the Tickets tab.
+              </p>
+            </div>
+          )}
 
           {role.id === "custom" && (
             <div className="space-y-1.5">

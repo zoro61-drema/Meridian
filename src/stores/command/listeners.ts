@@ -20,18 +20,26 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   COMMAND_A2A_EVENT_NAME,
   COMMAND_EVENT_NAME,
+  COMMAND_GROOMING_EVENT_NAME,
+  commandListGroomingProposals,
   commandListMessages,
   commandListSessions,
   type A2AMessage,
   type CommandEvent,
   type CommandEventRaw,
+  type GroomingProposalEvent,
   type StoredMessage,
 } from "@/lib/tauri/command";
 import type { AgentState } from "@/lib/commandSprites";
+import type {
+  GroomingFieldChange,
+  GroomingProposal,
+} from "@/lib/commandGrooming";
 import { useCommandStore } from "./store";
 
 let attached = false;
 let detachers: UnlistenFn[] = [];
+let loggedUsageShape = false;
 
 export async function attachCommandListeners(): Promise<() => void> {
   if (attached) return () => detach();
@@ -43,7 +51,56 @@ export async function attachCommandListeners(): Promise<() => void> {
   const unlistenA2A = await listen<A2AMessage>(COMMAND_A2A_EVENT_NAME, (e) => {
     useCommandStore.getState().receiveA2AMessage(e.payload);
   });
-  detachers = [unlisten, unlistenA2A];
+  const unlistenGrooming = await listen<GroomingProposalEvent>(
+    COMMAND_GROOMING_EVENT_NAME,
+    (e) => {
+      const payload = e.payload;
+      const proposal: GroomingProposal = {
+        id: payload.id,
+        ticketKey: payload.ticketKey,
+        ticketSummary: payload.ticketSummary,
+        ticketType: payload.ticketType,
+        changes: (payload.suggestedEdits ?? []).map((raw) => {
+          const r = raw as Record<string, unknown>;
+          const fieldRaw = typeof r.field === "string" ? r.field : "";
+          const field: GroomingFieldChange["field"] = (
+            [
+              "description",
+              "acceptance_criteria",
+              "steps_to_reproduce",
+              "observed_behavior",
+              "expected_behavior",
+              "summary",
+            ] as const
+          ).includes(fieldRaw as GroomingFieldChange["field"])
+            ? (fieldRaw as GroomingFieldChange["field"])
+            : "description";
+          return {
+            id:
+              typeof r.id === "string" && r.id.length > 0
+                ? r.id
+                : `${payload.id}-${Math.random().toString(36).slice(2, 8)}`,
+            field,
+            section: typeof r.section === "string" ? r.section : "",
+            current: typeof r.current === "string" ? r.current : null,
+            suggested: typeof r.suggested === "string" ? r.suggested : "",
+            reasoning: typeof r.reasoning === "string" ? r.reasoning : "",
+            decision: null,
+            approvedValue: null,
+          };
+        }),
+        clarifyingQuestions: payload.clarifyingQuestions ?? [],
+        groomingNotes: payload.groomingNotes ?? "",
+        createdAtMs: payload.createdAtMs,
+        skippedAt: null,
+        submittedAt: null,
+      };
+      useCommandStore
+        .getState()
+        .upsertGroomingProposal(payload.sessionId, proposal);
+    },
+  );
+  detachers = [unlisten, unlistenA2A, unlistenGrooming];
   return () => detach();
 }
 
@@ -51,6 +108,17 @@ function detach() {
   for (const fn of detachers) fn();
   detachers = [];
   attached = false;
+}
+
+// HMR safety: the previous module's `listen()` subscriptions stay
+// alive in Tauri's event bus across hot reloads — they kept firing
+// alongside the new module's listeners, doubling every transcript
+// chunk + tool entry. `import.meta.hot.dispose` runs before the
+// new module evaluates, so we tear them down cleanly.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    detach();
+  });
 }
 
 function dispatch(event: CommandEvent) {
@@ -166,19 +234,61 @@ function handleSessionUpdate(sessionId: string, raw: CommandEventRaw) {
   // Pull it out before the main switch so the costlier transcript
   // mutations don't run on what is effectively a counter update.
   if (kind === "usage_update") {
-    const used = (update as Record<string, unknown>).used;
-    const size = (update as Record<string, unknown>).size;
-    const cost = (update as Record<string, unknown>).cost as
+    const u = update as Record<string, unknown>;
+    // One-shot dev log: surfaces the raw payload shape so we can
+    // tell exactly which fields the wrapper emits (and which our
+    // probes have to match). Logs only once per page load to
+    // avoid flooding the console under streaming.
+    if (!loggedUsageShape) {
+      loggedUsageShape = true;
+      console.debug("[command] first usage_update payload:", u);
+    }
+    const used = pickNumber(u, [
+      "used",
+      "total",
+      "totalTokens",
+      "total_tokens",
+      "tokens",
+    ]);
+    const size = pickNumber(u, [
+      "size",
+      "contextSize",
+      "context_size",
+      "context_window",
+      "contextWindow",
+      "window",
+    ]);
+    const cost = u.cost as
       | { amount?: number; currency?: string }
       | undefined;
-    if (typeof used === "number") {
+    // Input/output split varies by wrapper. Claude Code surfaces
+    // `inputTokens` / `outputTokens` at the top level; some
+    // adapters use OpenAI-style `input_tokens` / `output_tokens`
+    // or `prompt_tokens` / `completion_tokens`. Others bury the
+    // split inside a nested `tokens` / `usage` / `tokenUsage`
+    // object. Probe all three flat names + nested under each.
+    const { input: inputTokens, output: outputTokens } = findInputOutput(u);
+    if (used != null) {
       store.setUsage(sessionId, {
         tokens: used,
-        contextSize: typeof size === "number" ? size : null,
+        inputTokens,
+        outputTokens,
+        contextSize: size,
         costUsd:
           cost && (cost.currency ?? "USD") === "USD" && typeof cost.amount === "number"
             ? cost.amount
             : null,
+      });
+    } else if (inputTokens != null || outputTokens != null) {
+      // Some wrappers omit the cumulative count but still send the
+      // split — fall back to in+out as the total.
+      const total = (inputTokens ?? 0) + (outputTokens ?? 0);
+      store.setUsage(sessionId, {
+        tokens: total,
+        inputTokens,
+        outputTokens,
+        contextSize: size,
+        costUsd: null,
       });
     }
     return;
@@ -305,6 +415,65 @@ function describePermissionTarget(toolCall: {
 }
 
 
+/** Read the first numeric field from `obj` whose key matches one
+ *  of `candidates`. Handles wrapper inconsistencies (camelCase /
+ *  snake_case / legacy naming). */
+function pickNumber(
+  obj: Record<string, unknown>,
+  candidates: string[],
+): number | null {
+  for (const key of candidates) {
+    const v = obj[key];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+
+const IN_KEYS = [
+  "inputTokens",
+  "input_tokens",
+  "prompt_tokens",
+  "input",
+  "in",
+];
+const OUT_KEYS = [
+  "outputTokens",
+  "output_tokens",
+  "completion_tokens",
+  "output",
+  "out",
+];
+
+/** Locate the input/output token split in a `usage_update`
+ *  payload. Wrappers differ on shape — some flatten the counts
+ *  onto the update body, others nest under `tokens`, `usage`, or
+ *  `tokenUsage`. Returns null per field when neither location
+ *  has a match. */
+function findInputOutput(u: Record<string, unknown>): {
+  input: number | null;
+  output: number | null;
+} {
+  const flatIn = pickNumber(u, IN_KEYS);
+  const flatOut = pickNumber(u, OUT_KEYS);
+  if (flatIn !== null || flatOut !== null) {
+    return { input: flatIn, output: flatOut };
+  }
+  for (const nestKey of ["tokens", "usage", "tokenUsage"]) {
+    const nested = u[nestKey];
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      const n = nested as Record<string, unknown>;
+      const nIn = pickNumber(n, IN_KEYS);
+      const nOut = pickNumber(n, OUT_KEYS);
+      if (nIn !== null || nOut !== null) {
+        return { input: nIn, output: nOut };
+      }
+    }
+  }
+  return { input: null, output: null };
+}
+
+
 /** Clear the per-unit spawning transient ~1s after launch so the
  *  sprite settles into its idle animation. Called from the launch
  *  flow because we know exactly when the unit was added. */
@@ -332,7 +501,27 @@ export async function hydrateCommandStore(): Promise<void> {
         }
       }),
     );
-    useCommandStore.getState().hydrateFromStorage(sessions, messagesBySession);
+    // Grooming queue is one bulk fetch — the SQLite query returns
+    // every proposal across every session, and we group by session
+    // id here. Skip silently on failure so a corrupt JSON blob
+    // doesn't kill the whole hydration pass.
+    const proposalsBySession: Record<string, GroomingProposal[]> = {};
+    try {
+      const stored = await commandListGroomingProposals();
+      for (const row of stored) {
+        try {
+          const parsed = JSON.parse(row.payloadJson) as GroomingProposal;
+          (proposalsBySession[row.sessionId] ??= []).push(parsed);
+        } catch (e) {
+          console.warn("[command] failed to parse grooming payload", e);
+        }
+      }
+    } catch (e) {
+      console.warn("[command] failed to load grooming proposals", e);
+    }
+    useCommandStore
+      .getState()
+      .hydrateFromStorage(sessions, messagesBySession, proposalsBySession);
   } catch (e) {
     console.warn("[command] hydrate failed", e);
   }

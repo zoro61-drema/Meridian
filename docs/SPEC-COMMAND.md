@@ -1,6 +1,6 @@
 # Command — Multi-Agent Tactical Workflow Spec
 
-> Status: **Draft v1.1**. Phases 1–11 & 13 implemented (phase 12 walked back). v1.1 introduces a **fleet-card layout** (per-agent cards always visible, modeled on pokegents) and **multi-terrain** support (Badlands + Space Station). The original full-screen tactical-field layout from v1.0 is preserved in the §15 history.
+> Status: **Draft v1.0**. Pre-implementation. Architectural decisions locked; sprite roster and role prompts open for iteration.
 
 A new top-level workflow in Meridian that turns Claude Code, Codex, and Gemini sessions into a unified, space-battle-themed multi-agent dashboard. Each agent is a **unit fighting on a planet surface**, rendered as 32-bit pixel art viewed from a **top-down 3/4 RTS perspective** (StarCraft / Tiberian Sun style). Inspired by classic late-90s RTS aesthetics; designed for engineering-leader workflows.
 
@@ -18,108 +18,92 @@ Command is Meridian's home for long-running, interactive coding agents. Where to
 
 ## 2. User Experience
 
-### 2.1 Screen layout (v1.1 — fleet-card)
+### 2.1 Screen layout
 
-The v1.1 layout is a **fleet-card grid** with a focused-agent panel on the right. Every active unit is visible at once as its own card showing live state + recent activity; the user no longer has to click a sprite to see what an agent is doing.
+Three panes:
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│  Command                              [+ Launch] [Archive] [Settings]  │ ← header
-├──────────────────────────────────────────┬─────────────────────────────┤
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐  │  ┌──────────────────────┐  │
-│  │ MINI     │ │ AGENT    │ │ AGENT    │  │  │ FOCUSED AGENT        │  │
-│  │ FIELD    │ │ CARD #1  │ │ CARD #2  │  │  │  [Chat | Files |     │  │
-│  │  🪖  ⚙️   │ │ 🪖 Mar.. │ │ ⚙️ Eng.. │  │  │   Commands | Debug]  │  │
-│  │  🛰️  🔭   │ │ ●thinking│ │ ●idle    │  │  │                      │  │
-│  │   🚀     │ │ msg: ... │ │ msg: ... │  │  │  streaming msgs      │  │
-│  └──────────┘ └──────────┘ └──────────┘  │  │  tool calls          │  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐  │  │  diffs               │  │
-│  │ AGENT    │ │ AGENT    │ │ AGENT    │  │  │  permission cards    │  │
-│  │ CARD #3  │ │ CARD #4  │ │ CARD #5  │  │  │  files / commands    │  │
-│  └──────────┘ └──────────┘ └──────────┘  │  └──────────────────────┘  │
-│                                          │  [ input box ]              │
-├──────────────────────────────────────────┴─────────────────────────────┤
-│  Status strip: total units · idle · thinking · blocked                  │ ← footer
-└────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│  Command                                [+ Launch] [Archive]  │ ← header
+├──────────────────────────────────────────┬────────────────────┤
+│                                          │                    │
+│             TACTICAL FIELD               │   UNIT CHAT        │
+│   (animated canvas, units as sprites)    │   (selected unit)  │
+│                                          │                    │
+│     🪖     🛰️                            │   • streaming msgs │
+│         🚀          ⚙️                   │   • tool calls     │
+│              🔭                          │   • diffs          │
+│                                          │   • permissions    │
+│                                          │   • input box      │
+├──────────────────────────────────────────┴────────────────────┤
+│  Status strip: total units · idle · thinking · blocked        │ ← footer
+└───────────────────────────────────────────────────────────────┘
 ```
 
-**Mini field** (top-left tile of the grid). The tactical field, compressed into a single card-sized tile. Renders the same terrain + unit sprites in their persisted positions, scaled down. Clicking a sprite inside the mini-field selects that agent. Subagent tethers and A2A signal arcs still render here. Double-click the tile to enter **expanded field mode** — the mini-field temporarily replaces the entire card grid for full-resolution viewing (Esc to return).
-
-**Agent cards** (remainder of the grid). One card per active unit. Each card contains:
-
-- **Header**: unit sprite (small, in its current animation state), name, role, backend/model chip
-- **Statusline**: current `AgentState` with colored dot, transient indicator (`spawning` / `deploying`), token usage / context % chip (from §16 #6 cost tracking), inbox-pending badge if any
-- **Recent activity**: last ~6 transcript entries (compressed — text chunks merged, tool calls one-liner). Auto-scrolls as the agent streams. Click the card to promote it to the focused panel.
-- **Parent/child tether glyph** in the corner if the unit has relatives (§5)
-
-Cards are sized uniformly so the grid stays orderly; they reflow responsively (3 columns wide ≥ 1400px, 2 columns 900–1400px, 1 column < 900px — focused panel collapses to overlay at the narrowest breakpoint). Grid order is stable per session (insertion-ordered, draggable in v1.2+ if user demand emerges).
-
-**Focused agent panel** (right). The detailed surface for the currently-selected agent — what was the v1.0 `UnitChatPanel`, now permanent. Carries the full Chat / Files / Commands / Debug tab set, full message history, permission prompts, input box, runtime switcher, breadcrumb when the unit has a parent/child. Resizable (drag handle on the gutter). Collapsible to a thin rail when the user wants the grid full-width.
-
-**Header**: Launch button (new-unit modal), Archive button (historical sessions drawer), Settings (terrain picker among other Command-scoped prefs — see §2.3).
-
-**Footer**: compact status strip — counts by state.
-
-#### Why the layout change
-
-v1.0's single-tactical-field-plus-chat layout requires clicking each unit to see what it's doing. For a single user driving 3–6 agents in parallel, that's friction — context-switch cost on every glance. The fleet-card grid (pokegents-style) makes every agent's recent activity ambient: the user sees who's idle, who's mid-tool-call, who's awaiting permission, and who just streamed something interesting, all without selecting anything. The mini-field preserves the tactical-positioning information (who is next to whom, A2A arcs, parent-child tethers) in a single corner tile.
+- **Tactical field** fills the left/center. The field renders a top-down view of a planet surface — a **Command-specific terrain background, independent of Meridian's space-themed global background system** (which targets the rest of the app). v1 ships a single terrain (see §2.3); future terrains tracked as v1.1+. Units render over the terrain as pixel-art sprites viewed from a top-down 3/4 perspective, each casting a soft shadow on the ground beneath as the positional anchor. Units idle-wander slightly during downtime (see §2.4) so the field reads as a living battle scene rather than a static dashboard.
+- **Chat panel** (right) is collapsible. Selected unit shows full conversation, streaming output, tool calls (collapsible), diffs (collapsible), inline permission prompts, files-touched list, commands-run list. Empty state when no unit is selected. When the selected unit has a parent or children (§5), an in-panel breadcrumb lets the user jump between related sessions.
+- **Header** holds the Launch button (opens new-unit modal) and the Archive button (opens the historical sessions drawer).
+- **Footer** is a compact status strip — counts by state.
 
 ### 2.2 Key user flows
 
-1. **Launch a unit.** Header → Launch → modal with roster picker (available unit sprites — see the sprite brief; v0 ships 3 Infantry units with the remaining 13 queued as a roster expansion), role (preset dropdown: Implementer / PR Reviewer / Ticket Groomer / Researcher / Custom), project (existing Meridian projects), backend (Claude / Codex / Gemini) + model picker. On confirm, the new unit's card appears in the grid, its sprite plays the `spawning` transient on the mini-field, then settles into `idle`. The new card auto-promotes to the focused panel; focus drops to the input box.
-2. **Glance at the fleet.** Cards tile the grid — each shows live state, recent messages, token usage. No clicking required to see what every agent is doing.
-3. **Switch focus.** Click any agent card *or* any sprite on the mini-field → focused panel shows that unit's full history. Last-selected unit is remembered per workspace.
-4. **Watch units work.** Each sprite animates per state — idle bob, thinking gesture, tool-running action, streaming radio pulse, etc. — both inside its card header and on the mini-field. Subagents spawn as their own first-class sprites adjacent to their parent (§5) and get their own card in the grid.
-5. **Unit-to-unit message.** Unit A calls the MCP messaging tool addressing Unit B. A signal arc renders on the mini-field between their positions; both transcripts get the event; B's card surfaces an inbox badge and an inbound-message card in the focused panel when selected.
-6. **Expanded field mode.** Double-click the mini-field tile → it grows to fill the card grid for inspection (positions, tethers, decoration). Esc returns to the grid view.
-7. **Resume a past session.** Header → Archive → list of historical sessions with sprite + name + role + project + last-active. Click → resumes as a new card in the grid + fresh sprite on the mini-field, full history restored.
-8. **Switch runtime mid-session.** Card menu (or focused-panel header) → Switch backend / model. The sprite plays a brief re-deploy animation on the mini-field; underlying session is recreated against the new backend.
+1. **Launch a unit.** Header → Launch → modal with roster picker (available unit sprites — see the sprite brief; v0 ships 3 Infantry units with the remaining 13 queued as a roster expansion), role (preset dropdown: Implementer / PR Reviewer / Ticket Groomer / Researcher / Custom), project (existing Meridian projects), backend (Claude / Codex / Gemini) + model picker. On confirm, the new unit's `spawning` transient plays at a chosen field position, then settles into `idle`. Focus drops to the chat panel input.
+2. **Switch between units.** Click any sprite on the field → chat panel shows that unit's history. Last-selected unit is remembered per workspace.
+3. **Watch units work.** Each sprite animates per state — idle bob, thinking gesture, tool-running action, streaming radio pulse, etc. Subagents spawn as their own first-class sprites adjacent to their parent (§5).
+4. **Unit-to-unit message.** Unit A calls the MCP messaging tool addressing Unit B. A signal arc renders between their positions; both transcripts get the event; B's chat panel surfaces an inbound-message card.
+5. **Resume a past session.** Header → Archive → list of historical sessions with sprite + name + role + project + last-active. Click → resumes as a fresh sprite on the field, full history restored.
+6. **Switch runtime mid-session.** Right-click sprite → Switch backend / model. The sprite plays a brief re-deploy animation; underlying session is recreated against the new backend.
 
 ### 2.3 Terrain
 
-The tactical field (mini and expanded) renders its own terrain background, separate from Meridian's global background system. Terrain communicates *where* the units are operating — a planet surface, an orbital platform, etc. — and is the visual foundation the StarCraft-style top-down view sits on.
+The tactical field renders its own planet-surface terrain background, separate from Meridian's global background system. This is the *ground* the units stand on, not space. It's what sells the StarCraft-style top-down view.
 
-#### 2.3.1 v1.1 ships two terrains
+**v1: single terrain — `Badlands`.**
 
-| ID | Style | Background bleed | Tile feel |
-|---|---|---|---|
-| `badlands` | Dusty rocky planet surface, neutral warm tones (browns, beige, gray-tan), sparse rock/debris decorations | **Opaque** — fills the entire field; Meridian's global space background is hidden | Ground / planetside |
-| `space-station` | Modular metal platform plates (StarCraft 2 *Space Platform* tileset reference), cool grays/teals, glowing edge strips, vents, cargo crates, antenna decoration | **Transparent perimeter** — the platform occupies the center as an irregular polygon; Meridian's global space background (stars, JWST imagery, nebula) shows through around the perimeter, selling the "we're in orbit" feel | Orbital |
+- Dusty rocky planet surface, neutral warm tones (browns, beige, gray-tan)
+- Subtle parallax-friendly base layer + sparse rock/debris decoration sprites
+- Pixel art at the same scale as the units (so terrain pixels and unit pixels share a grid)
+- Dark enough to read against light-accented units, light enough to read against dark-accented ones
+- Optional faint hex or grid overlay (configurable; default off) for tactical legibility
 
-Both render at the same pixel scale as the units (terrain pixels and unit pixels share a grid). Dark enough to read against light-accented units, light enough to read against dark-accented ones. Optional faint hex or grid overlay (configurable; default off) for tactical legibility.
+Chosen because Badlands is StarCraft's most iconic and neutral tileset — works as a foundation that doesn't bias the visual mood toward any single theme (no ice-cold, no lava-hot, no jungle-busy). Sprite accents read against it cleanly across all six colors.
 
-The Space Station terrain is the visual hook that justifies Meridian's existing app-wide space background even inside the Command screen — instead of hiding it, Command stages the units *on a platform floating in it*. The Badlands terrain remains the default for users who want fully opaque ground.
+**v1.1+ terrains** (tracked, not committed):
 
-#### 2.3.2 Terrain registry
+- `Ice` — cold blues and whites, cracked ice plate decoration
+- `Lava` — dark with orange glow vents, magma fissures
+- `Jungle` — alien greens and purples, vegetation sprites
+- `Urban` — destroyed city / industrial debris
 
-Terrains are pluggable. A central registry at `src/lib/commandTerrains/index.ts` maps terrain IDs to definitions:
+Terrain is selectable per-workspace, defaulting to Badlands. Persists with user preferences. Design of additional terrains is a separate Claude Design brief, not part of the sprite roster work.
 
-```ts
-interface TerrainDef {
-  id: TerrainId;
-  label: string;
-  // Returns the SVG tile pattern + decoration sprites for the field background.
-  Background: React.ComponentType<{ width: number; height: number }>;
-  // Footprint controls where units may be positioned. "rectangle" = full bounds (badlands).
-  // "polygon" = restricted to the polygon (space-station: keep sprites on-platform, not in the void).
-  footprint: { kind: 'rectangle' } | { kind: 'polygon'; vertices: Array<[number, number]> };
-  // Whether the global app background should show through outside the footprint.
-  bleedThrough: boolean;
-}
-```
+**Implementation note.** The terrain is rendered by the `TacticalField` component (see §8.2) as a tiled base layer with sparse decoration sprites. Tiles are 32×32, sprites are 48×48. Both use `image-rendering: pixelated`.
 
-Adding a new terrain is one new file in `src/lib/commandTerrains/` plus an entry in the registry. No core changes.
+### 2.4 Unit Movement — cosmetic idle wander
 
-#### 2.3.3 v1.2+ terrains (tracked, not committed)
+Units occasionally wander a few pixels in random directions while in `idle` state. This is **purely cosmetic** — there is no pathfinding, no autonomous behavior, no semantic meaning to where a unit moves. The point is liveliness: a battle scene where nobody moves doesn't read as a battle scene. Tiny shifts of position and facing make the field feel alive.
 
-- `ice` — cold blues and whites, cracked ice plate decoration
-- `lava` — dark with orange glow vents, magma fissures
-- `jungle` — alien greens and purples, vegetation sprites
-- `urban` — destroyed city / industrial debris
+**Wander mechanics:**
 
-Terrain is selectable per-workspace via Settings → Command → Terrain, defaulting to Badlands. Selection persists with user preferences. The selected terrain renders identically in the mini-field tile and expanded-field mode (§2.1).
+- Each unit is placed at an **anchor point** at launch (auto-assigned by the system on a non-colliding grid). The anchor is fixed for the unit's lifetime.
+- During `idle`, the unit may pick a random destination within ~30px of its anchor every 15–45 seconds (interval randomized per unit).
+- The unit walks slowly to the destination using its `walk` animation (see §10) — takes 2–3 seconds per move, distance 5–15px.
+- The unit's facing rotates to match its walk direction. When stopped, facing stays where it was.
+- Wander cancels on state change. If the unit enters `thinking`, `tool_running`, etc., it stops walking and plays the new state animation in place. When it returns to `idle`, wander resumes.
+- Soft collision: if a chosen destination would overlap another unit (within ~40px of another unit's current position), the unit picks a different destination. No pushing, no pathfinding around — just don't go there.
+- If a unit drifts toward the edge of its anchor radius, its next wander pick biases back toward the anchor. Units don't drift across the field over time.
 
-**Implementation note.** Terrain is rendered by the `MiniField` / expanded-field component (see §8.2) as a tiled SVG base layer with sparse decoration sprites. Tiles are 32×32, unit sprites are 48×48. Both use `image-rendering: pixelated`. For `space-station`, the terrain SVG is masked to the polygon footprint; pixels outside the mask are transparent, letting the parent `bg-background` (Meridian's space theme) bleed through.
+**Stationary units.** One unit in the roster has a `canWander: false` flag and never moves:
+
+- **Sentinel Turret** — anchored gun emplacement, no legs. By design.
+
+This unit skips the `walk` animation in the sprite library and never triggers wander. It still rotates facing (the barrel/scope) during certain states, but its body position is fixed.
+
+The Siege Walker, despite its "heavy artillery" role, is implemented as a wandering unit (`canWander: true`) — it has a `walk` animation in the asset library and can reposition during idle wander. Its locomotion is slower and more deliberate than the Infantry units' (visually heavier gait), but it does walk.
+
+**Direction model.** All units (including stationary ones for state animations) support **8 facing directions**: N, NE, E, SE, S, SW, W, NW. The unit's current facing is independent of its state — any state animation can play in any direction. PixelLab generates all 8 directions natively at character creation; no SVG rotation needed.
+
+**Card thumbnails.** Anywhere a unit appears in UI chrome (launch modal roster picker, chat panel unit identifier, archive drawer thumbnails), it renders in **S-facing direction only**, regardless of its current field facing. Cards play the animated `idle` loop S-facing as the canonical view. This keeps the UI predictable — a user identifying a unit type from a list doesn't have to mentally rotate it.
 
 ---
 
@@ -237,19 +221,46 @@ When a parent unit calls the Task tool (or equivalent on Codex/Gemini), it spawn
 
 ### 5.3 Level 3 — Spawn / deploy animations (v1.1)
 
-**Behavior.** Same as Level 2, plus visual dramatization of the spawn moment. The subagent's sprite plays its `spawning` transient (one-shot, ~1s) as it appears. The parent simultaneously plays its `deploying` transient (one-shot, ~0.6s). A Marine deploys a Probe Drone, the Marine waves overhead while the Drone drops in from off-field; a Capital Ship's bridge flashes while a Starfighter unfolds beside it.
+**Behavior.** Same as Level 2, plus visual dramatization of the spawn moment. The subagent's sprite plays its `spawning` transient (one-shot, ~1s) as it appears, optionally preceded by a dropship descent (see §5.5). The parent simultaneously plays its `deploying` transient (one-shot, ~0.6s). A Marine deploys a Probe Drone, the Marine waves overhead while the Drone drops in from off-field; a Capital Ship's bridge flashes while a Starfighter unfolds beside it.
 
 **What's needed beyond Level 2.**
 
 - Per-unit `spawning` and `deploying` transient animations (already in the sprite brief, §6.8).
 - Tactical-field choreography: when a spawn event fires, the field places the subagent's spawn position relative to the parent's facing direction, plays the transients in sync, and only registers the subagent as interactable after the transients complete.
 - Optional: contextual deployment direction. A parent looking right deploys to its right; the new sprite emerges from that side. Adds polish; not strictly required.
+- Dropship delivery system (see §5.5) for infantry, mech, and turret unit classes.
 
 **Why split from Level 2.** Level 2 gives the user the functional value (inspect any subagent independently). Level 3 is fit-and-finish — the experience layer. Splitting them lets us ship interactive subagent inspection without blocking on the choreography work, which is genuinely more involved.
 
 ### 5.4 Subagent depth
 
 V1 supports **arbitrary depth** at the data model level (sessions form a tree). Rendering-wise, the tactical field shows at most 2 levels of nesting visibly — a grandchild renders in a smaller adjacent position to its parent. Deeper levels are accessible via the chat panel breadcrumb but don't render distinct sprites (would clutter the field). v1.1 may revisit if heavy-orchestration patterns emerge.
+
+### 5.5 Dropship delivery (v1.1)
+
+All units arrive via a **spawn dropship** — a static dropship sprite that descends from above the tactical field, drops the unit near the ground, then ascends back out of frame. This dramatizes unit arrival as a coordinated military operation rather than units simply popping into existence.
+
+**The dropship sprite** is a single static asset, not an animated character. Animation comes from the rendering layer translating its position over the spawn sequence — PixelLab generation of internal dropship animations (engine pulses, door opens, ramp deploys) was attempted but per-direction consistency on those small details proved unreliable. The dropship sprite is rendered facing south (toward viewer) regardless of where the receiving unit is facing; the dropship is a delivery vehicle, not a unit with its own facing logic.
+
+**Spawn sequence.**
+
+| Phase | Duration | Behavior |
+|---|---|---|
+| **A — Descent** | ~0.5s | Dropship enters frame from above, translates downward to a position ~20px above the spawn anchor on the ground. |
+| **B — Drop** | ~0.7s | Dropship holds briefly above the spawn anchor. The receiving unit's `spawning` animation plays — unit appears below the dropship and drops to the ground anchor, landing in crouch then rising to idle. |
+| **C — Ascent** | ~0.5s | Dropship translates upward and exits the top of frame. Unit remains in standard idle stance at the spawn anchor. |
+
+Total spawn duration: ~1.7 seconds (vs the bare `spawning` animation's ~0.7s).
+
+**Universal coverage.** Every unit in the v0/v1 roster (all ground units — Infantry, Mechs, and any other ground-class units added later) uses dropship delivery for `spawning`. No per-class exceptions. If future roster additions include flying units (spacecraft, drones), this section will need updating to define which units bypass the dropship — but currently no such units exist in the active roster.
+
+**Visual layering.** The dropship renders above the unit on the z-axis during the spawn sequence (dropship is in the air, unit is on the ground). z-order priority during spawn: terrain → unit → dropship. After ascent (phase C complete), the dropship is removed from the render tree entirely.
+
+**Overlap policy.** Multiple dropships may visually overlap if multiple units spawn at nearby anchors within the same 1.7s window. Overlapping is allowed — dropships are transient and the visual chaos is acceptable for the brief duration. No queueing or staggering needed.
+
+**Dropship asset.** Single sprite at `src/lib/commandSprites/SpawnDropship.tsx` (or as a static asset under `src/lib/commandSprites/SpawnDropship/`). Rendered with appropriate scale (approximately 1.5× the size of an infantry unit), facing south, with cyan engine glow and orange accent markings (see sprite brief for visual specification).
+
+**Disambiguation from the `Dropship` unit.** The roster's Spacecraft category includes a `Dropship` unit (§7.11 in the brief) — a user-deployable transport intended to operate as a regular unit when that category ships. The spawn dropship in this section is a different asset: a non-interactive visual prop used only during unit arrival. When both exist, they should be visually distinct to prevent user confusion — the spawn dropship is larger, has orange accent markings, and never persists on the field; the `Dropship` unit follows standard roster color conventions and is a controllable unit.
 
 ---
 
@@ -343,31 +354,19 @@ src-tauri/src/command/
 
 ```
 src/components/command/
-├── AgentCardGrid.tsx        ← v1.1; tiles agent cards + mini-field in a responsive grid
-├── AgentCard.tsx            ← v1.1; one card per unit (sprite, statusline, recent activity)
-├── MiniField.tsx            ← v1.1; renamed/shrunk TacticalField — terrain + sprites + tethers + arcs
-├── ExpandedField.tsx        ← v1.1; full-resolution field shown via mini-field double-click
+├── TacticalField.tsx        ← canvas + unit positioning, layout, tethers, signal arcs
 ├── UnitInstance.tsx         ← wraps a sprite component with state-driven prop wiring
-├── FocusedAgentPanel.tsx    ← v1.1; promoted UnitChatPanel — right pane, always present
+├── UnitChatPanel.tsx        ← right pane; reuses chat patterns from PR Review Chat
 ├── LaunchUnitModal.tsx      ← roster picker, role, project, backend
 ├── ArchiveDrawer.tsx        ← historical sessions browser
 ├── SessionBreadcrumb.tsx    ← parent/child navigation inside chat panel
-├── ActivityToast.tsx        ← cross-unit event surfacing
-└── (legacy) TacticalField.tsx ← removed in v1.1; logic split into MiniField + ExpandedField
+└── ActivityToast.tsx        ← cross-unit event surfacing
 
 src/lib/commandSprites/
 ├── Marine.tsx, Engineer.tsx, … (16 unit components, see sprite brief)
 ├── index.ts                 ← barrel
 └── README.md                ← documents UnitProps, palette swap, etc.
-
-src/lib/commandTerrains/                          ← v1.1; new
-├── Badlands.tsx             ← opaque planet surface
-├── SpaceStation.tsx         ← platform polygon, transparent perimeter, bg-bleed
-├── index.ts                 ← TerrainDef registry, TerrainId union
-└── README.md                ← contract for adding new terrains
 ```
-
-`AgentCard` and `MiniField` both render `UnitInstance`. The card uses a small (e.g. 32px) size and pins the sprite to a fixed header position; the mini-field uses the persisted `positionX/Y` per unit. Both subscribe to the same Zustand store, so animation state stays in sync across surfaces.
 
 ### 8.3 Zustand store
 
@@ -377,6 +376,8 @@ type AgentState =
   | 'awaiting_permission' | 'done' | 'error';
 
 type TransientAnimation = 'spawning' | 'deploying';
+
+type Facing = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
 
 interface Unit {
   id: string;
@@ -393,9 +394,13 @@ interface Unit {
   accent: AccentColor;
   contextUsage: number;          // 0..1
   lastMessage?: ChatMessage;
-  positionX: number;             // tactical-field coordinates
+  anchorX: number;               // fixed at launch (auto-assigned), never changes
+  anchorY: number;
+  positionX: number;             // current live position, drifts within ~30px of anchor during wander
   positionY: number;
-  facing: 'left' | 'right';
+  facing: Facing;                // 8 compass directions, rotates during wander
+  canWander: boolean;            // derived from spriteId (Sentinel Turret = false; all other units = true)
+  isWandering: boolean;          // true while a wander move is in progress
   createdAt: number;
   lastActiveAt: number;
 }
@@ -404,11 +409,11 @@ interface CommandState {
   units: Record<string, Unit>;
   selectedUnitId: string | null;
   archive: ArchiveEntry[];
-  // …actions: launchUnit, selectUnit, sendPrompt, fireTransient, etc.
+  // …actions: launchUnit, selectUnit, sendPrompt, fireTransient, tickWander, etc.
 }
 ```
 
-`positionX/Y` are persisted in `localStorage` so the field layout survives reloads. Session metadata lives in Rust + SQLite.
+`anchorX/Y` are persisted in `localStorage` so field layout survives reloads. `positionX/Y` and `facing` are also persisted so a unit that wandered before reload doesn't snap back to anchor — it picks up where it left off. Session metadata lives in Rust + SQLite. Wander updates happen entirely client-side (no Rust round-trip needed for cosmetic motion) on a `requestAnimationFrame` loop in the `TacticalField` component.
 
 ---
 
@@ -428,9 +433,11 @@ struct SessionRecord {
     accent: String,
     state: SessionState,
     parent_id: Option<Uuid>,     // Level 2 hierarchy
-    position_x: f32,
+    anchor_x: f32,               // fixed placement at launch
+    anchor_y: f32,
+    position_x: f32,             // current live position (anchor + wander offset)
     position_y: f32,
-    facing: String,              // "left" | "right"
+    facing: String,              // "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW"
     created_at: i64,
     last_active_at: i64,
     archived: bool,
@@ -459,10 +466,13 @@ ACP backends normalize into the same structure — adapters handle the per-backe
 See [`COMMAND-SPRITES-DESIGN-BRIEF.md`](COMMAND-SPRITES-DESIGN-BRIEF.md) for the full design brief. Summary of what the codebase receives:
 
 - **v0 ships 3 React components** at `src/lib/commandSprites/`: `Marine.tsx`, `Engineer.tsx`, `FieldTech.tsx` (the three Infantry units). The remaining 13 units across Mechs, Spacecraft, and Drones & Constructs are tracked as a roster expansion deliverable (see brief §13); 16 total when complete.
-- Uniform `UnitProps` interface: `{ state, transient?, accent, size?, facing? }`
-- 7 persistent state animations + 2 transient one-shots (`spawning`, `deploying`)
+- **Spawn dropship asset** at `src/lib/commandSprites/SpawnDropship.tsx` (or static asset folder) — a single static sprite used as a visual prop during all unit spawn sequences (see §5.5). Not a unit, not interactive, no animations of its own. Position-translated by the rendering layer during spawn events.
+- Uniform `UnitProps` interface: `{ state, transient?, accent, size?, facing }` — `facing` is one of 8 compass directions (N/NE/E/SE/S/SW/W/NW).
+- **10 animations per wandering unit:** 7 persistent state animations (idle, thinking, tool_running, streaming, awaiting_permission, done, error) + 2 transient one-shots (spawning, deploying) + 1 locomotion loop (walk, used during cosmetic wander per §2.4).
+- **9 animations for stationary units** (Sentinel Turret) — same as above but without `walk`. This unit never wanders and has no need for a locomotion loop.
+- Each animation generated in all 8 directions. PixelLab handles rotation natively at character creation; no SVG transforms needed at runtime.
 - SVG-rendered pixel art (one `<rect>` per pixel) for runtime palette swap
-- `prefers-reduced-motion` fallback freezes to a representative frame per state
+- `prefers-reduced-motion` fallback freezes to a representative frame per state, *and* disables wander (units stand still at anchor)
 - Barrel `index.ts`, `README.md`, demo page
 
 The library is **independent of `src/lib/spaceEffects/`** (used elsewhere in Meridian for procedural backgrounds). Command's sprite animations and `spaceEffects` do not compose — sprites carry their own state, no effects layer.
@@ -539,9 +549,11 @@ CREATE TABLE command_sessions (
   accent TEXT NOT NULL,
   state TEXT NOT NULL,
   parent_id TEXT,
+  anchor_x REAL NOT NULL,
+  anchor_y REAL NOT NULL,
   position_x REAL NOT NULL,
   position_y REAL NOT NULL,
-  facing TEXT NOT NULL DEFAULT 'right',
+  facing TEXT NOT NULL DEFAULT 'S',
   created_at INTEGER NOT NULL,
   last_active_at INTEGER NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0,
@@ -607,13 +619,13 @@ Onboarding is non-blocking for Command: it can be launched with only Claude or o
 
 ## 14. Theming Integration
 
-Command inherits *some* of Meridian's theming and conditionally lets the rest bleed through:
+Command inherits *some* of Meridian's theming but owns its own background system:
 
-- **Terrain** — Command renders its own terrain backgrounds via the `src/lib/commandTerrains/` registry (see §2.3). v1.1 ships **Badlands** (opaque, hides the app's global background) and **Space Station** (polygon footprint, lets Meridian's global space background bleed through the perimeter — explicitly intended as a visual handshake with the rest of the app). Additional terrains plug in via the registry pattern.
-- **Accent colors** — units get one of the 6 existing Meridian accents at creation via palette swap on their team-color zone (see sprite brief §4). Accent also tints the agent card border, the mini-field positional ring under the unit, and the unit's signal arc / tether color.
+- **Terrain** — Command renders its own planet-surface terrain backgrounds (see §2.3), independent of Meridian's global background system. v1 ships Badlands; multi-terrain selection is tracked for v1.1+.
+- **Accent colors** — units get one of the 6 existing Meridian accents at creation via palette swap on their team-color zone (see sprite brief §4). This is the only piece of Meridian's theme that Command inherits directly.
 - **Pixel rendering** — `image-rendering: pixelated` is applied app-wide within the Command screen for crisp sprite and terrain edges at any DPI.
 
-No new theme primitives needed beyond what the sprite brief and terrain registry define.
+No new theme primitives needed beyond what the sprite brief and terrain spec define.
 
 ---
 
@@ -633,12 +645,11 @@ No new theme primitives needed beyond what the sprite brief and terrain registry
 | **9** | A2A messaging MCP server + signal-arc rendering | Two units can message each other end-to-end |
 | **10** | Files/commands tabs, runtime switching, polish | Feature complete for v1 |
 | **11** | Gemini backend (if ACP-capable) or deferred to v1.1 | Decision documented |
-| **12** | **Subagent Level 3**: `spawning` / `deploying` transients wired, choreography, contextual deployment direction | Spawn moments look dramatized as designed |
-| **13** | Internal dogfood + a11y pass + perf pass (20 concurrent units at 60fps) | Internal ready |
-| **14** | **v1.1 Terrain registry + Space Station** — extract terrain from the field into `src/lib/commandTerrains/` registry; add the Space Station polygon terrain with bg-bleed; Settings → Command → Terrain picker | Both terrains selectable; Badlands matches current visuals, Space Station shows app background through perimeter |
-| **15** | **v1.1 Fleet-card layout** — extract `MiniField` from `TacticalField`, add `AgentCard` + `AgentCardGrid`, promote `UnitChatPanel` → `FocusedAgentPanel`, double-click mini-field → `ExpandedField` mode, responsive breakpoints | All active units visible as cards simultaneously; click card or mini-field sprite to focus; expanded mode for full-resolution field inspection |
+| **12** | **Subagent Level 3**: `spawning` / `deploying` transients wired, choreography, contextual deployment direction, dropship delivery system (see §5.5 — descent + drop + ascent over ~1.7s, position-translated by rendering layer) | Spawn moments look dramatized as designed, dropship descends during every unit arrival |
+| **13** | **Cosmetic wander system**: anchor/position separation, walk animation playback during idle, 8-direction facing rotation, soft collision avoidance, `prefers-reduced-motion` opt-out (see §2.4). Stationary units (Sentinel Turret) skip wander but still rotate facing during state animations. | Units idle-wander naturally on the field at 60fps with 20 concurrent units |
+| **14** | Internal dogfood + a11y pass + perf pass (20 concurrent units at 60fps) | Internal ready |
 
-Phases 1–4 are the critical path to a usable demo. Phases 5–9 fill in the v1 feature surface. Phases 10–13 are quality and breadth. **Phase 12 was walked back** when auto-spawn detection proved too noisy — see `src/stores/command/listeners.ts` for the breadcrumb. **Phases 14–15 are the v1.1 fleet-card + terrain refresh.**
+Phases 1–4 are the critical path to a usable demo. Phases 5–9 fill in the v1 feature surface. Phases 10–14 are quality and breadth. Phase 12 (subagent Level 3) and Phase 13 (cosmetic wander) sit late deliberately — both are polish on a working dashboard, not blockers.
 
 ---
 
@@ -649,10 +660,7 @@ Phases 1–4 are the critical path to a usable demo. Phases 5–9 fill in the v1
 3. **Permission UI choreography** — when an agent enters `awaiting_permission`, its sprite shifts visually (`?` glyph above unit). Should the permission card render *only* in the chat panel, or also as a floating callout near the unit on the field? Default: chat panel only. Revisit if discoverability suffers.
 4. **Subagent rendering depth** — v1 visibly renders 2 levels of nesting. If users start orchestrating deeper trees, revisit (compact tree view? collapsible subgroups?).
 5. **Worktree mode** — should each Command unit automatically get its own git worktree (matching Meridian's existing PR Review worktree pattern), or share a single project worktree? Recommend per-unit worktree to prevent conflicts when multiple implementers run in parallel.
-6. ~~**Cost tracking**~~ — **Resolved.** Per-unit token/context/cost chip ships in the focused panel header (and the v1.1 agent card statusline), backed by `usage_update` parsing in `src/stores/command/listeners.ts`. Full detail still lives in the Debug tab + AI Traffic Debug Panel.
-7. **Card-grid density at fleet scale** — v1.1 targets 6–10 active cards. Beyond that the grid scrolls; at ~20+ units the per-card recent-activity stream gets noisy. Revisit if real usage trends past 10 concurrent agents (likely options: collapsed "list" mode toggle, group-by-role).
-8. **Space Station footprint shape** — v1.1 ships a single polygon footprint for the Space Station terrain. Variants (rectangular, cross-shaped, multi-platform with gaps) could express "different stations" — defer until we have a second visual hook worth carrying.
-9. **Mini-field auto-fit vs. fixed scale** — the mini-field tile shows persisted `positionX/Y` at a shrunk scale. If users park units far apart, some may render outside the tile. v1.1 default: auto-fit (recompute scale to include all units); fall back to fixed scale + scrollbars if auto-fit degrades the legibility of close clusters.
+6. **Cost tracking** — ACP exposes token usage in `session/update`. Should the chat panel surface per-turn cost inline, or leave it to the existing AI Traffic Debug Panel? Recommend inline summary, full detail in Debug Panel.
 
 ---
 
@@ -667,10 +675,8 @@ Phases 1–4 are the critical path to a usable demo. Phases 5–9 fill in the v1
 - Light mode (dark-mode-only in v1)
 - Damage / health states beyond `error`
 - Faction variants per unit (single-team in v1; accent is the only per-instance differentiator)
-- ~~Multi-terrain selection~~ — **Reclassified for v1.1**: ships Badlands + Space Station (§2.3). Ice / Lava / Jungle / Urban remain tracked for v1.2+.
+- Multi-terrain selection (single Badlands terrain in v1; alternate terrains like Ice / Lava / Jungle / Urban tracked for v1.1+ — see §2.3)
 - Terrain editor / custom terrain uploads
-- Draggable card reordering (cards are insertion-ordered in v1.1; revisit in v1.2 if demand emerges)
-- Per-card chat input (cards are read-only summaries; all input goes through the focused panel)
 - **Full 16-unit sprite roster** — v0 ships 3 Infantry units (Marine, Engineer, Field Tech). The remaining 13 units across Mechs, Spacecraft, and Drones & Constructs are a roster-expansion track running in parallel with the v1 build; not a v1 blocker. When the roster completes, preset role defaults revert to their natural assignments (PR Reviewer → Probe Drone, Researcher → Recon Scout, etc.) per the §11 v0 note.
 
 ---

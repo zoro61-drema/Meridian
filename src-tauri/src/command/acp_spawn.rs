@@ -59,7 +59,16 @@ pub struct AcpLaunchConfig {
     pub cwd: PathBuf,
 }
 
-pub fn launch_config(kind: BackendKind, cwd: PathBuf) -> Result<AcpLaunchConfig, String> {
+pub fn launch_config(
+    kind: BackendKind,
+    cwd: PathBuf,
+    model_override: Option<&str>,
+) -> Result<AcpLaunchConfig, String> {
+    // Per-backend env-var convention. Each CLI honors a different
+    // variable for its default model; the wrapper inherits the env
+    // it was spawned with, so setting these here propagates through
+    // to the actual model that handles the agent's prompts.
+    let env = build_model_env(kind, model_override);
     match kind {
         BackendKind::ClaudeAcp => Ok(AcpLaunchConfig {
             binary: "npx".to_string(),
@@ -67,13 +76,13 @@ pub fn launch_config(kind: BackendKind, cwd: PathBuf) -> Result<AcpLaunchConfig,
                 "--yes".to_string(),
                 "@agentclientprotocol/claude-agent-acp".to_string(),
             ],
-            env: HashMap::new(),
+            env,
             cwd,
         }),
         BackendKind::GeminiAcp => Ok(AcpLaunchConfig {
             binary: "gemini".to_string(),
             args: vec!["--acp".to_string()],
-            env: HashMap::new(),
+            env,
             cwd,
         }),
         BackendKind::CodexAcp => Ok(AcpLaunchConfig {
@@ -82,14 +91,35 @@ pub fn launch_config(kind: BackendKind, cwd: PathBuf) -> Result<AcpLaunchConfig,
                 "--yes".to_string(),
                 "@zed-industries/codex-acp".to_string(),
             ],
-            env: HashMap::new(),
+            env,
             cwd,
         }),
         BackendKind::QwenAcp => Ok(AcpLaunchConfig {
             binary: "qwen".to_string(),
             args: vec!["--acp".to_string()],
-            env: HashMap::new(),
+            env,
             cwd,
         }),
     }
+}
+
+fn build_model_env(
+    kind: BackendKind,
+    model_override: Option<&str>,
+) -> HashMap<String, String> {
+    let mut env = HashMap::new();
+    let Some(model) = model_override.map(|s| s.trim()).filter(|s| !s.is_empty())
+    else {
+        return env;
+    };
+    let key = match kind {
+        BackendKind::ClaudeAcp => "ANTHROPIC_MODEL",
+        BackendKind::GeminiAcp => "GEMINI_MODEL",
+        // Codex CLI reads OPENAI_MODEL for the default model;
+        // CODEX_MODEL is an internal alias used in some forks.
+        BackendKind::CodexAcp => "OPENAI_MODEL",
+        BackendKind::QwenAcp => "QWEN_MODEL",
+    };
+    env.insert(key.to_string(), model.to_string());
+    env
 }

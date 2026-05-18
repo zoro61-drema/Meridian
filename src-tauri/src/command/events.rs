@@ -12,6 +12,22 @@ use super::sessions::SessionId;
 pub const COMMAND_EVENT_NAME: &str = "command:session:update";
 pub const COMMAND_A2A_EVENT_NAME: &str = "command:a2a:message";
 
+pub const COMMAND_GROOMING_EVENT_NAME: &str = "command:grooming:proposal";
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroomingProposalEvent {
+    pub id: String,
+    pub session_id: String,
+    pub ticket_key: String,
+    pub ticket_summary: String,
+    pub ticket_type: String,
+    pub suggested_edits: Vec<serde_json::Value>,
+    pub clarifying_questions: Vec<String>,
+    pub grooming_notes: String,
+    pub created_at_ms: u64,
+}
+
 #[derive(Serialize, Debug, Clone)]
 #[serde(
     rename_all = "camelCase",

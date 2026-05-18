@@ -54,10 +54,6 @@ core-foundation = "0.10"
 # don't depend on the platform's sqlite version — meetings indexing has to
 # work the same on every macOS the app lands on.
 rusqlite = { version = "0.32", features = ["bundled"] }
-# Cross-platform PTY for the PR Review embedded-terminal workflow. Used by
-# `integrations::pty` to spawn interactive `claude` sessions in per-pane git
-# worktrees and pipe their I/O to xterm.js on the frontend.
-portable-pty = "0.9"
 
 # macOS-only — read the main window's CGWindowID for the screenshot
 # control endpoint. Lets `screencapture -l <id>` grab the window's

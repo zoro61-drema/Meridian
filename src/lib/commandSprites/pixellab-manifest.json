@@ -1,0 +1,26 @@
+{
+  "style_anchor": {
+    "unit": "marine",
+    "character_id": "405dde5f-ceb0-4c80-bdfc-6c5b9e760376",
+    "notes": "Marine generated manually via PixelLab web tool (v3 / mode=pro). Style attributes inlined in each subsequent unit's create_character description since MCP does not expose a style_reference_id parameter."
+  },
+  "config": {
+    "mode": "pro",
+    "size": 68,
+    "n_directions": 8,
+    "view": "low top-down",
+    "body_type_default": "humanoid"
+  },
+  "units": {
+    "marine": {
+      "character_id": "405dde5f-ceb0-4c80-bdfc-6c5b9e760376",
+      "canvas_size": "96x96",
+      "n_directions": 8,
+      "view": "low top-down",
+      "mode": "pro",
+      "animations": {
+        "_note": "73 custom animations on PixelLab. Individual animation IDs not retrievable via MCP get_character — populate manually if needed."
+      }
+    }
+  }
+}

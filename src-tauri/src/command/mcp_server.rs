@@ -280,6 +280,54 @@ fn tool_specs() -> Value {
             "name": "list_agents",
             "description": "List all live agents currently on the Meridian Command field with their ids, display names, and backends. Use the returned id with send_message.",
             "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
+            "name": "get_next_ticket",
+            "description": "Fetch the next pending ticket from your grooming queue. Returns the ticket key, current field values, and a 'Ticket N of M' progress marker. When the queue is empty, returns a 'no more tickets' signal — stop calling this tool and send a one-paragraph summary of the batch. Tickets arrive one at a time; call `submit_grooming_recommendations` for each, then call this tool again.",
+            "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
+            "name": "submit_grooming_recommendations",
+            "description": "Submit a per-ticket grooming proposal for the user to review. Use this once per ticket after you've gathered enough context. The user reviews each suggested edit and decides whether to approve, edit, or decline before anything is pushed to JIRA. After calling this, move on to the next ticket — do not block waiting for the user to review.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["ticket_key", "ticket_summary", "ticket_type"],
+                "properties": {
+                    "ticket_key": {
+                        "type": "string",
+                        "description": "JIRA ticket key, e.g. \"PROJ-1234\"."
+                    },
+                    "ticket_summary": {
+                        "type": "string",
+                        "description": "The ticket's current summary line."
+                    },
+                    "ticket_type": {
+                        "type": "string",
+                        "description": "One of story / task / bug / spike / epic / subtask / feature / chore."
+                    },
+                    "suggested_edits": {
+                        "type": "array",
+                        "description": "Per-field suggested changes. Empty when the agent has no concrete edits but still wants to surface clarifying questions or grooming notes.",
+                        "items": {
+                            "type": "object",
+                            "required": ["id", "field", "section", "suggested", "reasoning"],
+                            "properties": {
+                                "id":        { "type": "string" },
+                                "field":     { "type": "string", "description": "One of: description, acceptance_criteria, steps_to_reproduce, observed_behavior, expected_behavior, summary." },
+                                "section":   { "type": "string" },
+                                "current":   { "type": ["string", "null"] },
+                                "suggested": { "type": "string" },
+                                "reasoning": { "type": "string" }
+                            }
+                        }
+                    },
+                    "clarifying_questions": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    },
+                    "grooming_notes": { "type": "string" }
+                }
+            }
         }
     ])
 }
@@ -388,6 +436,125 @@ async fn handle_tool_call(
                 ),
                 Err(e) => err(id, -32000, format!("send_message failed: {e}")),
             }
+        }
+        "get_next_ticket" => {
+            match state.pop_next_grooming_ticket(sender_session_id).await {
+                Some((current, total, block)) => {
+                    // ONE content block (some MCP clients drop later
+                    // entries in a multi-block content array). The
+                    // body is also mirrored into structuredContent
+                    // so a client reading the structured channel
+                    // never ends up with only the progress counter.
+                    let combined =
+                        format!("Ticket {current} of {total}.\n\n{block}");
+                    ok(
+                        id,
+                        json!({
+                            "content": [
+                                { "type": "text", "text": combined }
+                            ],
+                            "structuredContent": {
+                                "remaining": total - current,
+                                "total": total,
+                                "current": current,
+                                "ticket": block
+                            }
+                        }),
+                    )
+                }
+                None => ok(
+                    id,
+                    json!({
+                        "content": [{
+                            "type": "text",
+                            "text": "No more tickets in the queue. Stop calling get_next_ticket and send a one-paragraph summary of the batch you just groomed."
+                        }],
+                        "structuredContent": { "remaining": 0, "done": true }
+                    }),
+                ),
+            }
+        }
+        "submit_grooming_recommendations" => {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            use tauri::Emitter;
+            let ticket_key = arguments
+                .get("ticket_key")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let ticket_summary = arguments
+                .get("ticket_summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let ticket_type = arguments
+                .get("ticket_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if ticket_key.is_empty() {
+                return err(id, -32602, "missing `ticket_key`");
+            }
+            let suggested_edits = arguments
+                .get("suggested_edits")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let clarifying_questions = arguments
+                .get("clarifying_questions")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let grooming_notes = arguments
+                .get("grooming_notes")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let now_us = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_micros())
+                .unwrap_or(0);
+            let proposal_id = format!(
+                "groom-{}-{}",
+                ticket_key.replace('/', "_"),
+                now_us,
+            );
+            let created_at_ms = (now_us / 1_000) as u64;
+
+            let event = super::events::GroomingProposalEvent {
+                id: proposal_id.clone(),
+                session_id: sender_session_id.to_string(),
+                ticket_key: ticket_key.clone(),
+                ticket_summary,
+                ticket_type,
+                suggested_edits,
+                clarifying_questions,
+                grooming_notes,
+                created_at_ms,
+            };
+            if let Err(e) = app.emit(
+                super::events::COMMAND_GROOMING_EVENT_NAME,
+                event,
+            ) {
+                eprintln!("[mcp] failed to emit grooming proposal: {e}");
+            }
+            ok(
+                id,
+                json!({
+                    "content": [{
+                        "type": "text",
+                        "text": format!(
+                            "Recommendations queued for {ticket_key}. The user will review per-field. Move on to the next ticket."
+                        )
+                    }],
+                    "structuredContent": { "proposalId": proposal_id }
+                }),
+            )
         }
         other => err(id, -32601, format!("unknown tool: {other}")),
     }

@@ -54,6 +54,71 @@ export const COMMAND_A2A_EVENT_NAME = "command:a2a:message";
 
 
 export const COMMAND_GROOMING_EVENT_NAME = "command:grooming:proposal";
+export const COMMAND_BUG_EVENT_NAME = "command:bug:report";
+export const COMMAND_PR_COMMENT_EVENT_NAME = "command:pr:comment-addressed";
+export const COMMAND_PR_FINDING_EVENT_NAME = "command:pr:review-finding";
+export const COMMAND_PR_REVIEW_COMPLETE_EVENT_NAME =
+  "command:pr:review-complete";
+
+interface PrRefPayload {
+  prId: string;
+  title: string;
+  url: string;
+  branch: string;
+  jiraKey: string | null;
+}
+
+export interface PrCommentAddressedEvent {
+  id: string;
+  sessionId: string;
+  pr: PrRefPayload;
+  worktreePath: string | null;
+  commentAuthor: string;
+  originalText: string;
+  changeSummary: string;
+  diff: string;
+  filePath: string;
+  startLine: number | null;
+  createdAtMs: number;
+}
+
+export interface PrReviewFindingEvent {
+  id: string;
+  sessionId: string;
+  pr: PrRefPayload;
+  worktreePath: string | null;
+  lens: string;
+  description: string;
+  severity: string;
+  filePath: string;
+  lineRange: string;
+  snippet: string;
+  createdAtMs: number;
+}
+
+export interface PrReviewCompleteEvent {
+  sessionId: string;
+  prId: string;
+  recommendation: string;
+  summary: string;
+}
+
+/** Payload of `command:bug:report` — emitted when a Bug Hunter
+ *  agent calls the `submit_bug_report` MCP tool. The listener
+ *  appends a report to the sending unit's `bugReports` queue. */
+export interface BugReportEvent {
+  id: string;
+  sessionId: string;
+  summary: string;
+  description: string;
+  observedBehavior: string;
+  expectedBehavior: string;
+  stepsToReproduce: string;
+  severity: string;
+  suspectedRootCause: string;
+  affectedFiles: Array<Record<string, unknown>>;
+  createdAtMs: number;
+}
 
 /** Payload of `command:grooming:proposal` — emitted when a
  *  ticket-groomer agent calls the `submit_grooming_recommendations`

@@ -215,4 +215,7 @@ const PREVIEW_UNIT: CommandUnit = {
     updatedAtMs: Date.now(),
   },
   groomingQueue: [],
+  bugReports: [],
+  addressedPrs: [],
+  reviewedPrs: [],
 };

@@ -11,11 +11,14 @@ import { Input } from "@/components/ui/input";
 import { setPreference } from "@/lib/preferences";
 import { deleteCredential, getNonSecretConfig, saveCredential } from "@/lib/tauri/credentials";
 import {
+    getCatalogModelsForAiProvider,
+    mergeCustomModels,
+} from "@/lib/modelsCatalog";
+import {
     addCustomGeminiModel,
     detectGeminiCli,
     enableGeminiCliDelegation,
     getCustomGeminiModels,
-    getGeminiModels,
     pingGemini,
     removeCustomGeminiModel,
     setupAiCli,
@@ -63,10 +66,10 @@ export function GeminiSection({
 
   async function refreshModelLists() {
     const [result, custom] = await Promise.all([
-      getGeminiModels(),
+      getCatalogModelsForAiProvider("gemini"),
       getCustomGeminiModels(),
     ]);
-    setModels(result.models);
+    setModels(mergeCustomModels(result.models, custom));
     setModelsFetchError(result.fetchError);
     setCustomModels(custom);
   }
@@ -105,8 +108,8 @@ export function GeminiSection({
     try {
       const updated = await addCustomGeminiModel(id);
       setCustomModels(updated);
-      const refreshed = await getGeminiModels();
-      setModels(refreshed.models);
+      const refreshed = await getCatalogModelsForAiProvider("gemini");
+      setModels(mergeCustomModels(refreshed.models, updated));
       setModelsFetchError(refreshed.fetchError);
       useAiSelectionStore.getState().invalidateModels("gemini");
       setCustomModelDraft("");
@@ -122,8 +125,8 @@ export function GeminiSection({
     try {
       const updated = await removeCustomGeminiModel(id);
       setCustomModels(updated);
-      const refreshed = await getGeminiModels();
-      setModels(refreshed.models);
+      const refreshed = await getCatalogModelsForAiProvider("gemini");
+      setModels(mergeCustomModels(refreshed.models, updated));
       setModelsFetchError(refreshed.fetchError);
       useAiSelectionStore.getState().invalidateModels("gemini");
       if (selectedModel === id) handleModelChange("");

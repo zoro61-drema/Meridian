@@ -9,10 +9,10 @@ import {
 } from "@/components/ui/card";
 import { setPreference } from "@/lib/preferences";
 import { deleteCredential, getNonSecretConfig, saveCredential } from "@/lib/tauri/credentials";
+import { getCatalogModelsForAiProvider } from "@/lib/modelsCatalog";
 import {
     detectClaudeCodeCli,
     enableClaudeCodeDelegation,
-    getClaudeModels,
     pingAnthropic,
     setupAiCli,
     testAnthropicStored,
@@ -63,7 +63,7 @@ export function AnthropicSection({
   const [cliError, setCliError] = useState<string | null>(null);
 
   useEffect(() => {
-    getClaudeModels()
+    getCatalogModelsForAiProvider("claude")
       .then((r) => {
         setModels(r.models);
         setModelsFetchError(r.fetchError);

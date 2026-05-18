@@ -25,7 +25,18 @@ const KEY = {
   anthropicMaxOutputTokens: "anthropic_max_output_tokens",
   geminiMaxOutputTokens: "gemini_max_output_tokens",
   commandStateBadgesEnabled: "command_state_badges_enabled",
+  commandBugFilingBoards: "command_bug_filing_boards",
+  preferredIdeId: "preferred_ide_id",
 } as const;
+
+/** A user-named JIRA destination for Bug Hunter reports. `name` is
+ *  the friendly label shown in the dropdown; `projectKey` is the
+ *  JIRA project key (e.g. "PROJ") or numeric board id used as
+ *  `pid` in the create-issue URL. */
+export interface BugFilingBoard {
+  name: string;
+  projectKey: string;
+}
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 //
@@ -85,6 +96,17 @@ export const APP_PREFERENCE_DEFAULTS = {
    *  changes. Useful at a glance; some users prefer the quieter
    *  read of just the animation. */
   commandStateBadgesEnabled: true,
+  /** Named JIRA destinations for the Bug Hunter's "Open JIRA"
+   *  button. Empty list = no dropdown; the user pastes manually
+   *  after the Copy-as-JIRA flow. Each entry is `{ name, projectKey }`
+   *  — name is the dropdown label, projectKey is what lands in
+   *  `pid=` on the create-issue URL. May differ from the sprint
+   *  board id under Integrations. */
+  commandBugFilingBoards: [] as BugFilingBoard[],
+  /** Preferred IDE for "Open in IDE" buttons across Bugs / My PRs /
+   *  Reviewed PRs tabs. One of the ids in `IDES` from
+   *  `ideLauncher.ts` (vscode, cursor, zed, idea, clion, …). */
+  preferredIdeId: "vscode" as string,
 } as const;
 
 export type AiDebugDockMode = "bottom" | "right" | "left" | "window" | "hidden";
@@ -103,6 +125,8 @@ export type AppPreferences = {
   anthropicMaxOutputTokens: number;
   geminiMaxOutputTokens: number;
   commandStateBadgesEnabled: boolean;
+  commandBugFilingBoards: BugFilingBoard[];
+  preferredIdeId: string;
 };
 
 // ── Parsing helpers ───────────────────────────────────────────────────────────
@@ -204,7 +228,37 @@ export async function getAppPreferences(): Promise<AppPreferences> {
       prefs[KEY.commandStateBadgesEnabled],
       APP_PREFERENCE_DEFAULTS.commandStateBadgesEnabled,
     ),
+    commandBugFilingBoards: parseBugFilingBoards(
+      prefs[KEY.commandBugFilingBoards],
+    ),
+    preferredIdeId:
+      (prefs[KEY.preferredIdeId] ?? "").trim() ||
+      APP_PREFERENCE_DEFAULTS.preferredIdeId,
   };
+}
+
+/** Tolerant parser — the value is a JSON-encoded array; if the
+ *  stored value is malformed (manual edit, version skew) fall
+ *  back to an empty list rather than blocking app start. */
+function parseBugFilingBoards(raw: string | undefined): BugFilingBoard[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry): BugFilingBoard | null => {
+        if (!entry || typeof entry !== "object") return null;
+        const o = entry as Record<string, unknown>;
+        const name = typeof o.name === "string" ? o.name.trim() : "";
+        const projectKey =
+          typeof o.projectKey === "string" ? o.projectKey.trim() : "";
+        if (name.length === 0 || projectKey.length === 0) return null;
+        return { name, projectKey };
+      })
+      .filter((b): b is BugFilingBoard => b !== null);
+  } catch {
+    return [];
+  }
 }
 
 function parseClampedFloat(
@@ -281,4 +335,19 @@ export async function setGeminiMaxOutputTokens(value: number): Promise<void> {
 }
 export async function setCommandStateBadgesEnabled(value: boolean): Promise<void> {
   await setPreference(KEY.commandStateBadgesEnabled, value ? "true" : "false");
+}
+export async function setCommandBugFilingBoards(
+  boards: BugFilingBoard[],
+): Promise<void> {
+  const cleaned = boards
+    .map((b) => ({ name: b.name.trim(), projectKey: b.projectKey.trim() }))
+    .filter((b) => b.name.length > 0 && b.projectKey.length > 0);
+  if (cleaned.length === 0) {
+    await deletePreference(KEY.commandBugFilingBoards);
+  } else {
+    await setPreference(KEY.commandBugFilingBoards, JSON.stringify(cleaned));
+  }
+}
+export async function setPreferredIdeId(value: string): Promise<void> {
+  await setPreference(KEY.preferredIdeId, value);
 }

@@ -10,6 +10,9 @@ import {
     setDailyTokenBudget,
     setGeminiMaxOutputTokens,
   setCommandStateBadgesEnabled,
+  setCommandBugFilingBoards,
+  setPreferredIdeId,
+  type BugFilingBoard,
     setMeetingsEmbeddingModel,
     setMeetingsSearchMinScore,
     setNotifyAgentStageComplete,
@@ -310,6 +313,13 @@ export function useAppPreferencesEditor() {
           // Mirror into the command store so the toggle takes
           // effect on the field without waiting for a re-hydrate.
           useCommandStore.setState({ stateBadgesEnabled: value as boolean });
+          break;
+        case "commandBugFilingBoards":
+          await setCommandBugFilingBoards(value as BugFilingBoard[]);
+          break;
+        case "preferredIdeId":
+          await setPreferredIdeId(value as string);
+          useCommandStore.setState({ preferredIdeId: value as string });
           break;
       }
       setError(null);

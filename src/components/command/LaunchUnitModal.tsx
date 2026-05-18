@@ -40,6 +40,7 @@ import {
   filterServersForBackend,
   toWrapperPayload,
 } from "@/lib/commandMcpServers";
+import { getModelsForBackend, type ModelEntry } from "@/lib/modelsCatalog";
 import {
   getAllActiveSprints,
   getFutureSprints,
@@ -128,6 +129,16 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
    *  the appropriate env var per backend (`ANTHROPIC_MODEL`,
    *  `OPENAI_MODEL`, …) at spawn time. */
   const [modelOverride, setModelOverride] = useState("");
+  /** Catalog of model ids available for `backend` (pulled from
+   *  models.dev). Empty until the first fetch completes. */
+  const [models, setModels] = useState<ModelEntry[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  /** When true, the Model field renders a freeform Input so the
+   *  user can paste an id not present in the catalog. The select
+   *  switches into this mode when the user picks the "Custom…"
+   *  sentinel option. */
+  const [customModelMode, setCustomModelMode] = useState(false);
   const [launching, setLaunching] = useState(false);
 
   // Ticket-groomer batch picker state. Only meaningful when
@@ -146,11 +157,46 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
     setCustomPrompt("");
     setCustomName("");
     setModelOverride("");
+    setCustomModelMode(false);
     setProjectDir(defaultProjectDir);
     setGroomerMode("sprint");
     setSelectedSprintId(null);
     setManualTicketsRaw("");
   }, [open, role, defaultProjectDir]);
+
+  // Pull the per-backend model list whenever the modal opens or
+  // the user switches backend. Cached in localStorage by
+  // modelsCatalog, so re-opens within the TTL are instant.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    setModelsLoading(true);
+    setModelsError(null);
+    getModelsForBackend(backend)
+      .then((list) => {
+        if (!alive) return;
+        setModels(list);
+      })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setModelsError(msg);
+        setModels([]);
+      })
+      .finally(() => {
+        if (alive) setModelsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, backend]);
+
+  // Switching backend invalidates the previous backend's model id.
+  // Reset the override + leave custom-mode so the picker re-engages.
+  useEffect(() => {
+    setModelOverride("");
+    setCustomModelMode(false);
+  }, [backend]);
 
   // Fetch the sprint list once when the ticket-groomer role is
   // selected. Active + future sprints get concatenated; the future-
@@ -394,8 +440,8 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[85vh] w-[calc(100vw-4rem)] max-w-4xl flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-white/10 p-5 pb-4">
           <DialogTitle>Launch a unit</DialogTitle>
           <DialogDescription>
             Deploy an AI agent to the tactical field. The role's system prompt is
@@ -403,32 +449,42 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={(e) => void onSubmit(e)}>
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-              Role
-            </Label>
-            <div className="grid grid-cols-2 gap-2">
-              {COMMAND_ROLES.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setRoleId(r.id)}
-                  className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
-                    roleId === r.id
-                      ? "border-amber-500/60 bg-amber-900/20 text-amber-100"
-                      : "border-white/10 bg-black/30 hover:bg-white/5"
-                  }`}
-                >
-                  <div className="text-sm font-medium">{r.title}</div>
-                  <div className="mt-0.5 text-[10px] text-muted-foreground line-clamp-2">
-                    {r.description}
-                  </div>
-                </button>
-              ))}
+        <form
+          className="flex min-h-0 flex-1 flex-col"
+          onSubmit={(e) => void onSubmit(e)}
+        >
+          <div className="flex min-h-0 flex-1">
+            {/* Left rail — role list. Vertical list of roles with
+                title + short description per row. Scrolls
+                independently from the right pane. */}
+            <div className="flex w-64 shrink-0 flex-col border-r border-white/10">
+              <div className="px-4 pt-4 pb-2 text-xs uppercase tracking-wider text-muted-foreground">
+                Role
+              </div>
+              <div className="flex-1 overflow-y-auto px-2 pb-3">
+                {COMMAND_ROLES.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setRoleId(r.id)}
+                    className={`mb-1 w-full rounded-md border px-2.5 py-2 text-left transition-colors ${
+                      roleId === r.id
+                        ? "border-amber-500/60 bg-amber-900/20 text-amber-100"
+                        : "border-transparent hover:border-white/10 hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="text-sm font-medium">{r.title}</div>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground line-clamp-2">
+                      {r.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
+            {/* Right pane — everything else. Scrolls independently. */}
+            <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+              <div className="space-y-4 p-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -502,20 +558,77 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
             >
               Model (optional)
             </Label>
-            <Input
-              id="launch-model"
-              value={modelOverride}
-              onChange={(e) => setModelOverride(e.target.value)}
-              placeholder={MODEL_PLACEHOLDER[backend]}
-              className="bg-black/30 font-mono text-xs"
-            />
+            {customModelMode ? (
+              <div className="flex gap-1.5">
+                <Input
+                  id="launch-model"
+                  value={modelOverride}
+                  onChange={(e) => setModelOverride(e.target.value)}
+                  placeholder={MODEL_PLACEHOLDER[backend]}
+                  className="bg-black/30 font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCustomModelMode(false);
+                    setModelOverride("");
+                  }}
+                >
+                  Pick from list
+                </Button>
+              </div>
+            ) : (
+              <select
+                id="launch-model"
+                value={modelOverride}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__custom__") {
+                    setCustomModelMode(true);
+                    setModelOverride("");
+                  } else {
+                    setModelOverride(v);
+                  }
+                }}
+                disabled={modelsLoading}
+                className="w-full rounded-md border border-white/10 bg-black/40 px-2 py-1.5 font-mono text-xs"
+              >
+                <option value="">
+                  {modelsLoading
+                    ? "Loading models…"
+                    : "Use CLI default"}
+                </option>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+                <option value="__custom__">Custom… (type your own id)</option>
+              </select>
+            )}
             <p className="text-[10px] text-muted-foreground">
-              Set via{" "}
-              <code className="rounded bg-black/30 px-1 py-0.5 font-mono">
-                {MODEL_ENV_VAR[backend]}
-              </code>
-              {" "}at spawn time. Leave blank to use the CLI's configured
-              default.
+              {modelsError ? (
+                <>
+                  <span className="text-amber-300">
+                    Couldn't load model catalog ({modelsError}).
+                  </span>{" "}
+                  Use Custom to type an id manually.
+                </>
+              ) : (
+                <>
+                  Catalog pulled from{" "}
+                  <code className="rounded bg-black/30 px-1 py-0.5 font-mono">
+                    models.dev
+                  </code>
+                  . Passed via{" "}
+                  <code className="rounded bg-black/30 px-1 py-0.5 font-mono">
+                    {MODEL_ENV_VAR[backend]}
+                  </code>{" "}
+                  at spawn time. Leave blank to use the CLI's configured default.
+                </>
+              )}
             </p>
           </div>
 
@@ -617,7 +730,10 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
             </div>
           )}
 
-          <DialogFooter>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="border-t border-white/10 p-4">
             <Button
               type="button"
               variant="ghost"

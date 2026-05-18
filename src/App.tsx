@@ -174,6 +174,7 @@ function AppInner() {
       useCommandStore.getState().setStateBadgesEnabled(
         prefs.commandStateBadgesEnabled,
       );
+      useCommandStore.getState().setPreferredIdeId(prefs.preferredIdeId);
     });
 
     // Boot the AI traffic listener. Idempotent — it'll no-op if

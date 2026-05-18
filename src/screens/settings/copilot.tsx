@@ -10,10 +10,13 @@ import { Input } from "@/components/ui/input";
 import { setPreference } from "@/lib/preferences";
 import { getNonSecretConfig } from "@/lib/tauri/credentials";
 import {
+    getCatalogModelsForAiProvider,
+    mergeCustomModels,
+} from "@/lib/modelsCatalog";
+import {
     addCustomCopilotModel,
     detectCopilotCli,
     enableCopilotCliDelegation,
-    getCopilotModels,
     getCustomCopilotModels,
     pingCopilot,
     removeCustomCopilotModel,
@@ -59,10 +62,10 @@ export function CopilotSection({
 
   async function refreshModelLists() {
     const [result, custom] = await Promise.all([
-      getCopilotModels(),
+      getCatalogModelsForAiProvider("copilot"),
       getCustomCopilotModels(),
     ]);
-    setModels(result.models);
+    setModels(mergeCustomModels(result.models, custom));
     setCustomModels(custom);
   }
 
@@ -92,8 +95,8 @@ export function CopilotSection({
     try {
       const updated = await addCustomCopilotModel(id);
       setCustomModels(updated);
-      const refreshed = await getCopilotModels();
-      setModels(refreshed.models);
+      const refreshed = await getCatalogModelsForAiProvider("copilot");
+      setModels(mergeCustomModels(refreshed.models, updated));
       useAiSelectionStore.getState().invalidateModels("copilot");
       setCustomModelDraft("");
       if (!selectedModel) handleModelChange(id);
@@ -108,8 +111,8 @@ export function CopilotSection({
     try {
       const updated = await removeCustomCopilotModel(id);
       setCustomModels(updated);
-      const refreshed = await getCopilotModels();
-      setModels(refreshed.models);
+      const refreshed = await getCatalogModelsForAiProvider("copilot");
+      setModels(mergeCustomModels(refreshed.models, updated));
       useAiSelectionStore.getState().invalidateModels("copilot");
       if (selectedModel === id) handleModelChange("");
     } catch (err) {

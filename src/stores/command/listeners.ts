@@ -21,15 +21,23 @@ import { SPAWN_TOTAL_MS } from "@/lib/commandSpawn";
 
 import {
   COMMAND_A2A_EVENT_NAME,
+  COMMAND_BUG_EVENT_NAME,
   COMMAND_EVENT_NAME,
   COMMAND_GROOMING_EVENT_NAME,
+  COMMAND_PR_COMMENT_EVENT_NAME,
+  COMMAND_PR_FINDING_EVENT_NAME,
+  COMMAND_PR_REVIEW_COMPLETE_EVENT_NAME,
   commandListGroomingProposals,
   commandListMessages,
   commandListSessions,
   type A2AMessage,
   type CommandEvent,
   type CommandEventRaw,
+  type BugReportEvent,
   type GroomingProposalEvent,
+  type PrCommentAddressedEvent,
+  type PrReviewCompleteEvent,
+  type PrReviewFindingEvent,
   type StoredMessage,
 } from "@/lib/tauri/command";
 import type { AgentState } from "@/lib/commandSprites";
@@ -37,6 +45,19 @@ import type {
   GroomingFieldChange,
   GroomingProposal,
 } from "@/lib/commandGrooming";
+import {
+  parseAffectedFiles,
+  parseBugSeverity,
+  type BugReport,
+} from "@/lib/commandBugs";
+import {
+  extractJiraKey,
+  parseReviewRecommendation,
+  parseReviewSeverity,
+  type AddressedComment,
+  type PrRef,
+  type PrReviewFinding,
+} from "@/lib/commandPrWork";
 import { useCommandStore } from "./store";
 
 let attached = false;
@@ -102,7 +123,111 @@ export async function attachCommandListeners(): Promise<() => void> {
         .upsertGroomingProposal(payload.sessionId, proposal);
     },
   );
-  detachers = [unlisten, unlistenA2A, unlistenGrooming];
+  const unlistenBugs = await listen<BugReportEvent>(
+    COMMAND_BUG_EVENT_NAME,
+    (e) => {
+      const p = e.payload;
+      const report: BugReport = {
+        id: p.id,
+        summary: p.summary,
+        description: p.description,
+        observedBehavior: p.observedBehavior,
+        expectedBehavior: p.expectedBehavior,
+        stepsToReproduce: p.stepsToReproduce,
+        severity: parseBugSeverity(p.severity),
+        suspectedRootCause: p.suspectedRootCause,
+        affectedFiles: parseAffectedFiles(p.affectedFiles ?? []),
+        createdAtMs: p.createdAtMs,
+        submittedJiraKey: null,
+      };
+      useCommandStore.getState().appendBugReport(p.sessionId, report);
+    },
+  );
+  const unlistenPrComments = await listen<PrCommentAddressedEvent>(
+    COMMAND_PR_COMMENT_EVENT_NAME,
+    (e) => {
+      const p = e.payload;
+      const pr: PrRef = {
+        prId: p.pr.prId,
+        title: p.pr.title,
+        url: p.pr.url,
+        branch: p.pr.branch,
+        jiraKey:
+          (p.pr.jiraKey && p.pr.jiraKey.length > 0
+            ? p.pr.jiraKey
+            : null) ??
+          extractJiraKey(p.pr.branch) ??
+          extractJiraKey(p.pr.title),
+      };
+      const comment: AddressedComment = {
+        id: p.id,
+        commentAuthor: p.commentAuthor,
+        originalText: p.originalText,
+        changeSummary: p.changeSummary,
+        diff: p.diff,
+        filePath: p.filePath,
+        startLine: p.startLine ?? null,
+        createdAtMs: p.createdAtMs,
+      };
+      useCommandStore.getState().appendAddressedComment(p.sessionId, {
+        pr,
+        worktreePath: p.worktreePath ?? null,
+        comment,
+      });
+    },
+  );
+  const unlistenPrFindings = await listen<PrReviewFindingEvent>(
+    COMMAND_PR_FINDING_EVENT_NAME,
+    (e) => {
+      const p = e.payload;
+      const pr: PrRef = {
+        prId: p.pr.prId,
+        title: p.pr.title,
+        url: p.pr.url,
+        branch: p.pr.branch,
+        jiraKey:
+          (p.pr.jiraKey && p.pr.jiraKey.length > 0
+            ? p.pr.jiraKey
+            : null) ??
+          extractJiraKey(p.pr.branch) ??
+          extractJiraKey(p.pr.title),
+      };
+      const finding: PrReviewFinding = {
+        id: p.id,
+        lens: p.lens,
+        description: p.description,
+        severity: parseReviewSeverity(p.severity),
+        filePath: p.filePath,
+        lineRange: p.lineRange,
+        snippet: p.snippet,
+        createdAtMs: p.createdAtMs,
+      };
+      useCommandStore.getState().appendPrReviewFinding(p.sessionId, {
+        pr,
+        worktreePath: p.worktreePath ?? null,
+        finding,
+      });
+    },
+  );
+  const unlistenPrComplete = await listen<PrReviewCompleteEvent>(
+    COMMAND_PR_REVIEW_COMPLETE_EVENT_NAME,
+    (e) => {
+      const p = e.payload;
+      useCommandStore.getState().completePrReview(p.sessionId, p.prId, {
+        recommendation: parseReviewRecommendation(p.recommendation),
+        summary: p.summary,
+      });
+    },
+  );
+  detachers = [
+    unlisten,
+    unlistenA2A,
+    unlistenGrooming,
+    unlistenBugs,
+    unlistenPrComments,
+    unlistenPrFindings,
+    unlistenPrComplete,
+  ];
   return () => detach();
 }
 

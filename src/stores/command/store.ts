@@ -17,6 +17,14 @@
 import { create } from "zustand";
 
 import { DEFAULT_TERRAIN, isTerrainId, type TerrainId } from "@/lib/commandTerrains";
+import type { BugReport } from "@/lib/commandBugs";
+import type {
+  AddressedComment,
+  AddressedPr,
+  PrReviewFinding,
+  PrReviewRecommendation,
+  ReviewedPr,
+} from "@/lib/commandPrWork";
 import type {
   FieldDecision,
   GroomingProposal,
@@ -213,6 +221,19 @@ export interface CommandUnit {
    *  proposal per ticket; the user reviews and decides per-field
    *  in the focused panel's Tickets tab. */
   groomingQueue: GroomingProposal[];
+  /** Bug reports — populated by Bug Hunter units when they call
+   *  the `submit_bug_report` MCP tool. The user reviews each in
+   *  the Bugs tab and decides whether to push to JIRA. In-memory
+   *  only for V1; cleared with the unit. */
+  bugReports: BugReport[];
+  /** PRs the Address-PR-Tasks role has worked on, keyed by PR id.
+   *  Grouped by PR so the My PRs tab can show one card per PR
+   *  with all addressed comments collapsed inside. */
+  addressedPrs: AddressedPr[];
+  /** PRs the PR-Auto-Review role has reviewed, keyed by PR id.
+   *  Each entry holds the agent's findings + recommendation; the
+   *  user's verdict lives on the same record. */
+  reviewedPrs: ReviewedPr[];
 }
 
 /** Transient parent→child arc drawn by the tactical field for a
@@ -412,6 +433,11 @@ interface CommandState {
    *  mirrors here immediately. */
   stateBadgesEnabled: boolean;
   setStateBadgesEnabled: (value: boolean) => void;
+  /** Preferred IDE for the "Open in IDE" buttons (Bugs / My PRs /
+   *  Reviewed PRs tabs). One of the ids in `IDES` from
+   *  `ideLauncher.ts`. Hydrated from preferences at boot. */
+  preferredIdeId: string;
+  setPreferredIdeId: (value: string) => void;
   /** Append (or replace, if a proposal for the same ticket key
    *  already exists) a grooming proposal on the unit's queue. */
   upsertGroomingProposal: (
@@ -434,6 +460,55 @@ interface CommandState {
   markGroomingProposalSubmitted: (
     sessionId: string,
     proposalId: string,
+  ) => void;
+  /** Append a bug report from the Bug Hunter to the unit's
+   *  reports queue. Surfaced in the Bugs tab. */
+  appendBugReport: (sessionId: string, report: BugReport) => void;
+  /** Remove a bug report from the unit's queue — used when the
+   *  user dismisses a report they don't want to act on. */
+  dismissBugReport: (sessionId: string, reportId: string) => void;
+  /** Mark a bug as submitted to JIRA with the resulting key.
+   *  Keeps the report visible in the Bugs tab as a record. */
+  markBugSubmitted: (
+    sessionId: string,
+    reportId: string,
+    jiraKey: string,
+  ) => void;
+  /** Append an addressed-comment to the matching PR card (creating
+   *  the card if it's the first comment on that PR). */
+  appendAddressedComment: (
+    sessionId: string,
+    prInfo: {
+      pr: AddressedPr["pr"];
+      worktreePath: string | null;
+      comment: AddressedComment;
+    },
+  ) => void;
+  /** Append a review finding to the matching reviewed-PR card
+   *  (creating the card if it's the first finding on that PR). */
+  appendPrReviewFinding: (
+    sessionId: string,
+    prInfo: {
+      pr: ReviewedPr["pr"];
+      worktreePath: string | null;
+      finding: PrReviewFinding;
+    },
+  ) => void;
+  /** Finalise the agent's recommendation + executive summary for a
+   *  reviewed PR. Called by `submit_pr_review_complete`. */
+  completePrReview: (
+    sessionId: string,
+    prId: string,
+    update: {
+      recommendation: PrReviewRecommendation;
+      summary: string;
+    },
+  ) => void;
+  /** Persist the user's verdict on a reviewed PR. */
+  setPrUserVerdict: (
+    sessionId: string,
+    prId: string,
+    verdict: PrReviewRecommendation,
   ) => void;
   removeUnit: (id: string, exitCode?: number | null) => void;
   /** Replace the store with units + transcripts loaded from SQLite
@@ -536,8 +611,10 @@ export const useCommandStore = create<CommandState>((set, get) => ({
   skills: [],
   mcpServers: [],
   stateBadgesEnabled: true,
+  preferredIdeId: "vscode",
 
   setStateBadgesEnabled: (value) => set({ stateBadgesEnabled: value }),
+  setPreferredIdeId: (value) => set({ preferredIdeId: value }),
   selectUnit: (id) => set({ selectedUnitId: id }),
   setTerrain: (id) => set({ terrain: isTerrainId(id) ? id : DEFAULT_TERRAIN }),
   setTileSize: (size) =>
@@ -626,6 +703,9 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         lastRawEvent: null,
         usage: null,
         groomingQueue: [],
+        bugReports: [],
+        addressedPrs: [],
+        reviewedPrs: [],
 };
       // Persist asynchronously — best effort; surfaces no error to
       // the UI because the unit is fully usable in memory regardless
@@ -959,6 +1039,179 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       });
     }
   },
+
+  appendBugReport: (sessionId, report) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      // Dedup by id — defensive against the agent retrying the
+      // same MCP call. New reports append to the end so the
+      // chronology in the Bugs tab matches the order the agent
+      // found them.
+      if (u.bugReports.some((r) => r.id === report.id)) return s;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: { ...u, bugReports: [...u.bugReports, report] },
+        },
+      };
+    }),
+
+  dismissBugReport: (sessionId, reportId) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: {
+            ...u,
+            bugReports: u.bugReports.filter((r) => r.id !== reportId),
+          },
+        },
+      };
+    }),
+
+  markBugSubmitted: (sessionId, reportId, jiraKey) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: {
+            ...u,
+            bugReports: u.bugReports.map((r) =>
+              r.id === reportId ? { ...r, submittedJiraKey: jiraKey } : r,
+            ),
+          },
+        },
+      };
+    }),
+
+  appendAddressedComment: (sessionId, { pr, worktreePath, comment }) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const idx = u.addressedPrs.findIndex((p) => p.pr.prId === pr.prId);
+      const now = Date.now();
+      let nextAddressed: AddressedPr[];
+      if (idx === -1) {
+        nextAddressed = [
+          ...u.addressedPrs,
+          {
+            pr,
+            worktreePath,
+            comments: [comment],
+            lastUpdatedMs: now,
+          },
+        ];
+      } else {
+        const existing = u.addressedPrs[idx];
+        if (existing.comments.some((c) => c.id === comment.id)) return s;
+        nextAddressed = u.addressedPrs.map((p, i) =>
+          i === idx
+            ? {
+                ...p,
+                pr,
+                worktreePath: worktreePath ?? p.worktreePath,
+                comments: [...p.comments, comment],
+                lastUpdatedMs: now,
+              }
+            : p,
+        );
+      }
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: { ...u, addressedPrs: nextAddressed },
+        },
+      };
+    }),
+
+  appendPrReviewFinding: (sessionId, { pr, worktreePath, finding }) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const idx = u.reviewedPrs.findIndex((p) => p.pr.prId === pr.prId);
+      const now = Date.now();
+      let nextReviewed: ReviewedPr[];
+      if (idx === -1) {
+        nextReviewed = [
+          ...u.reviewedPrs,
+          {
+            pr,
+            worktreePath,
+            findings: [finding],
+            recommendation: "pending",
+            summary: "",
+            userVerdict: null,
+            lastUpdatedMs: now,
+          },
+        ];
+      } else {
+        const existing = u.reviewedPrs[idx];
+        if (existing.findings.some((f) => f.id === finding.id)) return s;
+        nextReviewed = u.reviewedPrs.map((p, i) =>
+          i === idx
+            ? {
+                ...p,
+                pr,
+                worktreePath: worktreePath ?? p.worktreePath,
+                findings: [...p.findings, finding],
+                lastUpdatedMs: now,
+              }
+            : p,
+        );
+      }
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: { ...u, reviewedPrs: nextReviewed },
+        },
+      };
+    }),
+
+  completePrReview: (sessionId, prId, { recommendation, summary }) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: {
+            ...u,
+            reviewedPrs: u.reviewedPrs.map((p) =>
+              p.pr.prId === prId
+                ? {
+                    ...p,
+                    recommendation,
+                    summary,
+                    lastUpdatedMs: Date.now(),
+                  }
+                : p,
+            ),
+          },
+        },
+      };
+    }),
+
+  setPrUserVerdict: (sessionId, prId, verdict) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: {
+            ...u,
+            reviewedPrs: u.reviewedPrs.map((p) =>
+              p.pr.prId === prId ? { ...p, userVerdict: verdict } : p,
+            ),
+          },
+        },
+      };
+    }),
 
   setUsage: (sessionId, usage) =>
     set((s) => {
@@ -1328,6 +1581,9 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         lastRawEvent: null,
         usage: null,
         groomingQueue: [],
+        bugReports: [],
+        addressedPrs: [],
+        reviewedPrs: [],
 };
       return {
         units: {
@@ -1467,6 +1723,9 @@ export const useCommandStore = create<CommandState>((set, get) => ({
           lastRawEvent: null,
           usage: null,
           groomingQueue: proposalsBySession?.[s.id] ?? [],
+          bugReports: [],
+          addressedPrs: [],
+          reviewedPrs: [],
         };
         units[s.id] = unit;
         unitOrder.push(s.id);

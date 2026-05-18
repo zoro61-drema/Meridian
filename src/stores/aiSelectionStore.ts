@@ -24,9 +24,12 @@
 
 import { deletePreference, getPreferences, setPreference } from "@/lib/preferences";
 import {
-  getClaudeModels,
-  getCopilotModels,
-  getGeminiModels,
+  getCatalogModelsForAiProvider,
+  mergeCustomModels,
+} from "@/lib/modelsCatalog";
+import {
+  getCustomCopilotModels,
+  getCustomGeminiModels,
   getLocalModels,
 } from "@/lib/tauri/providers";
 import { create } from "zustand";
@@ -293,10 +296,21 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
     set({ modelsLoading: { ...modelsLoading, [provider]: true } });
     try {
       let list: [string, string][] = [];
-      if (provider === "claude") list = (await getClaudeModels()).models;
-      else if (provider === "gemini") list = (await getGeminiModels()).models;
-      else if (provider === "local") list = await getLocalModels();
-      else if (provider === "copilot") list = (await getCopilotModels()).models;
+      if (provider === "local") {
+        list = await getLocalModels();
+      } else {
+        // Cloud providers — pull from the models.dev catalog (same
+        // source-of-truth opencode uses), then merge in user-added
+        // custom model ids for providers that support them.
+        const catalog = await getCatalogModelsForAiProvider(provider);
+        const customIds: string[] =
+          provider === "gemini"
+            ? await getCustomGeminiModels().catch(() => [])
+            : provider === "copilot"
+              ? await getCustomCopilotModels().catch(() => [])
+              : [];
+        list = mergeCustomModels(catalog.models, customIds);
+      }
       set((s) => ({
         modelsByProvider: { ...s.modelsByProvider, [provider]: list },
         modelsLoading: { ...s.modelsLoading, [provider]: false },

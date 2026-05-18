@@ -287,6 +287,126 @@ fn tool_specs() -> Value {
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
+            "name": "submit_bug_report",
+            "description": "Submit one bug report for the user to review in the Bugs tab. Call this once per distinct bug you find while hunting through a feature. The user reviews each report and decides whether to push it to JIRA — you don't open tickets yourself. After calling this, keep hunting; don't block waiting for review.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["summary", "description", "severity"],
+                "properties": {
+                    "summary": {
+                        "type": "string",
+                        "description": "One-line problem statement, JIRA-ready title."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "What the bug is, why it's a bug, the failure mode you observed."
+                    },
+                    "observed_behavior": {
+                        "type": "string",
+                        "description": "What the code currently does. Optional."
+                    },
+                    "expected_behavior": {
+                        "type": "string",
+                        "description": "What it should do. Optional."
+                    },
+                    "steps_to_reproduce": {
+                        "type": "string",
+                        "description": "User-facing steps to reproduce. Leave empty when the bug isn't user-reachable / is purely structural."
+                    },
+                    "suspected_root_cause": {
+                        "type": "string",
+                        "description": "Best-guess explanation for why the bug exists. Optional."
+                    },
+                    "severity": {
+                        "type": "string",
+                        "enum": ["critical", "high", "medium", "low"],
+                        "description": "Severity of the bug."
+                    },
+                    "affected_files": {
+                        "type": "array",
+                        "description": "Files implicated in the bug. Each entry is { path, lineRange }.",
+                        "items": {
+                            "type": "object",
+                            "required": ["path"],
+                            "properties": {
+                                "path": { "type": "string" },
+                                "lineRange": { "type": "string", "description": "e.g. \"42-58\" or \"42\"." }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "submit_pr_comment_addressed",
+            "description": "Address PR Tasks role: submit one report per review comment / task you've addressed locally. The user reviews each in the My PRs tab and pushes themselves — you must never push to the remote. Call this after committing the change locally (in the PR's dedicated worktree).",
+            "inputSchema": {
+                "type": "object",
+                "required": ["pr", "comment_author", "original_text", "change_summary", "diff", "file_path"],
+                "properties": {
+                    "pr": {
+                        "type": "object",
+                        "required": ["prId", "title", "url", "branch"],
+                        "properties": {
+                            "prId":   { "type": "string" },
+                            "title":  { "type": "string" },
+                            "url":    { "type": "string", "description": "Bitbucket URL the user clicks to open the PR." },
+                            "branch": { "type": "string" },
+                            "jiraKey": { "type": "string", "description": "Optional JIRA ticket key extracted from branch/title." }
+                        }
+                    },
+                    "worktree_path":     { "type": "string", "description": "Absolute path to the worktree you created for this PR." },
+                    "comment_author":    { "type": "string", "description": "Author of the original PR comment." },
+                    "original_text":     { "type": "string", "description": "Original comment / task text you addressed." },
+                    "change_summary":    { "type": "string", "description": "One-line summary of what you changed." },
+                    "diff":              { "type": "string", "description": "Unified diff of the change (the local commit)." },
+                    "file_path":         { "type": "string", "description": "File the change landed in." },
+                    "start_line":        { "type": "integer", "description": "1-based start line for 'Open in IDE'." }
+                }
+            }
+        },
+        {
+            "name": "submit_pr_review_finding",
+            "description": "PR Auto-Review role: submit one review finding for an assigned PR. Findings land in the Reviewed PRs tab grouped by `pr.prId`. Call once per distinct finding, then call `submit_pr_review_complete` when done with the PR.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["pr", "lens", "description", "severity", "file_path", "line_range", "snippet"],
+                "properties": {
+                    "pr": {
+                        "type": "object",
+                        "required": ["prId", "title", "url", "branch"],
+                        "properties": {
+                            "prId":   { "type": "string" },
+                            "title":  { "type": "string" },
+                            "url":    { "type": "string" },
+                            "branch": { "type": "string" },
+                            "jiraKey": { "type": "string" }
+                        }
+                    },
+                    "worktree_path": { "type": "string" },
+                    "lens":          { "type": "string", "description": "One of: acceptance, security, logic, testing, quality." },
+                    "description":   { "type": "string" },
+                    "severity":      { "type": "string", "enum": ["blocking", "non_blocking", "nitpick"] },
+                    "file_path":     { "type": "string" },
+                    "line_range":    { "type": "string", "description": "1-based, e.g. '42' or '42-58'." },
+                    "snippet":       { "type": "string", "description": "5-10 lines of surrounding code." }
+                }
+            }
+        },
+        {
+            "name": "submit_pr_review_complete",
+            "description": "PR Auto-Review role: finalise the review of one PR. Call this after you've submitted all findings via `submit_pr_review_finding`. Updates the PR card in the Reviewed PRs tab with your recommendation + summary.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["pr_id", "recommendation", "summary"],
+                "properties": {
+                    "pr_id":          { "type": "string" },
+                    "recommendation": { "type": "string", "enum": ["approve", "needs_review"] },
+                    "summary":        { "type": "string", "description": "One-paragraph executive summary." }
+                }
+            }
+        },
+        {
             "name": "submit_grooming_recommendations",
             "description": "Submit a per-ticket grooming proposal for the user to review. Use this once per ticket after you've gathered enough context. The user reviews each suggested edit and decides whether to approve, edit, or decline before anything is pushed to JIRA. After calling this, move on to the next ticket — do not block waiting for the user to review.",
             "inputSchema": {
@@ -473,6 +593,335 @@ async fn handle_tool_call(
                     }),
                 ),
             }
+        }
+        "submit_bug_report" => {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            use tauri::Emitter;
+            let summary = arguments
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if summary.is_empty() {
+                return err(id, -32602, "missing `summary`");
+            }
+            let description = arguments
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let observed = arguments
+                .get("observed_behavior")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let expected = arguments
+                .get("expected_behavior")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let steps = arguments
+                .get("steps_to_reproduce")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let root_cause = arguments
+                .get("suspected_root_cause")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            // Severity comes in lower-cased per the schema enum;
+            // accept anything but default to "medium" if blank.
+            let severity = arguments
+                .get("severity")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_lowercase())
+                .filter(|s| {
+                    matches!(s.as_str(), "critical" | "high" | "medium" | "low")
+                })
+                .unwrap_or_else(|| "medium".to_string());
+            let affected_files = arguments
+                .get("affected_files")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            let now_us = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_micros())
+                .unwrap_or(0);
+            let report_id = format!("bug-{}-{}", sender_session_id, now_us);
+            let created_at_ms = (now_us / 1_000) as u64;
+
+            let event = super::events::BugReportEvent {
+                id: report_id.clone(),
+                session_id: sender_session_id.to_string(),
+                summary: summary.clone(),
+                description,
+                observed_behavior: observed,
+                expected_behavior: expected,
+                steps_to_reproduce: steps,
+                severity,
+                suspected_root_cause: root_cause,
+                affected_files,
+                created_at_ms,
+            };
+            if let Err(e) = app.emit(
+                super::events::COMMAND_BUG_EVENT_NAME,
+                event,
+            ) {
+                eprintln!("[mcp] failed to emit bug report: {e}");
+            }
+            ok(
+                id,
+                json!({
+                    "content": [{
+                        "type": "text",
+                        "text": format!(
+                            "Bug report filed: \"{summary}\". The user will review in the Bugs tab. Keep hunting."
+                        )
+                    }],
+                    "structuredContent": { "reportId": report_id }
+                }),
+            )
+        }
+        "submit_pr_comment_addressed" => {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            use tauri::Emitter;
+            let pr_obj = match arguments.get("pr").and_then(|v| v.as_object()) {
+                Some(o) => o,
+                None => return err(id, -32602, "missing or invalid `pr`"),
+            };
+            let pr = super::events::PrRefPayload {
+                pr_id: pr_obj
+                    .get("prId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                title: pr_obj
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                url: pr_obj
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                branch: pr_obj
+                    .get("branch")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                jira_key: pr_obj
+                    .get("jiraKey")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+            };
+            if pr.pr_id.is_empty() {
+                return err(id, -32602, "missing `pr.prId`");
+            }
+            let now_us = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_micros())
+                .unwrap_or(0);
+            let comment_id =
+                format!("addr-{}-{}-{}", sender_session_id, pr.pr_id, now_us);
+            let created_at_ms = (now_us / 1_000) as u64;
+            let event = super::events::PrCommentAddressedEvent {
+                id: comment_id.clone(),
+                session_id: sender_session_id.to_string(),
+                pr,
+                worktree_path: arguments
+                    .get("worktree_path")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                comment_author: arguments
+                    .get("comment_author")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                original_text: arguments
+                    .get("original_text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                change_summary: arguments
+                    .get("change_summary")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                diff: arguments
+                    .get("diff")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                file_path: arguments
+                    .get("file_path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                start_line: arguments
+                    .get("start_line")
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as u32),
+                created_at_ms,
+            };
+            if let Err(e) = app.emit(
+                super::events::COMMAND_PR_COMMENT_EVENT_NAME,
+                event,
+            ) {
+                eprintln!("[mcp] failed to emit pr comment: {e}");
+            }
+            ok(
+                id,
+                json!({
+                    "content": [{ "type": "text", "text": "Comment addressing recorded. The user reviews in the My PRs tab and pushes locally — do NOT push." }],
+                    "structuredContent": { "commentId": comment_id }
+                }),
+            )
+        }
+        "submit_pr_review_finding" => {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            use tauri::Emitter;
+            let pr_obj = match arguments.get("pr").and_then(|v| v.as_object()) {
+                Some(o) => o,
+                None => return err(id, -32602, "missing or invalid `pr`"),
+            };
+            let pr = super::events::PrRefPayload {
+                pr_id: pr_obj
+                    .get("prId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                title: pr_obj
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                url: pr_obj
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                branch: pr_obj
+                    .get("branch")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                jira_key: pr_obj
+                    .get("jiraKey")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+            };
+            if pr.pr_id.is_empty() {
+                return err(id, -32602, "missing `pr.prId`");
+            }
+            let severity = arguments
+                .get("severity")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_lowercase().replace('-', "_"))
+                .filter(|s| {
+                    matches!(s.as_str(), "blocking" | "non_blocking" | "nitpick")
+                })
+                .unwrap_or_else(|| "non_blocking".to_string());
+            let now_us = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_micros())
+                .unwrap_or(0);
+            let finding_id =
+                format!("find-{}-{}-{}", sender_session_id, pr.pr_id, now_us);
+            let created_at_ms = (now_us / 1_000) as u64;
+            let event = super::events::PrReviewFindingEvent {
+                id: finding_id.clone(),
+                session_id: sender_session_id.to_string(),
+                pr,
+                worktree_path: arguments
+                    .get("worktree_path")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                lens: arguments
+                    .get("lens")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                description: arguments
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                severity,
+                file_path: arguments
+                    .get("file_path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                line_range: arguments
+                    .get("line_range")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                snippet: arguments
+                    .get("snippet")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                created_at_ms,
+            };
+            if let Err(e) = app.emit(
+                super::events::COMMAND_PR_FINDING_EVENT_NAME,
+                event,
+            ) {
+                eprintln!("[mcp] failed to emit pr finding: {e}");
+            }
+            ok(
+                id,
+                json!({
+                    "content": [{ "type": "text", "text": "Finding recorded. Continue reviewing; call submit_pr_review_complete when done with this PR." }],
+                    "structuredContent": { "findingId": finding_id }
+                }),
+            )
+        }
+        "submit_pr_review_complete" => {
+            use tauri::Emitter;
+            let pr_id = arguments
+                .get("pr_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if pr_id.is_empty() {
+                return err(id, -32602, "missing `pr_id`");
+            }
+            let recommendation = arguments
+                .get("recommendation")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_lowercase().replace('-', "_").replace(' ', "_"))
+                .filter(|s| matches!(s.as_str(), "approve" | "needs_review"))
+                .unwrap_or_else(|| "needs_review".to_string());
+            let summary = arguments
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let event = super::events::PrReviewCompleteEvent {
+                session_id: sender_session_id.to_string(),
+                pr_id: pr_id.clone(),
+                recommendation,
+                summary,
+            };
+            if let Err(e) = app.emit(
+                super::events::COMMAND_PR_REVIEW_COMPLETE_EVENT_NAME,
+                event,
+            ) {
+                eprintln!("[mcp] failed to emit pr review complete: {e}");
+            }
+            ok(
+                id,
+                json!({
+                    "content": [{ "type": "text", "text": format!("Review of PR {pr_id} finalised. User will see your recommendation in the Reviewed PRs tab.") }]
+                }),
+            )
         }
         "submit_grooming_recommendations" => {
             use std::time::{SystemTime, UNIX_EPOCH};

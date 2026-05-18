@@ -27,6 +27,9 @@ import { toast } from "sonner";
 import { DebugTab } from "@/components/command/DebugTab";
 import { SessionBreadcrumb } from "@/components/command/SessionBreadcrumb";
 import { TicketsTab } from "@/components/command/TicketsTab";
+import { BugsTab } from "@/components/command/BugsTab";
+import { MyPrsTab } from "@/components/command/MyPrsTab";
+import { ReviewedPrsTab } from "@/components/command/ReviewedPrsTab";
 import {
   SlashCommandMenu,
   useSlashCommandState,
@@ -117,6 +120,21 @@ export function UnitChatPanel() {
   // RoleId enum so a future "Bulk Groomer" or similar role can
   // opt in by sharing the same title prefix.
   const isGroomerRole = unit?.role?.toLowerCase().includes("groomer") ?? false;
+  // Show the Bugs tab whenever the unit is a Bug Hunter OR when
+  // it has reports filed — keeps reports accessible even if a
+  // future role variant uses the same MCP tool.
+  const isBugHunterRole =
+    unit?.role?.toLowerCase().includes("bug hunter") ?? false;
+  const showBugsTab = isBugHunterRole || (unit?.bugReports.length ?? 0) > 0;
+  // PR-focused tabs surface when the unit's role matches OR when
+  // it has queued PR data — same pattern as Bugs tab.
+  const isAddressPrsRole =
+    unit?.role?.toLowerCase().includes("address pr") ?? false;
+  const isPrReviewerRole =
+    unit?.role?.toLowerCase().includes("auto-review") ?? false;
+  const showMyPrsTab = isAddressPrsRole || (unit?.addressedPrs.length ?? 0) > 0;
+  const showReviewedPrsTab =
+    isPrReviewerRole || (unit?.reviewedPrs.length ?? 0) > 0;
 
   // Local interceptor for slash commands the CLI's interactive
   // REPL would normally handle. Returns true if the command was
@@ -571,6 +589,28 @@ export function UnitChatPanel() {
               Tickets {unit.groomingQueue.length > 0 ? `(${unit.groomingQueue.length})` : ""}
             </TabsTrigger>
           )}
+          {showBugsTab && (
+            <TabsTrigger value="bugs" className="h-6 px-2 text-[11px]">
+              <Bug className="mr-1 h-3 w-3" />
+              Bugs {unit.bugReports.length > 0 ? `(${unit.bugReports.length})` : ""}
+            </TabsTrigger>
+          )}
+          {showMyPrsTab && (
+            <TabsTrigger value="my-prs" className="h-6 px-2 text-[11px]">
+              My PRs{" "}
+              {unit.addressedPrs.length > 0
+                ? `(${unit.addressedPrs.length})`
+                : ""}
+            </TabsTrigger>
+          )}
+          {showReviewedPrsTab && (
+            <TabsTrigger value="reviewed-prs" className="h-6 px-2 text-[11px]">
+              Reviewed PRs{" "}
+              {unit.reviewedPrs.length > 0
+                ? `(${unit.reviewedPrs.length})`
+                : ""}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="debug" className="h-6 px-2 text-[11px]">
             <Bug className="mr-1 h-3 w-3" />
             Debug
@@ -614,6 +654,30 @@ export function UnitChatPanel() {
             className="flex-1 min-h-0 overflow-hidden focus-visible:outline-none"
           >
             <TicketsTab unit={unit} />
+          </TabsContent>
+        )}
+        {showBugsTab && (
+          <TabsContent
+            value="bugs"
+            className="flex-1 min-h-0 overflow-hidden focus-visible:outline-none"
+          >
+            <BugsTab unit={unit} />
+          </TabsContent>
+        )}
+        {showMyPrsTab && (
+          <TabsContent
+            value="my-prs"
+            className="flex-1 min-h-0 overflow-hidden focus-visible:outline-none"
+          >
+            <MyPrsTab unit={unit} />
+          </TabsContent>
+        )}
+        {showReviewedPrsTab && (
+          <TabsContent
+            value="reviewed-prs"
+            className="flex-1 min-h-0 overflow-hidden focus-visible:outline-none"
+          >
+            <ReviewedPrsTab unit={unit} />
           </TabsContent>
         )}
         <TabsContent

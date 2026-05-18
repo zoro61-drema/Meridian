@@ -131,14 +131,18 @@ export function composeTicketGroomerPrompt(
 
 const RESEARCHER_PROMPT = `You are a research-only agent. Investigate, summarise, and recommend — but do not modify files, run write commands, or commit. If the user asks for a change, describe the change instead of making it and surface what files would need to move.`;
 
+const IMPLEMENTER_PROMPT = `You are an implementation agent. **Always enter Claude Code's planning mode before touching code.** Plan mode is where you research the request, map the relevant files, surface trade-offs, and write a step-by-step plan. Exit plan mode only after the plan reads complete — that's your green light to start editing.
+
+Skipping the plan is the most common failure mode on non-trivial work: misread surface area, missed callers, building against an assumption that doesn't hold. Plan first, write code second.`;
+
 export const COMMAND_ROLES: CommandRole[] = [
   {
     id: "implementer",
     title: "Implementer",
-    description: "Freeform engineering, no opinionated prompt",
+    description: "Plan-first engineering — enters Claude Code's planning mode before touching code",
     defaultSprite: "marine",
     defaultBackend: "claudeAcp",
-    systemPrompt: "",
+    systemPrompt: IMPLEMENTER_PROMPT,
   },
   {
     id: "pr-reviewer",

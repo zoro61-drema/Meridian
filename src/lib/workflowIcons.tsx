@@ -164,11 +164,27 @@ export function MeetingsIcon(props: IconProps) {
 export function CommanderIcon(props: IconProps) {
   return (
     <IconBase {...props}>
-      <rect x="4" y="4" width="24" height="24" rx="2" opacity="0.55" />
-      <path d="M10 22 L16 14 L22 19" opacity="0.5" />
-      <circle cx="10" cy="22" r="2" fill="currentColor" />
-      <circle cx="16" cy="14" r="2" fill="currentColor" />
-      <circle cx="22" cy="19" r="2" fill="currentColor" />
+      {/* Five-point star — commander's insignia (general's rank
+          symbol). Filled in currentColor so it inherits text colour
+          from the card. */}
+      <polygon
+        points="16,3 17.57,7.45 22.66,7.84 18.54,10.83 20.11,15.66 16,12.67 11.89,15.66 13.46,10.83 9.34,7.84 14.43,7.45"
+        fill="currentColor"
+        stroke="none"
+      />
+      {/* Two rank chevrons below the star — inverted-V military
+          stripes. Drawn as thick filled wedges so they read at
+          small sizes without relying on stroke width. */}
+      <path
+        d="M8 20 L16 16 L24 20 L24 23 L16 19 L8 23 Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="M8 26 L16 22 L24 26 L24 29 L16 25 L8 29 Z"
+        fill="currentColor"
+        stroke="none"
+      />
     </IconBase>
   );
 }

@@ -290,10 +290,14 @@ const WORKFLOW_CARDS: {
   title: string;
   description: string;
 }[] = [
+  // Order drives the orbital layout — index 0 sits at the top of
+  // the globe and the rest fan clockwise. Commander leads the
+  // crown position; PR review takes the upper-left slot where
+  // Commander used to live.
   {
-    id: "review-pr",
-    title: "Review a Pull Request",
-    description: "AI-assisted code review across 5 analysis lenses",
+    id: "command",
+    title: "Commander",
+    description: "Multi-agent tactical field — launch Claude, Gemini, Codex, or Qwen units, watch them work, and let them message each other",
   },
   {
     id: "sprint-dashboard",
@@ -321,9 +325,9 @@ const WORKFLOW_CARDS: {
     description: "Automatic work-hours tracker — pauses on screen lock or idle, banks overtime for later in the week",
   },
   {
-    id: "command",
-    title: "Commander",
-    description: "Multi-agent tactical field — launch Claude, Gemini, Codex, or Qwen units, watch them work, and let them message each other",
+    id: "review-pr",
+    title: "Review a Pull Request",
+    description: "AI-assisted code review across 5 analysis lenses",
   },
 ];
 

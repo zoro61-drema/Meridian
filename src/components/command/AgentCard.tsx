@@ -50,7 +50,7 @@ const SPRITE_FOR_ID: Record<CommandUnit["spriteId"], ComponentType<UnitProps>> =
   "siege-walker": SiegeWalker as ComponentType<UnitProps>,
 };
 
-const CARD_SPRITE_SIZE = 36;
+const CARD_SPRITE_SIZE = 64;
 
 interface AgentCardProps {
   unitId: string;
@@ -81,16 +81,29 @@ export const AgentCard = memo(function AgentCard({ unitId }: AgentCardProps) {
     >
       {/* Header */}
       <div className="flex items-start gap-2">
+        {/* Thumbnail box stays at CARD_SPRITE_SIZE; the sprite is
+            zoomed 1.5× via CSS transform with overflow:hidden
+            clipping the excess, so the character looks bigger
+            without making the card layout shift. */}
         <div
-          className="shrink-0"
+          className="shrink-0 overflow-hidden"
           style={{ width: CARD_SPRITE_SIZE, height: CARD_SPRITE_SIZE }}
         >
-          <Sprite
-            state={displayState}
-            transient={unit.transient}
-            size={CARD_SPRITE_SIZE}
-            facing="S"
-          />
+          <div
+            style={{
+              transform: "scale(1.5)",
+              transformOrigin: "center center",
+              width: CARD_SPRITE_SIZE,
+              height: CARD_SPRITE_SIZE,
+            }}
+          >
+            <Sprite
+              state={displayState}
+              transient={unit.transient}
+              size={CARD_SPRITE_SIZE}
+              facing="S"
+            />
+          </div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-1">

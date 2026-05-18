@@ -36,6 +36,7 @@ import { SprintDashboardScreen } from "@/screens/SprintDashboardScreen";
 import { TimeTrackingScreen } from "@/screens/TimeTrackingScreen";
 import { WorkflowScreen, type WorkflowId } from "@/screens/WorkflowScreen";
 import { useAiDebugStore } from "@/stores/aiDebugStore";
+import { useCommandStore } from "@/stores/command/store";
 import { useCredentialStatusStore } from "@/stores/credentialStatusStore";
 import { hydrateMeetingsStore } from "@/stores/meetings/listeners";
 import { attachCommandListeners, hydrateCommandStore } from "@/stores/command/listeners";
@@ -170,6 +171,9 @@ function AppInner() {
         enabled: prefs.aiDebugEnabled,
         dockMode: prefs.aiDebugDockMode,
       });
+      useCommandStore.getState().setStateBadgesEnabled(
+        prefs.commandStateBadgesEnabled,
+      );
     });
 
     // Boot the AI traffic listener. Idempotent — it'll no-op if

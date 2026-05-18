@@ -9,6 +9,7 @@ import {
     setAnthropicMaxOutputTokens,
     setDailyTokenBudget,
     setGeminiMaxOutputTokens,
+  setCommandStateBadgesEnabled,
     setMeetingsEmbeddingModel,
     setMeetingsSearchMinScore,
     setNotifyAgentStageComplete,
@@ -22,6 +23,7 @@ import { clearMeetingsEmbeddings } from "@/lib/tauri/meetings";
 import { setPreference } from "@/lib/preferences";
 import { setRuntimeOverloadPct } from "@/lib/workloadClassifier";
 import { useAiDebugStore } from "@/stores/aiDebugStore";
+import { useCommandStore } from "@/stores/command/store";
 import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -302,6 +304,12 @@ export function useAppPreferencesEditor() {
           break;
         case "geminiMaxOutputTokens":
           await setGeminiMaxOutputTokens(value as number);
+          break;
+        case "commandStateBadgesEnabled":
+          await setCommandStateBadgesEnabled(value as boolean);
+          // Mirror into the command store so the toggle takes
+          // effect on the field without waiting for a re-hydrate.
+          useCommandStore.setState({ stateBadgesEnabled: value as boolean });
           break;
       }
       setError(null);

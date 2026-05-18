@@ -156,6 +156,7 @@ const PREVIEW_UNIT: CommandUnit = {
   facing8: "S",
   isWandering: false,
   canWander: true,
+  spawnStartedAt: null,
   contextUsage: 0.45,
   createdAt: Date.now(),
   lastActiveAt: Date.now(),

@@ -40,12 +40,16 @@ import type {
   TransientAnimation,
 } from "@/lib/commandSprites";
 import {
+  FACING_VECTOR,
   initialSchedule as initialWanderSchedule,
+  pickFacing,
   planWanderMove,
   scheduleNextPick,
   easedPosition,
+  WANDER,
   type WanderSchedule,
 } from "@/lib/commandWander";
+import { computeSpawnVisuals, SPAWN_TOTAL_MS } from "@/lib/commandSpawn";
 import {
   commandArchiveSession,
   commandSaveGroomingProposal,
@@ -126,6 +130,11 @@ export interface CommandUnit {
   /** Whether this unit may wander at all. Derived from spriteId at
    *  launch (Sentinel Turret = false; all others = true). */
   canWander: boolean;
+  /** Wall-clock ms when the current spawn ceremony began. Non-null
+   *  while transient="spawning" is being animated by the dropship
+   *  choreography (spec §5.5). Cleared along with `transient` when
+   *  the ceremony completes. In-memory only — not persisted. */
+  spawnStartedAt: number | null;
   contextUsage: number;
   createdAt: number;
   lastActiveAt: number;
@@ -378,6 +387,31 @@ interface CommandState {
    *  in-flight moves, picks new destinations on schedule, and
    *  cancels wander when state isn't `idle`. */
   tickWander: (nowMs: number) => void;
+  /** Debug-only: set a unit's 8-direction facing immediately
+   *  (without playing a walk animation). */
+  debugSetFacing: (sessionId: string, facing: Facing) => void;
+  /** Debug-only: force the unit to walk in a specific direction.
+   *  Resets state to idle so the wander system honors the move,
+   *  writes an in-flight WanderInProgress, and lets `tickWander`
+   *  animate it as usual. */
+  debugWalk: (sessionId: string, facing: Facing) => void;
+  /** Debug-only: snap a unit back to its anchor and clear any
+   *  in-flight wander move. */
+  debugResetToAnchor: (sessionId: string) => void;
+  /** Debug-only: cancel any active wander immediately. The unit
+   *  stops where it stands. */
+  debugStopWander: (sessionId: string) => void;
+  /** Debug-only: drive a unit at a constant velocity (px/sec).
+   *  Used by the arrow-key walk hook for hold-to-walk control.
+   *  Pass (0, 0) to stop. Overrides the wander system while
+   *  non-zero. */
+  debugSetWalkVelocity: (sessionId: string, vx: number, vy: number) => void;
+  /** UI flag — whether the emoji state badge pops above each unit
+   *  on state transitions. Hydrated from the app preference
+   *  `commandStateBadgesEnabled` at boot; toggling the setting
+   *  mirrors here immediately. */
+  stateBadgesEnabled: boolean;
+  setStateBadgesEnabled: (value: boolean) => void;
   /** Append (or replace, if a proposal for the same ticket key
    *  already exists) a grooming proposal on the unit's queue. */
   upsertGroomingProposal: (
@@ -460,6 +494,35 @@ const CAN_WANDER_BY_SPRITE: Record<SpriteId, boolean> = {
  *  isWandering fields. Keyed by unit id; cleaned up on removal. */
 const wanderSchedules = new Map<string, WanderSchedule>();
 
+/** Per-unit constant-velocity walk (px/sec). Set by the arrow-key
+ *  hook on keydown, cleared on the last keyup. Overrides the
+ *  cosmetic wander system while present. In-memory only. */
+const walkVelocities = new Map<string, { vx: number; vy: number }>();
+
+/** Logical field dimensions. Mirrors the FIELD_W/FIELD_H constants
+ *  in MiniField — the TacticalField always renders at this logical
+ *  size and is scaled to fit by ResizeObserver. */
+const FIELD_W = 800;
+const FIELD_H = 420;
+/** Buffer from the field edge to the unit's center, in px — keeps
+ *  the full sprite visible (half-sprite worth of padding, with a
+ *  little extra for the selection ring). Roughly half of the field
+ *  SPRITE_SIZE (120) in UnitInstance. */
+const FIELD_PADDING = 60;
+
+function clampToField(x: number, y: number): { x: number; y: number } {
+  return {
+    x: Math.max(FIELD_PADDING, Math.min(FIELD_W - FIELD_PADDING, x)),
+    y: Math.max(FIELD_PADDING, Math.min(FIELD_H - FIELD_PADDING, y)),
+  };
+}
+
+/** Last `tickWander` timestamp — used to compute dt for the
+ *  velocity-driven walk. Set to null whenever no velocity walks
+ *  are active so the next velocity tick starts from a fresh
+ *  reference instead of catching up over an arbitrary gap. */
+let lastWanderTickMs: number | null = null;
+
 export const useCommandStore = create<CommandState>((set, get) => ({
   units: {},
   unitOrder: [],
@@ -472,7 +535,9 @@ export const useCommandStore = create<CommandState>((set, get) => ({
   roleSkills: {},
   skills: [],
   mcpServers: [],
+  stateBadgesEnabled: true,
 
+  setStateBadgesEnabled: (value) => set({ stateBadgesEnabled: value }),
   selectUnit: (id) => set({ selectedUnitId: id }),
   setTerrain: (id) => set({ terrain: isTerrainId(id) ? id : DEFAULT_TERRAIN }),
   setTileSize: (size) =>
@@ -527,6 +592,12 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         facing8: "S",
         isWandering: false,
         canWander: CAN_WANDER_BY_SPRITE[chosenSprite] ?? true,
+        // performance.now() (monotonic) so the value lines up with
+        // what tickWander and the TacticalField render math read.
+        // Don't use `now` — that's Date.now() (wall clock) for the
+        // createdAt/lastActiveAt fields, on a different clock.
+        spawnStartedAt:
+          typeof performance !== "undefined" ? performance.now() : 0,
         contextUsage: 0,
         createdAt: now,
         lastActiveAt: now,
@@ -917,8 +988,48 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       let changed = false;
       const next: Record<string, CommandUnit> = { ...s.units };
 
+      // Velocity-driven walks (arrow-key hold). Apply first and
+      // skip the cosmetic-wander logic for any unit under user
+      // control — the user is steering, the engine shouldn't
+      // fight them.
+      const dt =
+        lastWanderTickMs == null
+          ? 1 / 60
+          : Math.min(0.1, (nowMs - lastWanderTickMs) / 1000);
+      lastWanderTickMs = nowMs;
+      const userControlled = new Set<string>();
+      for (const [id, vel] of walkVelocities) {
+        const u = next[id] ?? s.units[id];
+        if (!u) continue;
+        userControlled.add(id);
+        const { x: newX, y: newY } = clampToField(
+          u.positionX + vel.vx * dt,
+          u.positionY + vel.vy * dt,
+        );
+        const facing = pickFacing(vel.vx, vel.vy) ?? u.facing8;
+        if (
+          u.positionX !== newX ||
+          u.positionY !== newY ||
+          u.facing8 !== facing ||
+          !u.isWandering
+        ) {
+          next[id] = {
+            ...u,
+            positionX: newX,
+            positionY: newY,
+            facing8: facing,
+            isWandering: true,
+          };
+          changed = true;
+        }
+        // Velocity walks override any in-flight cosmetic move.
+        const sched = wanderSchedules.get(id);
+        if (sched?.active) sched.active = null;
+      }
+
       for (const id of s.unitOrder) {
-        const u = s.units[id];
+        if (userControlled.has(id)) continue;
+        const u = next[id] ?? s.units[id];
         if (!u) continue;
         // Stationary units (canWander=false) never wander.
         // State must be idle, no active transient, and the unit
@@ -1015,7 +1126,150 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         if (!s.units[id]) wanderSchedules.delete(id);
       }
 
+      // Spawn-ceremony cleanup (spec §5.5). For each unit in the
+      // middle of a spawn, write the current unit-Y offset into
+      // positionY so renderers see the drop animation, and clear
+      // the transient when the ceremony finishes. The dropship
+      // overlay is rendered by TacticalField directly from the
+      // same elapsed-time computation.
+      for (const id of s.unitOrder) {
+        const cur = next[id] ?? s.units[id];
+        if (cur.transient !== "spawning" || cur.spawnStartedAt == null) continue;
+        const elapsed = nowMs - cur.spawnStartedAt;
+        if (elapsed >= SPAWN_TOTAL_MS) {
+          next[id] = {
+            ...cur,
+            transient: undefined,
+            spawnStartedAt: null,
+            positionX: cur.anchorX,
+            positionY: cur.anchorY,
+          };
+          changed = true;
+          continue;
+        }
+        const visuals = computeSpawnVisuals(elapsed);
+        const targetY = cur.anchorY + visuals.unitDy;
+        if (cur.positionX !== cur.anchorX || cur.positionY !== targetY) {
+          next[id] = { ...cur, positionX: cur.anchorX, positionY: targetY };
+          changed = true;
+        }
+      }
+
       return changed ? { units: next } : s;
+    }),
+
+  debugSetFacing: (sessionId, facing) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      return {
+        units: { ...s.units, [sessionId]: { ...u, facing8: facing } },
+      };
+    }),
+
+  debugWalk: (sessionId, facing) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const now =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      const v = FACING_VECTOR[facing];
+      const step = WANDER.moveDistMax;
+      const duration =
+        (WANDER.moveDurationMinMs + WANDER.moveDurationMaxMs) / 2;
+      const schedule = wanderSchedules.get(sessionId) ?? initialWanderSchedule(now);
+      schedule.active = {
+        startedAtMs: now,
+        durationMs: duration,
+        fromX: u.positionX,
+        fromY: u.positionY,
+        toX: u.positionX + v.dx * step,
+        toY: u.positionY + v.dy * step,
+        facing,
+      };
+      wanderSchedules.set(sessionId, schedule);
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: {
+            ...u,
+            // Force idle so the wander tick honors the in-flight move.
+            state: "idle",
+            transient: undefined,
+            facing8: facing,
+            isWandering: true,
+          },
+        },
+      };
+    }),
+
+  debugResetToAnchor: (sessionId) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const schedule = wanderSchedules.get(sessionId);
+      if (schedule) schedule.active = null;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: {
+            ...u,
+            positionX: u.anchorX,
+            positionY: u.anchorY,
+            isWandering: false,
+          },
+        },
+      };
+    }),
+
+  debugStopWander: (sessionId) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const schedule = wanderSchedules.get(sessionId);
+      if (schedule) schedule.active = null;
+      if (!u.isWandering) return s;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: { ...u, isWandering: false },
+        },
+      };
+    }),
+
+  debugSetWalkVelocity: (sessionId, vx, vy) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      if (vx === 0 && vy === 0) {
+        if (!walkVelocities.has(sessionId)) {
+          // Already idle and nothing to clean up.
+          return s;
+        }
+        walkVelocities.delete(sessionId);
+        if (walkVelocities.size === 0) lastWanderTickMs = null;
+        if (!u.isWandering) return s;
+        return {
+          units: {
+            ...s.units,
+            [sessionId]: { ...u, isWandering: false },
+          },
+        };
+      }
+      walkVelocities.set(sessionId, { vx, vy });
+      // Force idle so tickWander honors the velocity (the same
+      // condition we use for debugWalk's discrete-step variant).
+      // Also clear any cosmetic wander schedule that might be
+      // mid-flight.
+      const sched = wanderSchedules.get(sessionId);
+      if (sched) sched.active = null;
+      if (u.state === "idle" && !u.transient) return s;
+      return {
+        units: {
+          ...s.units,
+          [sessionId]: { ...u, state: "idle", transient: undefined },
+        },
+      };
     }),
 
   addSubagent: ({ parentId, sessionId, name, spriteId }) =>
@@ -1046,6 +1300,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         isWandering: false,
         canWander:
           CAN_WANDER_BY_SPRITE[spriteId ?? "field-tech"] ?? true,
+        spawnStartedAt:
+          typeof performance !== "undefined" ? performance.now() : 0,
         contextUsage: 0,
         createdAt: now,
         lastActiveAt: now,
@@ -1191,6 +1447,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
           facing8: parseFacing8(s.facing),
           isWandering: false,
           canWander: CAN_WANDER_BY_SPRITE[sprite] ?? true,
+          spawnStartedAt: null,
           contextUsage: 0,
           createdAt: s.createdAt,
           lastActiveAt: s.lastActiveAt,
@@ -1252,6 +1509,8 @@ const VALID_SPRITES: ReadonlySet<SpriteId> = new Set([
   "marine",
   "engineer",
   "field-tech",
+  "light-walker",
+  "siege-walker",
 ]);
 function parseSprite(raw: string): SpriteId {
   return VALID_SPRITES.has(raw as SpriteId) ? (raw as SpriteId) : "marine";

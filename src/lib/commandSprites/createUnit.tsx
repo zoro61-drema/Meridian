@@ -45,6 +45,12 @@ export function createUnit({
         ? "walking"
         : STATE_TO_ANIM[state];
     const isTransient = Boolean(transient);
+    // These states play once and freeze on the last frame instead
+    // of looping — used for persistent indicators where a terminal
+    // pose reads better than a continuous loop. No callback fires
+    // when they settle; the unit just holds until state changes.
+    const FREEZE_LAST: ReadonlySet<typeof state> = new Set(["error", "thinking"]);
+    const oneShot = isTransient || FREEZE_LAST.has(state);
 
     // Manifest lookup before hooks so the hook receives a stable
     // count. If the entry is missing we still want to fail loudly,
@@ -55,7 +61,7 @@ export function createUnit({
     const frame = useSpriteAnimation({
       frameCount: manifestEntry ?? 1,
       fps: FPS,
-      loop: !isTransient, // transients play once; persistent + walk loop
+      loop: !oneShot, // transients + error play once; others loop
       onComplete: isTransient ? onTransientComplete : undefined,
       key: `${anim}:${dir}`,
     });
@@ -69,9 +75,17 @@ export function createUnit({
       );
     }
 
+    // Clamp against the current frame count. When `anim` or `dir`
+    // changes, useSpriteAnimation's setFrame(0) is queued in an
+    // effect — for one render it still returns the previous frame
+    // index, which may exceed the new animation's frame count and
+    // point at a nonexistent file. Modulo here keeps the lookup
+    // valid through the transition.
+    const safeFrame = frame % manifestEntry;
+
     const url = useMemo(
-      () => getFrameUrl(component, anim, dir, frame),
-      [anim, dir, frame],
+      () => getFrameUrl(component, anim, dir, safeFrame),
+      [anim, dir, safeFrame],
     );
 
     return (
@@ -80,7 +94,19 @@ export function createUnit({
         alt={`${displayName} ${anim} facing ${facing}`}
         width={size}
         height={size}
-        style={{ imageRendering: "pixelated", display: "block" }}
+        // `maxWidth: none` overrides Tailwind preflight's
+        // `img { max-width: 100% }` rule — without it, an img
+        // placed inside an overflow-hidden container smaller than
+        // `size` would silently scale down to fit and our card
+        // thumbnail zoom wouldn't take effect.
+        style={{
+          imageRendering: "pixelated",
+          display: "block",
+          maxWidth: "none",
+          maxHeight: "none",
+          width: size,
+          height: size,
+        }}
         draggable={false}
       />
     );

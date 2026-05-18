@@ -47,7 +47,7 @@ export function AgentCardGrid({ onExpandField }: AgentCardGridProps) {
 
   return (
     <div
-      className="grid h-full gap-2 overflow-y-auto p-2"
+      className="grid h-full content-start gap-2 overflow-y-auto p-2"
       style={{
         gridTemplateColumns: `repeat(auto-fill, minmax(${minWidthPx}px, 1fr))`,
       }}

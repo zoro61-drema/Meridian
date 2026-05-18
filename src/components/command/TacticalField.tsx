@@ -6,11 +6,14 @@
 // don't paint an opaque background, so Meridian's global space
 // theme shows through outside the platform polygon.
 
-import { FIELD_ACCENTS } from "@/lib/commandSprites";
+import { FIELD_ACCENTS, SpawnDropship } from "@/lib/commandSprites";
+import { computeSpawnVisuals } from "@/lib/commandSpawn";
 import { getTerrain } from "@/lib/commandTerrains";
 import { useCommandStore } from "@/stores/command/store";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { UnitInstance } from "./UnitInstance";
+
+const DROPSHIP_DISPLAY_SIZE = 108;
 
 interface TacticalFieldProps {
   /** When true, suppresses per-unit name labels and the hover ring
@@ -44,6 +47,29 @@ export function TacticalField({ compact = false }: TacticalFieldProps = {}) {
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
   }, [tickWander]);
+
+  // Spawn-ceremony forced re-render. During the dropship's descent
+  // + hover phases the unit's stored position doesn't change (it
+  // stays at anchor), so the store-driven re-render path never
+  // fires and the dropship overlay — computed from `performance.now()`
+  // at render time — would be frozen at its initial frame. This
+  // local rAF kicks a tick counter every frame while any unit has
+  // an active spawn ceremony so the dropship animates.
+  const anySpawning = unitOrder.some((id) => {
+    const u = units[id];
+    return u?.transient === "spawning" && u.spawnStartedAt != null;
+  });
+  const [, setSpawnTick] = useState(0);
+  useEffect(() => {
+    if (!anySpawning) return;
+    let rafId = 0;
+    const loop = () => {
+      setSpawnTick((t) => (t + 1) % 1_000_000);
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [anySpawning]);
 
   const terrainId = useCommandStore((s) => s.terrain);
   const terrain = getTerrain(terrainId);
@@ -210,7 +236,41 @@ export function TacticalField({ compact = false }: TacticalFieldProps = {}) {
       {unitOrder.map((id) => {
         const u = units[id];
         if (!u) return null;
+        // During the descent + hover phases of the spawn ceremony
+        // (spec §5.5) the unit is hidden inside the dropship; we
+        // skip rendering its sprite until the drop phase begins.
+        if (u.transient === "spawning" && u.spawnStartedAt != null) {
+          const visuals = computeSpawnVisuals(
+            performance.now() - u.spawnStartedAt,
+          );
+          if (!visuals.unitVisible) return null;
+        }
         return <UnitInstance key={id} unit={u} compact={compact} />;
+      })}
+      {/* Spawn-ceremony dropships. Rendered as an overlay layer
+          on top of unit sprites so a dropship that's lower in the
+          frame still covers a unit's head. */}
+      {unitOrder.map((id) => {
+        const u = units[id];
+        if (!u || u.transient !== "spawning" || u.spawnStartedAt == null) {
+          return null;
+        }
+        const visuals = computeSpawnVisuals(
+          performance.now() - u.spawnStartedAt,
+        );
+        if (!visuals.dropshipVisible) return null;
+        return (
+          <div
+            key={`dropship-${id}`}
+            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: u.anchorX,
+              top: u.anchorY + visuals.dropshipDy,
+            }}
+          >
+            <SpawnDropship size={DROPSHIP_DISPLAY_SIZE} />
+          </div>
+        );
       })}
     </div>
   );

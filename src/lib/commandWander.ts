@@ -7,11 +7,13 @@ import type { Facing } from "@/lib/commandSprites";
 
 /** Inputs the engine treats as constants. Tune here, not at call sites. */
 export const WANDER = {
-  /** Radius around anchor a unit may drift to. */
-  anchorRadius: 30,
+  /** Radius around anchor a unit may drift to. Scaled with the
+   *  step distance so candidates have room without hitting the
+   *  anchor-clamp. */
+  anchorRadius: 120,
   /** Per-step move distance range (px). */
-  moveDistMin: 5,
-  moveDistMax: 15,
+  moveDistMin: 20,
+  moveDistMax: 60,
   /** Per-step move duration range (ms). */
   moveDurationMinMs: 2000,
   moveDurationMaxMs: 3000,
@@ -25,6 +27,22 @@ export const WANDER = {
   /** Max attempts to find a non-colliding candidate before giving up. */
   maxAttempts: 8,
 } as const;
+
+
+/** Unit-length screen-space vectors for each 8-compass facing.
+ *  Useful when a caller (e.g. the Debug tab) wants to displace a
+ *  unit in a specific direction without doing trig at the call
+ *  site. Note `+y` is south in screen coords. */
+export const FACING_VECTOR: Record<Facing, { dx: number; dy: number }> = {
+  N: { dx: 0, dy: -1 },
+  NE: { dx: 0.7071, dy: -0.7071 },
+  E: { dx: 1, dy: 0 },
+  SE: { dx: 0.7071, dy: 0.7071 },
+  S: { dx: 0, dy: 1 },
+  SW: { dx: -0.7071, dy: 0.7071 },
+  W: { dx: -1, dy: 0 },
+  NW: { dx: -0.7071, dy: -0.7071 },
+};
 
 export interface WanderInProgress {
   /** Wall-clock ms when the move started. */

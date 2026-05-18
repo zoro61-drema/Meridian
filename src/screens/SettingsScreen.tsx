@@ -59,6 +59,7 @@ import {
 import { PrTaskFiltersSection } from "./settings/pr-task-filters";
 import { PrTemplateSection } from "./settings/pr-template";
 import { ThemeSection } from "./settings/theme";
+import { CommandUiSection } from "./settings/command";
 import { TimeTrackingSection } from "./settings/time-tracking";
 
 interface SettingsScreenProps {
@@ -319,6 +320,7 @@ export function SettingsScreen({ onClose, onNavigate }: SettingsScreenProps) {
                   Appearance
                 </h2>
                 <ThemeSection />
+                <CommandUiSection />
               </section>
 
               <section

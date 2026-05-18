@@ -1,6 +1,6 @@
 import { createUnit } from "./createUnit";
 
 export const FieldTech = createUnit({
-  displayName: "Field Tech",
+  displayName: "Medic",
   component: "FieldTech",
 });

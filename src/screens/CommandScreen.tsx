@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 
 import { APP_HEADER_TITLE, WorkflowPanelHeader } from "@/components/appHeaderLayout";
 import { AgentCardGrid } from "@/components/command/AgentCardGrid";
+import { useArrowKeyWalk } from "@/components/command/useArrowKeyWalk";
 import { ArchiveDrawer } from "@/components/command/ArchiveDrawer";
 import { ChatPanelResizer } from "@/components/command/ChatPanelResizer";
 import { CommanderSettingsButton } from "@/components/command/CommanderSettings";
@@ -101,6 +102,11 @@ interface CommandScreenProps {
 }
 
 export function CommandScreen({ onBack }: CommandScreenProps) {
+  // Arrow-key walk control for the selected unit. Mounted at the
+  // screen level so it works regardless of which inner view
+  // (mini-field grid vs expanded TacticalField) is currently up.
+  useArrowKeyWalk();
+
   const units = useCommandStore((s) => s.units);
   const unitList = Object.values(units);
   const total = unitList.length;

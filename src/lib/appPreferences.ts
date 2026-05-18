@@ -24,6 +24,7 @@ const KEY = {
   meetingsSearchMinScore: "meetings_search_min_score",
   anthropicMaxOutputTokens: "anthropic_max_output_tokens",
   geminiMaxOutputTokens: "gemini_max_output_tokens",
+  commandStateBadgesEnabled: "command_state_badges_enabled",
 } as const;
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -80,6 +81,10 @@ export const APP_PREFERENCE_DEFAULTS = {
    *  and overriding it produces confusing mid-response truncation. */
   anthropicMaxOutputTokens: 32768,
   geminiMaxOutputTokens: 32768,
+  /** Show the emoji bubble above each command unit when its state
+   *  changes. Useful at a glance; some users prefer the quieter
+   *  read of just the animation. */
+  commandStateBadgesEnabled: true,
 } as const;
 
 export type AiDebugDockMode = "bottom" | "right" | "left" | "window" | "hidden";
@@ -97,6 +102,7 @@ export type AppPreferences = {
   meetingsSearchMinScore: number;
   anthropicMaxOutputTokens: number;
   geminiMaxOutputTokens: number;
+  commandStateBadgesEnabled: boolean;
 };
 
 // ── Parsing helpers ───────────────────────────────────────────────────────────
@@ -194,6 +200,10 @@ export async function getAppPreferences(): Promise<AppPreferences> {
       prefs[KEY.geminiMaxOutputTokens],
       APP_PREFERENCE_DEFAULTS.geminiMaxOutputTokens,
     ),
+    commandStateBadgesEnabled: parseBool(
+      prefs[KEY.commandStateBadgesEnabled],
+      APP_PREFERENCE_DEFAULTS.commandStateBadgesEnabled,
+    ),
   };
 }
 
@@ -268,4 +278,7 @@ export async function setAnthropicMaxOutputTokens(value: number): Promise<void> 
 }
 export async function setGeminiMaxOutputTokens(value: number): Promise<void> {
   await setPreference(KEY.geminiMaxOutputTokens, String(value));
+}
+export async function setCommandStateBadgesEnabled(value: boolean): Promise<void> {
+  await setPreference(KEY.commandStateBadgesEnabled, value ? "true" : "false");
 }

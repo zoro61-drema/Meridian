@@ -133,14 +133,17 @@ describe("planWanderMove", () => {
 
   it("avoids placing the destination inside another unit's separation radius", () => {
     const rng = seededRng(123);
-    // Surround the unit with neighbours on a tight ring so any move
-    // direction would collide. Engine should give up and return null.
+    // Surround the unit with neighbours on a ring sized so any move
+    // direction within [moveDistMin, moveDistMax] would collide with
+    // the nearest other (worst-case angular gap on a 16-point ring is
+    // 11.25°). Engine should give up and return null.
     const others = [];
+    const ringRadius = 40;
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2;
       others.push({
-        x: Math.cos(a) * 10,
-        y: Math.sin(a) * 10,
+        x: Math.cos(a) * ringRadius,
+        y: Math.sin(a) * ringRadius,
       });
     }
     const move = planWanderMove({

@@ -99,7 +99,9 @@ const MODEL_ENV_VAR: Record<BackendKind, string> = {
 const SPRITE_OPTIONS: Array<{ id: SpriteId; label: string }> = [
   { id: "marine", label: "Marine" },
   { id: "engineer", label: "Engineer" },
-  { id: "field-tech", label: "Field Tech" },
+  { id: "field-tech", label: "Medic" },
+  { id: "light-walker", label: "Light Walker" },
+  { id: "siege-walker", label: "Siege Walker" },
 ];
 
 interface Props {
@@ -432,13 +434,13 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                 Sprite
               </Label>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {SPRITE_OPTIONS.map((s) => (
                   <button
                     key={s.id}
                     type="button"
                     onClick={() => setSpriteId(s.id)}
-                    className={`flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                    className={`flex-1 basis-[calc(50%-3px)] rounded-md border px-2 py-1.5 text-xs transition-colors ${
                       spriteId === s.id
                         ? "border-amber-500/60 bg-amber-900/20 text-amber-100"
                         : "border-white/10 bg-black/30 hover:bg-white/5"

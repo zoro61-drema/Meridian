@@ -17,6 +17,8 @@
 
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import { SPAWN_TOTAL_MS } from "@/lib/commandSpawn";
+
 import {
   COMMAND_A2A_EVENT_NAME,
   COMMAND_EVENT_NAME,
@@ -474,13 +476,19 @@ function findInputOutput(u: Record<string, unknown>): {
 }
 
 
-/** Clear the per-unit spawning transient ~1s after launch so the
- *  sprite settles into its idle animation. Called from the launch
- *  flow because we know exactly when the unit was added. */
+/** Safety net to clear the per-unit spawning transient after the
+ *  dropship ceremony's total runtime, in case the user navigated
+ *  away from the Command screen before tickWander could clear it
+ *  itself (tickWander only runs while TacticalField is mounted).
+ *  When the user IS on-screen, tickWander finishes the ceremony
+ *  at exactly SPAWN_TOTAL_MS and this timeout fires harmlessly
+ *  against an already-cleared transient.
+ *  The 200ms buffer past SPAWN_TOTAL_MS avoids racing tickWander
+ *  on the very last frame. */
 export function scheduleSpawnSettle(sessionId: string) {
   setTimeout(() => {
     useCommandStore.getState().fireTransient(sessionId, undefined);
-  }, 1000);
+  }, SPAWN_TOTAL_MS + 200);
 }
 
 /** Load persisted sessions + transcripts from SQLite into the

@@ -40,7 +40,7 @@ const UNITS: Array<{
 }> = [
   { name: "Marine", Component: Marine },
   { name: "Engineer", Component: Engineer },
-  { name: "Field Tech", Component: FieldTech },
+  { name: "Medic", Component: FieldTech },
   { name: "Light Walker", Component: LightWalker },
   { name: "Siege Walker", Component: SiegeWalker },
 ];

@@ -15,7 +15,11 @@ import { AlertCircle, Mail, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { AgentState, TransientAnimation } from "@/lib/commandSprites";
+import type {
+  AgentState,
+  Facing,
+  TransientAnimation,
+} from "@/lib/commandSprites";
 import type { A2AMessage, CommandEventRaw } from "@/lib/tauri/command";
 import type { CommandUnit } from "@/stores/command/store";
 import { useCommandStore } from "@/stores/command/store";
@@ -31,11 +35,22 @@ const STATES: AgentState[] = [
 ];
 const TRANSIENTS: TransientAnimation[] = ["spawning", "deploying"];
 
+// 8-compass picker arranged as a 3×3 grid (center is empty).
+const FACING_GRID: Array<Facing | null> = [
+  "NW", "N",  "NE",
+  "W",  null, "E",
+  "SW", "S",  "SE",
+];
+
 export function DebugTab({ unit }: { unit: CommandUnit }) {
   const setUnitState = useCommandStore((s) => s.setUnitState);
   const fireTransient = useCommandStore((s) => s.fireTransient);
   const receiveA2AMessage = useCommandStore((s) => s.receiveA2AMessage);
   const setPendingPermission = useCommandStore((s) => s.setPendingPermission);
+  const debugSetFacing = useCommandStore((s) => s.debugSetFacing);
+  const debugWalk = useCommandStore((s) => s.debugWalk);
+  const debugResetToAnchor = useCommandStore((s) => s.debugResetToAnchor);
+  const debugStopWander = useCommandStore((s) => s.debugStopWander);
   const units = useCommandStore((s) => s.units);
 
   const otherUnits = useMemo(
@@ -75,6 +90,79 @@ export function DebugTab({ unit }: { unit: CommandUnit }) {
           <Chip onClick={() => fireTransient(unit.id, undefined)} tone="ghost">
             clear transient
           </Chip>
+        </div>
+      </Section>
+
+      <Section title="Movement">
+        <div className="text-[10px] text-muted-foreground">
+          Set facing (click — instant), or walk in a direction (click & hold
+          a Walk button) using the wander animation. Position + facing get
+          overwritten by the cosmetic wander system when the unit returns
+          to idle on a real ACP turn.
+        </div>
+        <div className="mt-2 flex flex-wrap gap-4">
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+              Face
+            </div>
+            <div className="grid w-fit grid-cols-3 gap-1">
+              {FACING_GRID.map((f, i) =>
+                f === null ? (
+                  <div key={`empty-${i}`} className="h-7 w-12" />
+                ) : (
+                  <Chip
+                    key={f}
+                    active={unit.facing8 === f}
+                    onClick={() => debugSetFacing(unit.id, f)}
+                  >
+                    {f}
+                  </Chip>
+                ),
+              )}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+              Walk
+            </div>
+            <div className="grid w-fit grid-cols-3 gap-1">
+              {FACING_GRID.map((f, i) =>
+                f === null ? (
+                  <div key={`walk-empty-${i}`} className="h-7 w-12" />
+                ) : (
+                  <Chip
+                    key={`walk-${f}`}
+                    onClick={() => debugWalk(unit.id, f)}
+                    tone="amber"
+                  >
+                    {f}
+                  </Chip>
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          <Chip onClick={() => debugStopWander(unit.id)} tone="ghost">
+            stop walking
+          </Chip>
+          <Chip onClick={() => debugResetToAnchor(unit.id)} tone="ghost">
+            reset to anchor
+          </Chip>
+        </div>
+        <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 text-[10px] text-white/60">
+          <span>facing:</span>
+          <span className="font-mono">{unit.facing8}</span>
+          <span>position:</span>
+          <span className="font-mono">
+            ({unit.positionX.toFixed(1)}, {unit.positionY.toFixed(1)})
+          </span>
+          <span>anchor:</span>
+          <span className="font-mono">
+            ({unit.anchorX.toFixed(1)}, {unit.anchorY.toFixed(1)})
+          </span>
+          <span>wandering:</span>
+          <span className="font-mono">{String(unit.isWandering)}</span>
         </div>
       </Section>
 

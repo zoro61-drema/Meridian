@@ -70,7 +70,7 @@ export async function enableClaudeCodeDelegation(): Promise<string> {
  * `gemini`, or `copilot login`).
  */
 export async function setupAiCli(
-  provider: "anthropic" | "google" | "copilot",
+  provider: "anthropic" | "google" | "copilot" | "codex",
 ): Promise<void> {
   return invoke<void>("setup_ai_cli", { provider });
 }
@@ -257,4 +257,26 @@ export async function testBitbucketStored(): Promise<string> {
 /** Run a full diagnostic sweep of every JIRA endpoint, returning a plain-text report. */
 export async function debugJiraEndpoints(): Promise<string> {
   return invoke<string>("debug_jira_endpoints");
+}
+
+
+// ── Codex CLI (OpenAI / ChatGPT) ─────────────────────────────────────────────
+
+/** Detect the locally-installed OpenAI Codex CLI. Returns the absolute
+ *  path on success; throws with an install hint when the CLI isn't on
+ *  PATH. Codex is CLI-delegation-only — the user signs in once via
+ *  `codex login` against their ChatGPT account. */
+export async function detectCodexCli(): Promise<string> {
+  return invoke<string>("detect_codex_cli");
+}
+
+/** Switch the active Codex auth mode to CLI delegation. Verifies the
+ *  CLI is on PATH and writes `codex_auth_method=codex_cli`. */
+export async function enableCodexCliDelegation(): Promise<string> {
+  return invoke<string>("enable_codex_cli_delegation");
+}
+
+/** Re-detect the stored Codex CLI without re-saving the auth pref. */
+export async function testCodexStored(): Promise<string> {
+  return invoke<string>("test_codex_stored");
 }

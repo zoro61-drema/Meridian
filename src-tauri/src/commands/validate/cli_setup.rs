@@ -38,6 +38,7 @@ pub async fn setup_ai_cli(provider: String) -> Result<(), String> {
         "anthropic" | "claude" => CLAUDE_CODE_SETUP_SH,
         "google" | "gemini" => GEMINI_CLI_SETUP_SH,
         "copilot" | "github" => COPILOT_CLI_SETUP_SH,
+        "codex" | "openai" => CODEX_CLI_SETUP_SH,
         other => return Err(format!("Unknown provider for CLI setup: {other}")),
     };
 
@@ -240,4 +241,50 @@ echo "After signing in, close this terminal, then click 'Re-detect CLI'"
 echo "back in Meridian → Settings → GitHub Copilot."
 echo ""
 copilot login
+"#;
+
+const CODEX_CLI_SETUP_SH: &str = r#"#!/bin/sh
+clear
+cat <<'BANNER'
+╭───────────────────────────────────────────────────────────╮
+│ Meridian — OpenAI Codex CLI setup                         │
+╰───────────────────────────────────────────────────────────╯
+
+BANNER
+
+if command -v codex >/dev/null 2>&1; then
+  echo "✓ Codex CLI already installed at $(command -v codex)"
+else
+  echo "Codex CLI is not installed."
+  echo ""
+  printf "Install via 'npm install -g @openai/codex'? [y/N] "
+  read -r ans
+  case "$ans" in
+    y|Y|yes|YES)
+      echo ""
+      npm install -g @openai/codex
+      if [ $? -ne 0 ]; then
+        echo ""
+        echo "Install failed. Press Enter to close."
+        read -r _
+        exit 1
+      fi
+      ;;
+    *)
+      echo "Aborted. Press Enter to close."
+      read -r _
+      exit 1
+      ;;
+  esac
+fi
+
+echo ""
+echo "Launching 'codex login' to sign in with your ChatGPT account."
+echo "(A browser window will open for OAuth.) Your ChatGPT Plus/Pro/Team"
+echo "subscription powers Codex from that account."
+echo ""
+echo "After signing in, close this terminal, then click 'Re-detect CLI'"
+echo "back in Meridian → Settings → Codex."
+echo ""
+codex login
 "#;

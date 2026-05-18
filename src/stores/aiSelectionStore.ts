@@ -34,7 +34,7 @@ import {
 } from "@/lib/tauri/providers";
 import { create } from "zustand";
 
-export type AiProvider = "claude" | "gemini" | "local" | "copilot";
+export type AiProvider = "claude" | "gemini" | "local" | "copilot" | "codex";
 
 export type PanelId =
   | "pr_review"
@@ -61,9 +61,16 @@ export const PROVIDER_LABELS: Record<AiProvider, string> = {
   gemini: "Gemini",
   local: "Local LLM",
   copilot: "GitHub Copilot",
+  codex: "Codex (ChatGPT)",
 };
 
-export const ALL_PROVIDERS: AiProvider[] = ["claude", "gemini", "local", "copilot"];
+export const ALL_PROVIDERS: AiProvider[] = [
+  "claude",
+  "gemini",
+  "local",
+  "copilot",
+  "codex",
+];
 
 const PROVIDER_VALUES = new Set<string>(ALL_PROVIDERS);
 
@@ -211,6 +218,7 @@ export const useAiSelectionStore = create<State & Actions>((set, get) => ({
         gemini: prefs.gemini_model,
         local: prefs.local_llm_model,
         copilot: prefs.copilot_model,
+        codex: prefs.codex_model,
       };
 
       // Legacy `ai_provider` was either "auto" or one of the provider ids.

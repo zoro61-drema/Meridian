@@ -9,6 +9,10 @@ export interface CredentialStatus {
   /** True when the user has enabled GitHub Copilot CLI delegation
    *  (`copilot_auth_method=copilot_cli`). Copilot has no API-key path. */
   copilotCli: boolean;
+  /** True when the user has enabled Codex CLI delegation
+   *  (`codex_auth_method=codex_cli`). Codex is CLI-only — used by
+   *  the Commander panel's `codexAcp` backend. */
+  codexCli: boolean;
   localLlmUrl: boolean;
   jiraBaseUrl: boolean;
   jiraEmail: boolean;
@@ -39,6 +43,10 @@ export function anthropicComplete(s: CredentialStatus) {
 
 export function copilotComplete(s: CredentialStatus) {
   return s.copilotCli;
+}
+
+export function codexComplete(s: CredentialStatus) {
+  return s.codexCli;
 }
 
 /** True when at least one AI provider (Anthropic, Gemini, Copilot, or local LLM) is configured. */
@@ -83,6 +91,7 @@ const EMPTY_STATUS: CredentialStatus = {
   anthropicApiKey: false,
   geminiApiKey: false,
   copilotCli: false,
+  codexCli: false,
   localLlmUrl: false,
   jiraBaseUrl: false,
   jiraEmail: false,

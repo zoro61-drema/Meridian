@@ -6,7 +6,7 @@
 
 > ⚠️ **Work in progress — expect rough edges.** Meridian is under active development as a personal tool. Workflows, settings, prompts, and storage formats are still in flux; features may change shape, regress, or break between commits without notice. There's no stable release branch yet — `main` is the only branch and it's where day-to-day iteration happens. Use at your own risk and pin to a known-good commit if you need stability.
 
-A personal productivity desktop application for a senior engineer and scrum master. Meridian combines AI-assisted PR review and ticket grooming with engineering leadership tooling — sprint dashboard, retrospectives, multi-sprint trends, workload balancing, meeting transcription, and cross-meeting search — all drawing from JIRA and Bitbucket as the single source of truth.
+A personal productivity desktop application for a senior engineer and scrum master. Meridian combines AI-assisted PR review and ticket grooming with engineering leadership tooling — sprint dashboard, retrospectives, multi-sprint trends, workload balancing, meeting transcription, and cross-meeting search — all drawing from JIRA and Bitbucket as the single source of truth. A separate **Commander** panel runs long-lived ACP-protocol agents (Claude / Gemini / Codex / Qwen) for autonomous workflows like bug-hunting, PR-comment addressing, and queue-based ticket grooming.
 
 ---
 
@@ -18,8 +18,10 @@ A personal productivity desktop application for a senior engineer and scrum mast
 | Frontend | React 18 + TypeScript, Zustand for state, Recharts for charts |
 | UI components | [shadcn/ui](https://ui.shadcn.com) + Tailwind CSS |
 | AI orchestration | TypeScript sidecar (Node) running [LangGraph.js](https://langchain-ai.github.io/langgraphjs/) state machines + [LangChain.js](https://js.langchain.com/) provider adapters |
-| LLM providers | Claude (Anthropic), Gemini (Google), local Ollama |
-| Auth modes | API keys, *or* delegate to user-installed CLIs (`claude -p`, `gemini -p`) — the CLI handles its own auth and Meridian never sees credentials |
+| LLM providers | Claude (Anthropic), Gemini (Google), GitHub Copilot, OpenAI Codex (ChatGPT), local Ollama |
+| Auth modes | API keys, *or* delegate to user-installed CLIs (`claude -p`, `gemini -p`, `copilot -p`, `codex exec`) — the CLI handles its own auth and Meridian never sees credentials |
+| Model catalog | Per-provider model lists pulled from [models.dev](https://models.dev/api.json) (same source-of-truth `opencode` uses), cached locally with a 24h TTL, with user-added custom IDs merged on top |
+| Commander agents | Long-lived [ACP](https://agentclientprotocol.com) (Agent Client Protocol) wrappers — `@agentclientprotocol/claude-agent-acp`, `gemini --acp`, `@zed-industries/codex-acp`, `qwen --acp` — supervised by Rust with a built-in MCP server for agent-to-agent messaging |
 | Speech-to-text | Local Whisper via `whisper-rs` (no audio leaves the machine), with `pyannote`-compatible speaker diarization |
 | Search | SQLite FTS5 + Ollama-backed semantic embeddings for cross-meeting RAG |
 | Data sources | JIRA REST API, Bitbucket REST API |
@@ -52,6 +54,19 @@ Two persistent knowledge bases the agents consult on every relevant run:
 - **Review Standards** — team-specific review criteria for the PR Review and PR Review Chat agents.
 
 Skills are plain editable text under Settings → Agent Skills.
+
+#### Commander
+A tactical-field UI that runs long-lived ACP-protocol agents in their own worktrees, with persistent transcripts, an MCP server for agent-to-agent messaging, and a pixel-art unit overlay. Each unit is one autonomous role:
+
+- **Implementer** — enters Claude Code's planning mode before touching code; never modifies without a confirmed plan.
+- **Ticket Groomer** — batch-grooms a sprint (or a manual ticket list) by calling `get_next_ticket` MCP tool repeatedly; each per-ticket recommendation lands in the Tickets tab for review.
+- **Bug Hunter** — surveys a named feature/area and files structured `submit_bug_report` calls; reports land in the Bugs tab with a "Copy as JIRA" / "Open JIRA" helper for promoting to tickets.
+- **Address PR Tasks** — picks up review comments on assigned PRs, addresses them locally (never pushes), and submits a per-comment summary + diff to the My PRs tab.
+- **PR Auto-Review** — autonomously reviews assigned PRs end-to-end across the same five lenses as the regular PR Review workflow, files per-finding entries via `submit_pr_review_finding`, and finalises each PR with `submit_pr_review_complete` (recommendation + executive summary). Auto-starts on launch.
+- **PR Reviewer** — interactive variant; the user drives the review one PR at a time.
+- **Custom** — type your own system prompt.
+
+Each launch picks a backend (Claude / Gemini / Codex / Qwen), a model from a dropdown sourced from the models.dev catalog, an optional MCP server set (Serena, codesight, context7, …), and a project directory. Units run as siblings of the base repo, never inside it.
 
 ---
 
@@ -122,13 +137,30 @@ Six CSS-variable-driven accent colours: slate, blue, violet, green, orange, rose
 ### AI Plumbing
 
 #### Per-Panel Provider Selection
-There is **no fixed fallback chain**. Each AI workflow has its own provider/model picker in the header. All supported providers (Claude, Gemini, Ollama) work for every workflow.
+There is **no fixed fallback chain**. Each AI workflow has its own provider/model picker in the header. All supported providers (Claude, Gemini, GitHub Copilot, OpenAI Codex, local Ollama) work for every workflow — pick one per panel, no automatic substitution.
 
-#### CLI Delegation Auth (Anthropic + Gemini)
-Meridian's preferred auth path is to delegate to the user's locally-installed CLI: `claude -p` for Anthropic, `gemini -p` for Gemini. The CLI handles its own auth (Claude.ai Pro/Max subscription, free Gemini Code Assist tier, or each CLI's own API key) and Meridian never sees credentials — it just spawns the binary per call and parses the streamed/buffered response. This is the sanctioned headless-mode pattern for each tool. API keys (`sk-ant-api…`, `AIza…`) remain as a distribution-safe fallback for users without the CLIs installed.
+#### CLI Delegation Auth
+Meridian's preferred auth path for cloud providers is to delegate to the user's locally-installed CLI:
+
+| Provider | CLI invocation | Sign-in command |
+|---|---|---|
+| Anthropic Claude | `claude -p` | `claude /login` (Pro/Max subscription or API key) |
+| Google Gemini | `gemini -p` | `gemini` (Google account → free Gemini Code Assist tier, or API key) |
+| GitHub Copilot | `copilot -p` | `copilot login` (GitHub account → your Copilot plan) |
+| OpenAI Codex (ChatGPT) | `codex exec --json --yolo` | `codex login` (ChatGPT Plus/Pro/Team account) |
+
+The CLI handles its own auth in every case and Meridian never sees credentials — it just spawns the binary per call and parses the streamed/buffered response. API keys (`sk-ant-api…`, `AIza…`) remain as a distribution-safe fallback for Anthropic + Gemini; Copilot and Codex are CLI-delegation-only because no public API path for third-party clients exists.
+
+> **Heads-up on Anthropic billing (June 15, 2026):** Agent SDK / `claude -p` usage on Pro/Max subscription plans draws from a **separate $100/month metered pool** (Max 5x rate; Pro is $20, Max 20x is $200), independent of interactive Claude Code rate limits. Once exhausted, overage either bills pay-as-you-go at API rates (if extra usage is enabled) or hard-stops until the next billing cycle. Switching the Anthropic auth path to API key in Settings keeps sidecar workflow usage off that pool. See the [Anthropic announcement](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) for details.
+
+#### Models.dev Catalog
+Per-provider model dropdowns (in the Commander Launch modal and every Settings provider card) are populated from [models.dev/api.json](https://models.dev/api.json) — the same catalog `opencode` uses. Fetched once per session, cached in `localStorage` with a 24h TTL, filtered to tool-callable text-out models, sorted newest-first. User-added custom IDs (Gemini, Copilot) merge on top via the existing per-provider preference. Falls back gracefully when the catalog can't be reached.
 
 #### AI Traffic Debug Panel
 Opt-in (Settings → AI debug capture). Captures every LLM round-trip — system prompt, messages, response, token usage, latency — into a dockable in-app panel. Useful for prompt inspection, waste analysis, and workflow tuning. Per-call token usage is read from LangChain.js's per-invocation metadata.
+
+#### Crash Reporting
+A `session.lock` marker file is written to `<app_data_dir>/crashes/` at startup and deleted on graceful exit. If the marker survives across runs, the next launch toasts you with a "View report" action (opens the report in Finder). Rust panics and unhandled JS errors / promise rejections both write timestamped reports to the same folder; the marker catches everything else (WebView crashes, OOM kills, force quits, power loss). Last 20 reports are kept; older pruned automatically.
 
 ---
 
@@ -183,6 +215,8 @@ On first launch the app routes to an onboarding screen. Provide at minimum one A
 |---|---|
 | **Anthropic** — API key *or* delegate to Claude Code CLI | [platform.claude.com](https://platform.claude.com) → API Keys, or pick **Install & sign in via terminal** on the Claude Code CLI tab in Settings → Anthropic (Meridian opens your configured terminal app and walks through `npm install -g @anthropic-ai/claude-code` + `claude /login`) |
 | **Google Gemini** — API key *or* delegate to gemini-cli | [aistudio.google.com](https://aistudio.google.com) → API key, or pick **Install & sign in via terminal** on the Gemini CLI tab in Settings → Gemini (Meridian opens your configured terminal and walks through `npm install -g @google/gemini-cli` + the CLI's "Sign in with Google" prompt for the free Gemini Code Assist tier) |
+| **GitHub Copilot** — CLI delegation only | Pick **Install & sign in via terminal** in Settings → GitHub Copilot. Meridian walks through `npm install -g @github/copilot` + `copilot login` (device-code flow against your GitHub account; your Copilot plan is read from there). No API-key path. |
+| **OpenAI Codex (ChatGPT)** — CLI delegation only | Pick **Install & sign in via terminal** in Settings → Codex. Meridian walks through `npm install -g @openai/codex` + `codex login` (OAuth against your ChatGPT Plus/Pro/Team account). No API-key path. |
 | **Ollama** | Just install it locally — Meridian defaults to `http://localhost:11434` and accepts custom URLs |
 | **JIRA base URL** | Your Atlassian workspace URL, e.g. `https://yourcompany.atlassian.net` |
 | **JIRA email** | The email on your Atlassian account |
@@ -215,27 +249,42 @@ Credentials and settings can be updated at any time via the **Settings** screen 
 meridian/
 ├── src/                         # React frontend
 │   ├── components/              # Shared shadcn/ui-based components
+│   │   └── command/             # Commander UI (tactical field, unit chat,
+│   │                            #   Bugs/My PRs/Reviewed PRs tabs, launch modal)
 │   ├── screens/                 # One file per top-level workflow screen
+│   │   ├── settings/            # Per-provider settings cards (anthropic, gemini,
+│   │   │                        #   copilot, codex, local-llm, …)
+│   │   └── onboarding/          # First-run provider-setup wizard
 │   ├── stores/                  # Zustand stores; one per long-running screen
+│   │   └── command/             # Commander session store + ACP event listeners
 │   ├── lib/
 │   │   ├── backgrounds/         # 26 ambient backgrounds + JWST generators
 │   │   ├── spaceEffects/        # Pulsar/nova/black-hole/etc. flourishes
 │   │   ├── tauri/               # Typed Tauri command wrappers
+│   │   ├── modelsCatalog.ts     # models.dev fetch + 24h cache + per-provider filter
+│   │   ├── crashReporting.ts    # JS error capture + previous-session crash toast
 │   │   └── …                    # Theme, mock data, search, time tracking helpers
 │   └── providers/               # React context providers
 ├── src-sidecar/                 # TypeScript sidecar (Node)
 │   └── src/
 │       ├── workflows/           # One LangGraph StateGraph per workflow
-│       ├── models/              # LangChain adapters (API-key + CLI delegation)
+│       ├── models/              # LangChain adapters: API-key (anthropic-direct,
+│       │                        #   google-direct, ollama-direct) + CLI delegation
+│       │                        #   (anthropic-via-claude-code, gemini-via-cli,
+│       │                        #   copilot-via-cli, codex-via-cli)
 │       └── tools/               # LangGraph tools + IPC bridge to Rust
 ├── src-tauri/                   # Rust/Tauri backend (host process)
 │   └── src/
 │       ├── commands/            # Tauri commands exposed to the frontend
+│       ├── command/             # Commander backend: ACP spawn/client, session
+│       │                        #   supervisor, MCP loopback server, event bus
 │       ├── integrations/        # JIRA, Bitbucket, sidecar process management
-│       ├── llms/                # Provider helpers (model catalogue, CLI detection)
+│       ├── llms/                # Provider helpers (claude, gemini, copilot, codex,
+│       │                        #   local_llm — CLI detection + model defaults)
 │       ├── agents/              # Dispatch helpers (LLM calls live in sidecar)
-│       └── storage/             # Credentials, preferences, meeting search index
-├── docs/                        # Internal architecture notes
+│       ├── storage/             # Credentials, preferences, meeting search index
+│       └── crash.rs             # Panic hook + session.lock marker + crash reports
+├── docs/                        # Internal architecture notes (incl. SPEC-COMMAND.md)
 ├── scripts/                     # Debug helpers (JIRA, Bitbucket)
 └── public/                      # Static assets
 ```

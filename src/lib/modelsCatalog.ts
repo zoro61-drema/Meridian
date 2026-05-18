@@ -172,6 +172,10 @@ const AI_PROVIDER_MODELS_DEV_ID: Record<string, string | null> = {
   claude: "anthropic",
   gemini: "google",
   copilot: "github-copilot",
+  // Codex isn't a sidecar AiProvider — it's a Commander-only backend
+  // — but the settings/onboarding model picker for Codex reuses the
+  // same helper, so we map "codex" → openai here.
+  codex: "openai",
   local: null,
 };
 

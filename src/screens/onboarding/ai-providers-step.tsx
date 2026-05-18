@@ -25,6 +25,7 @@ export function AiProvidersStep({
     claude: { authed: false },
     gemini: { authed: false },
     copilot: { authed: false },
+    codex: { authed: false },
     local: { authed: false },
   });
   const [expanded, setExpanded] = useState<OnboardingProvider | null>("claude");
@@ -38,6 +39,7 @@ export function AiProvidersStep({
         claude: { ...prev.claude, authed: !!s.anthropicApiKey },
         gemini: { ...prev.gemini, authed: !!s.geminiApiKey },
         copilot: { ...prev.copilot, authed: !!s.copilotCli },
+        codex: { ...prev.codex, authed: !!s.codexCli },
         local: { ...prev.local, authed: !!s.localLlmUrl },
       }));
     });

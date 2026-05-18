@@ -19,6 +19,10 @@ import { SpaceEffectsOverlay } from "@/lib/spaceEffects/overlay";
 import { isMockMode, setJiraBaseUrlCache, setLocalLlmUrlCache, setMockClaudeMode, setMockMode } from "@/lib/tauri/core";
 import { bitbucketComplete, credentialStatusComplete, getCredentialStatus, getNonSecretConfig, jiraComplete, type CredentialStatus } from "@/lib/tauri/credentials";
 import { cancelAllAgents } from "@/lib/cancelAllAgents";
+import {
+  checkPendingCrashAndToast,
+  installJsCrashHandlers,
+} from "@/lib/crashReporting";
 import { installWindowFocusTracker } from "@/lib/windowFocus";
 import { setRuntimeOverloadPct } from "@/lib/workloadClassifier";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -160,6 +164,13 @@ function AppInner() {
     // unfocused / hidden so animations don't pile up off-screen and
     // stutter the first frame after refocus.
     installWindowFocusTracker();
+
+    // Crash reporting: forward unhandled JS errors to the same
+    // crash-store as Rust panics, and toast about the previous
+    // session if it didn't exit cleanly. installJsCrashHandlers is
+    // idempotent; checkPendingCrashAndToast is single-shot per run.
+    installJsCrashHandlers();
+    void checkPendingCrashAndToast();
 
     // Hydrate runtime flags driven by user preferences. These map to
     // module-level toggles in their respective stores so the listeners

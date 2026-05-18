@@ -6,6 +6,7 @@ import { OllamaDirectChatModel } from "./ollama-direct.js";
 import { ClaudeCodeChatModel } from "./anthropic-via-claude-code.js";
 import { GeminiCliChatModel } from "./gemini-via-cli.js";
 import { CopilotCliChatModel } from "./copilot-via-cli.js";
+import { CodexCliChatModel } from "./codex-via-cli.js";
 import { wrapWithAiCapture } from "../ai-capture.js";
 
 /** Optional, per-call passthroughs that don't belong on ModelSelection
@@ -89,6 +90,13 @@ function buildModelInner(
     }
     case "copilot": {
       return new CopilotCliChatModel({
+        model,
+        maxTokens,
+        cwd: options.worktreePath,
+      });
+    }
+    case "codex": {
+      return new CodexCliChatModel({
         model,
         maxTokens,
         cwd: options.worktreePath,

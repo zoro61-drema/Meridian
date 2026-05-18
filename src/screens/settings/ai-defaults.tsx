@@ -48,6 +48,11 @@ const PROVIDER_META: Record<
     color: "border-emerald-400/40 bg-emerald-400/10 text-emerald-400",
     dot: "bg-emerald-400",
   },
+  codex: {
+    label: "Codex (ChatGPT)",
+    color: "border-cyan-400/40 bg-cyan-400/10 text-cyan-400",
+    dot: "bg-cyan-400",
+  },
 };
 
 /**

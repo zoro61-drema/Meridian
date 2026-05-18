@@ -61,6 +61,10 @@ pub struct CredentialStatus {
     /// (`copilot_auth_method=copilot_cli`). Copilot has no API-key
     /// path — this flag is what "Copilot is configured" means.
     pub copilot_cli: bool,
+    /// True when the user has enabled Codex CLI delegation
+    /// (`codex_auth_method=codex_cli`). Codex is CLI-only — used by
+    /// the Commander panel's `codexAcp` backend.
+    pub codex_cli: bool,
     pub local_llm_url: bool,
     pub jira_base_url: bool,
     pub jira_email: bool,
@@ -81,6 +85,9 @@ impl CredentialStatus {
     }
     pub fn copilot_complete(&self) -> bool {
         self.copilot_cli
+    }
+    pub fn codex_complete(&self) -> bool {
+        self.codex_cli
     }
     pub fn local_llm_complete(&self) -> bool {
         self.local_llm_url
@@ -107,10 +114,14 @@ pub fn credential_status() -> Result<CredentialStatus, String> {
     let copilot_method = credentials::cred_get("copilot_auth_method")
         .map(|m| m.trim().to_string())
         .unwrap_or_default();
+    let codex_method = credentials::cred_get("codex_auth_method")
+        .map(|m| m.trim().to_string())
+        .unwrap_or_default();
     Ok(CredentialStatus {
         anthropic_api_key: has("anthropic_api_key"),
         gemini_api_key: has("gemini_api_key"),
         copilot_cli: copilot_method == "copilot_cli",
+        codex_cli: codex_method == "codex_cli",
         local_llm_url: has("local_llm_url"),
         jira_base_url: has("jira_base_url"),
         jira_email: has("jira_email"),

@@ -37,6 +37,7 @@ import { AnthropicSection } from "./settings/anthropic";
 import { BitbucketSection } from "./settings/bitbucket";
 import { CacheSection } from "./settings/cache";
 import { ConfigSection } from "./settings/config";
+import { CodexSection } from "./settings/codex";
 import { CopilotSection } from "./settings/copilot";
 import { WorktreesSection } from "./settings/worktrees";
 import { CrossMeetingsSearchSection } from "./settings/cross-meetings";
@@ -212,6 +213,10 @@ export function SettingsScreen({ onClose, onNavigate }: SettingsScreenProps) {
                 />
                 <CopilotSection
                   isConfigured={credStatus.copilotCli}
+                  onSaved={refresh}
+                />
+                <CodexSection
+                  isConfigured={credStatus.codexCli}
                   onSaved={refresh}
                 />
                 <LocalLlmSection

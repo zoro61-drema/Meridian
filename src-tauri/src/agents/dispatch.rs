@@ -106,7 +106,7 @@ pub fn resolve(ctx: &AiContext) -> ResolvedAi {
     // The sidecar will reject an empty model with a clear error if even
     // this turns up nothing — that's the right surface for "user hasn't
     // finished onboarding".
-    for p in ["claude", "gemini", "local", "copilot"] {
+    for p in ["claude", "gemini", "local", "copilot", "codex"] {
         let model = model_for_provider_default(p);
         if !model.is_empty() {
             return ResolvedAi { provider: p.to_string(), model };
@@ -123,6 +123,12 @@ fn model_for_provider_default(provider: &str) -> String {
             .unwrap_or_default(),
         "local" => local_llm::get_local_llm_model().unwrap_or_default(),
         "copilot" => copilot::get_active_model(),
+        // Codex: stored model pref, no built-in default fallback. If
+        // empty, the sidecar errors with a clear "no model selected"
+        // message and the user picks one in Settings → Codex.
+        "codex" => crate::storage::preferences::get_pref("codex_model")
+            .or_else(|| get_credential("codex_model"))
+            .unwrap_or_default(),
         _ => String::new(),
     }
 }

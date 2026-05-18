@@ -2,6 +2,7 @@ pub mod agents;
 pub mod command;
 pub mod commands;
 pub mod control_server;
+pub mod crash;
 pub mod http;
 pub mod integrations;
 pub mod llms;
@@ -103,6 +104,9 @@ use commands::{
     remove_custom_copilot_model,
     test_copilot_stored,
     ping_copilot,
+    detect_codex_cli,
+    enable_codex_cli_delegation,
+    test_codex_stored,
     setup_ai_cli,
     // Agent skills
     load_agent_skills,
@@ -280,16 +284,13 @@ fn install_app_menu(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Er
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Install a panic hook that prints the full backtrace to stderr before the
-    // process exits. On macOS the output appears in Console.app and in the
-    // terminal when running `pnpm tauri dev`.
-    std::panic::set_hook(Box::new(|info| {
-        eprintln!("[MERIDIAN PANIC] {info}");
-        eprintln!(
-            "[MERIDIAN PANIC] backtrace:\n{:?}",
-            std::backtrace::Backtrace::capture()
-        );
-    }));
+    // Crash reporting: panic hook writes the full backtrace to
+    // stderr (visible in Console.app + `pnpm tauri dev`) AND to a
+    // file under `<app_data_dir>/crashes/`. A session.lock marker
+    // (written in setup, deleted on RunEvent::Exit) lets the next
+    // run detect non-graceful exits — including WebView crashes,
+    // OOM kills, and force quits that the panic hook can't catch.
+    crash::install_panic_hook();
 
     eprintln!("[MERIDIAN] run() called — building Tauri app");
 
@@ -299,6 +300,10 @@ pub fn run() {
         .manage(crate::integrations::sidecar::SidecarState::new())
         .manage(crate::command::sessions::CommandState::new())
         .setup(|app| {
+            // Crash dir must be ready before anything that could
+            // panic in setup; init() also reads the previous
+            // session's marker so the frontend can toast about it.
+            crash::init(app.handle());
             storage::credentials::init_store_path(app.handle());
             storage::preferences::init_prefs_path(app.handle());
             storage::meeting_index::init_index_path(app.handle());
@@ -375,6 +380,9 @@ pub fn run() {
             enable_claude_code_delegation,
             detect_gemini_cli,
             enable_gemini_cli_delegation,
+            detect_codex_cli,
+            enable_codex_cli_delegation,
+            test_codex_stored,
             detect_copilot_cli,
             enable_copilot_cli_delegation,
             get_copilot_models,
@@ -553,7 +561,19 @@ pub fn run() {
             crate::command::command_drain_inbox,
             crate::command::command_send_message,
             crate::command::command_switch_backend,
+            crash::get_pending_crash_report,
+            crash::report_js_crash,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            // RunEvent::Exit fires on a graceful shutdown — clearing
+            // the live marker tells the next run "we exited cleanly,
+            // not a crash." Anything that bypasses this (panic abort,
+            // SIGKILL, WebView crash) leaves the marker in place,
+            // which is exactly the signal `crash::init` looks for.
+            if let tauri::RunEvent::Exit = event {
+                crash::mark_clean_exit();
+            }
+        });
 }

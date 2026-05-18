@@ -10,6 +10,7 @@
  */
 
 import { type CredentialStatus, getCredentialStatus } from "@/lib/tauri/credentials";
+import type { AiProvider } from "@/stores/aiSelectionStore";
 import { create } from "zustand";
 
 interface State {
@@ -41,12 +42,13 @@ export const useCredentialStatusStore = create<State>((set) => ({
  *  and PerPanelAiSection to badge unauthenticated providers. */
 export function authenticatedProviders(
   status: CredentialStatus | null,
-): Set<"claude" | "gemini" | "local" | "copilot"> {
-  const out = new Set<"claude" | "gemini" | "local" | "copilot">();
+): Set<AiProvider> {
+  const out = new Set<AiProvider>();
   if (!status) return out;
   if (status.anthropicApiKey) out.add("claude");
   if (status.geminiApiKey) out.add("gemini");
   if (status.localLlmUrl) out.add("local");
   if (status.copilotCli) out.add("copilot");
+  if (status.codexCli) out.add("codex");
   return out;
 }

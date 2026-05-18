@@ -70,6 +70,7 @@ pub use meetings::{
 pub use llms::embeddings::probe_ollama_cmd;
 pub use meetings_search::{get_meeting_segment, search_meetings};
 pub use llms::claude::{cancel_review, get_claude_models};
+pub use llms::codex::{detect_codex_cli, enable_codex_cli_delegation, test_codex_stored};
 pub use llms::copilot::{
     add_custom_copilot_model, detect_copilot_cli, enable_copilot_cli_delegation,
     get_copilot_models, get_custom_copilot_models, remove_custom_copilot_model,

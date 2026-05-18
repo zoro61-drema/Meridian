@@ -10,8 +10,8 @@
 use crate::agents::dispatch::{self, AiContext};
 use crate::commands::grooming_templates::read_grooming_template;
 use crate::integrations::sidecar::{
-    AnthropicCreds, CopilotCreds, GoogleCreds, ModelSelection, OllamaCreds, ProviderCredentials,
-    SidecarState, WorkflowResult,
+    AnthropicCreds, CodexCreds, CopilotCreds, GoogleCreds, ModelSelection, OllamaCreds,
+    ProviderCredentials, SidecarState, WorkflowResult,
 };
 use crate::storage::credentials::get_credential;
 
@@ -23,6 +23,7 @@ pub fn to_sidecar_provider(internal: &str) -> Result<&'static str, String> {
         "gemini" => Ok("google"),
         "local" => Ok("ollama"),
         "copilot" => Ok("copilot"),
+        "codex" => Ok("codex"),
         other => Err(format!("Unknown internal provider: {other}")),
     }
 }
@@ -94,6 +95,19 @@ pub async fn resolve_credentials(provider: &str) -> Result<ProviderCredentials, 
                 );
             }
             Ok(ProviderCredentials::Copilot(CopilotCreds::CopilotCli))
+        }
+        "codex" => {
+            // CLI delegation only. The user signs in via `codex login`
+            // against their ChatGPT account; Meridian never holds a
+            // credential. Same auth-method gate shape as Copilot.
+            let method = get_credential("codex_auth_method").unwrap_or_default();
+            if method != "codex_cli" {
+                return Err(
+                    "Codex CLI delegation is not enabled. Open Settings → Codex and switch on Codex CLI."
+                        .to_string(),
+                );
+            }
+            Ok(ProviderCredentials::Codex(CodexCreds::CodexCli))
         }
         other => Err(format!("Unsupported provider for sidecar workflows: {other}")),
     }

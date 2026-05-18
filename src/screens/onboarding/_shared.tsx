@@ -2,6 +2,7 @@ import { CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight, AlertCircle }
 import { Card, CardContent } from "@/components/ui/card";
 import type { AiProvider } from "@/stores/aiSelectionStore";
 import { ClaudeAuthForm } from "./claude-auth-form";
+import { CodexAuthForm } from "./codex-auth-form";
 import { CopilotAuthForm } from "./copilot-auth-form";
 import { GeminiAuthForm } from "./gemini-auth-form";
 import { LocalLlmAuthForm } from "./local-llm-auth-form";
@@ -24,12 +25,13 @@ export interface ProviderAuthState {
  *  component below. */
 export type OnboardingProvider = AiProvider;
 
-export const PROVIDER_ORDER: OnboardingProvider[] = ["claude", "gemini", "copilot", "local"];
+export const PROVIDER_ORDER: OnboardingProvider[] = ["claude", "gemini", "copilot", "codex", "local"];
 
 export const PROVIDER_BLURB: Record<OnboardingProvider, string> = {
   claude: "Anthropic's Claude — recommended default. Delegate to the user-installed Claude Code CLI (uses your Pro/Max subscription locally), or an API key.",
   gemini: "Google's Gemini — delegate to the user-installed gemini-cli, or an API key from AI Studio.",
   copilot: "GitHub Copilot — delegate to the user-installed Copilot CLI (uses your GitHub Copilot subscription). CLI-only; no API key path.",
+  codex: "OpenAI Codex — delegate to the user-installed Codex CLI (uses your ChatGPT Plus/Pro/Team subscription). Wired end-to-end: Commander backend AND every sidecar workflow (PR Review, grooming, retros, etc.).",
   local: "Run models locally via Ollama or any OpenAI-compatible server. No subscription needed.",
 };
 
@@ -37,6 +39,7 @@ export const PROVIDER_TITLE: Record<OnboardingProvider, string> = {
   claude: "Claude (Anthropic)",
   gemini: "Gemini (Google)",
   copilot: "GitHub Copilot",
+  codex: "Codex (OpenAI / ChatGPT)",
   local: "Local LLM (Ollama)",
 };
 
@@ -158,6 +161,9 @@ export function ProviderCard({
             )}
             {provider === "copilot" && (
               <CopilotAuthForm onAuthed={onAuthed} onCleared={onCleared} />
+            )}
+            {provider === "codex" && (
+              <CodexAuthForm onAuthed={onAuthed} onCleared={onCleared} />
             )}
             {provider === "local" && (
               <LocalLlmAuthForm onAuthed={onAuthed} onCleared={onCleared} />

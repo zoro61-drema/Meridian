@@ -124,6 +124,7 @@ pub enum ProviderCredentials {
     Google(GoogleCreds),
     Ollama(OllamaCreds),
     Copilot(CopilotCreds),
+    Codex(CodexCreds),
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -168,6 +169,16 @@ pub enum CopilotCreds {
     /// signs in once via `copilot login` or sets COPILOT_GITHUB_TOKEN).
     #[serde(rename = "copilot_cli")]
     CopilotCli,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(tag = "mode")]
+pub enum CodexCreds {
+    /// Delegation to the user's locally-installed OpenAI Codex CLI.
+    /// No credential payload — the CLI handles auth internally (the user
+    /// signs in once via `codex login` against their ChatGPT account).
+    #[serde(rename = "codex_cli")]
+    CodexCli,
 }
 
 #[derive(Serialize, Clone, Debug)]

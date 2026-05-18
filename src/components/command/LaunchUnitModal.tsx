@@ -111,6 +111,39 @@ interface Props {
   defaultProjectDir: string;
 }
 
+/** Auto-fire the first user prompt for roles that should start
+ *  acting immediately on launch (ticket-groomer, pr-auto-review).
+ *  ACP agents only act after receiving a session/prompt — without
+ *  this, the unit sits idle even when the role prompt told it to
+ *  begin. Consumes the role-prompt prefix exactly the way a real
+ *  user message would. */
+function autoKickoffUnit(
+  sessionId: string,
+  systemNotice: string,
+  kickoffPrompt: string,
+): void {
+  const store = useCommandStore.getState();
+  const rolePrefix = store.consumeRolePrompt(sessionId) ?? "";
+  const fullPrompt = rolePrefix
+    ? `${rolePrefix}\n\n---\n\nUser request:\n${kickoffPrompt}`
+    : kickoffPrompt;
+  store.appendTranscript(sessionId, "system", systemNotice, { newEntry: true });
+  store.setPromptInFlight(sessionId, true);
+  store.setUnitState(sessionId, "thinking");
+  void commandSmokePrompt(sessionId, fullPrompt)
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      const s = useCommandStore.getState();
+      s.appendTranscript(sessionId, "error", `Auto-kickoff failed: ${msg}`, {
+        newEntry: true,
+      });
+      s.setUnitState(sessionId, "error");
+    })
+    .finally(() => {
+      useCommandStore.getState().setPromptInFlight(sessionId, false);
+    });
+}
+
 export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props) {
   const addUnit = useCommandStore((s) => s.addUnit);
 
@@ -389,46 +422,24 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
       toast.success(`Launched ${role.title}`);
       onOpenChange(false);
 
-      // Ticket-groomer kickoff: the role prompt tells the agent to
-      // start calling get_next_ticket immediately, but ACP agents
-      // only act after they receive a session/prompt. Fire one
-      // automatically so the user doesn't have to type "go".
-      // Consumes the role-prompt prefix in the same way a normal
-      // user message would, then drives the unit to "thinking"
-      // until the wrapper acks the turn.
+      // Auto-kickoff for roles that should start acting on launch.
+      // ACP agents stay idle until they get the first session/prompt
+      // even when the role prompt says "begin immediately" — these
+      // branches fire that first prompt on the user's behalf.
       if (groomerTickets.length > 0) {
-        const store = useCommandStore.getState();
-        const rolePrefix = store.consumeRolePrompt(sessionId) ?? "";
-        const kickoff =
-          "Begin grooming the queue. Call get_next_ticket now to fetch the first ticket.";
-        const fullPrompt = rolePrefix
-          ? `${rolePrefix}\n\n---\n\nUser request:\n${kickoff}`
-          : kickoff;
-        store.appendTranscript(
+        autoKickoffUnit(
           sessionId,
-          "system",
           `Auto-starting grooming queue (${groomerTickets.length} ticket${
             groomerTickets.length === 1 ? "" : "s"
           }).`,
-          { newEntry: true },
+          "Begin grooming the queue. Call get_next_ticket now to fetch the first ticket.",
         );
-        store.setPromptInFlight(sessionId, true);
-        store.setUnitState(sessionId, "thinking");
-        void commandSmokePrompt(sessionId, fullPrompt)
-          .catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            const s = useCommandStore.getState();
-            s.appendTranscript(
-              sessionId,
-              "error",
-              `Auto-kickoff failed: ${msg}`,
-              { newEntry: true },
-            );
-            s.setUnitState(sessionId, "error");
-          })
-          .finally(() => {
-            useCommandStore.getState().setPromptInFlight(sessionId, false);
-          });
+      } else if (role.id === "pr-auto-review") {
+        autoKickoffUnit(
+          sessionId,
+          "Auto-starting PR auto-review run.",
+          "Begin the auto-review now. List the PRs assigned to me where the review is still pending, then work through them one at a time as described — separate worktree per PR, five-lens review, submit_pr_review_finding per issue, submit_pr_review_complete when each PR is done.",
+        );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

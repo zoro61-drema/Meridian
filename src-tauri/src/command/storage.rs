@@ -57,19 +57,30 @@ fn open_and_migrate(path: &PathBuf) -> rusqlite::Result<()> {
             project_id TEXT NOT NULL,
             backend TEXT NOT NULL,
             model_id TEXT NOT NULL,
-            accent TEXT NOT NULL,
             state TEXT NOT NULL,
             acp_session_id TEXT NOT NULL,
             role_prompt TEXT,
             position_x REAL NOT NULL,
             position_y REAL NOT NULL,
-            facing TEXT NOT NULL DEFAULT 'right',
+            facing TEXT NOT NULL DEFAULT 'S',
+            anchor_x REAL NOT NULL DEFAULT 0,
+            anchor_y REAL NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL,
             last_active_at INTEGER NOT NULL,
             archived INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_command_sessions_archived
             ON command_sessions(archived, last_active_at);
+
+        -- Phase 13: anchor columns added 2026-05-17. For rows
+        -- that pre-date the migration, the ALTER applied a zero
+        -- default; backfill them from position so wander pivots
+        -- around where the unit was last seen.
+        -- IF NOT EXISTS works around the column being present in
+        -- freshly-created tables but missing in older databases.
+        -- Wrapped in a transaction so a failure leaves the schema
+        -- coherent.
+        -- Two ALTERs (cannot batch) followed by the backfill.
 
         CREATE TABLE IF NOT EXISTS command_messages (
             id TEXT PRIMARY KEY,
@@ -102,8 +113,53 @@ fn open_and_migrate(path: &PathBuf) -> rusqlite::Result<()> {
           INSERT INTO command_messages_fts(command_messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
           INSERT INTO command_messages_fts(rowid, text) VALUES (new.rowid, new.text);
         END;
+
+        -- Grooming proposals — one row per `submit_grooming_recommendations`
+        -- call. The whole `GroomingProposal` shape is stored as a JSON
+        -- blob (changes, decisions, drafts, status flags) so we don't
+        -- pay for a third table when there's no need to query individual
+        -- field changes from SQL. Foreign-key cascade deletes the queue
+        -- when its owning session is removed.
+        CREATE TABLE IF NOT EXISTS command_grooming_proposals (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL REFERENCES command_sessions(id) ON DELETE CASCADE,
+            ticket_key TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_command_grooming_session
+            ON command_grooming_proposals(session_id, created_at);
         "#,
     )?;
+
+    // Phase 13 migration: add anchor columns if they don't yet exist.
+    // SQLite's ALTER TABLE ADD COLUMN is idempotent only via PRAGMA
+    // table_info — wrap each attempt and swallow the "duplicate
+    // column name" error which means the migration already ran.
+    let _ = conn.execute(
+        "ALTER TABLE command_sessions ADD COLUMN anchor_x REAL NOT NULL DEFAULT 0",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE command_sessions ADD COLUMN anchor_y REAL NOT NULL DEFAULT 0",
+        [],
+    );
+    // Backfill anchor from position for rows that pre-date Phase 13.
+    let _ = conn.execute(
+        "UPDATE command_sessions SET anchor_x = position_x, anchor_y = position_y \
+         WHERE anchor_x = 0 AND anchor_y = 0",
+        [],
+    );
+
+    // Phase 13 (cont): per-unit accent colors removed. Drop the
+    // column from databases that still have it. SQLite supports
+    // DROP COLUMN since 3.35; rusqlite 0.32 bundles a recent
+    // version. Idempotent — errors when the column is absent.
+    let _ = conn.execute(
+        "ALTER TABLE command_sessions DROP COLUMN accent",
+        [],
+    );
+
     let _ = CONN.set(Arc::new(Mutex::new(conn)));
     Ok(())
 }
@@ -128,13 +184,14 @@ pub struct StoredSession {
     pub project_id: String,
     pub backend: BackendKind,
     pub model_id: String,
-    pub accent: String,
     pub state: String,
     pub acp_session_id: String,
     pub role_prompt: Option<String>,
     pub position_x: f32,
     pub position_y: f32,
     pub facing: String,
+    pub anchor_x: f32,
+    pub anchor_y: f32,
     pub created_at: i64,
     pub last_active_at: i64,
     pub archived: bool,
@@ -159,10 +216,10 @@ pub fn save_session(record: &StoredSession) -> Result<(), String> {
         conn.execute(
             r#"
             INSERT INTO command_sessions(
-                id, name, sprite_id, role, project_id, backend, model_id, accent,
+                id, name, sprite_id, role, project_id, backend, model_id,
                 state, acp_session_id, role_prompt, position_x, position_y, facing,
-                created_at, last_active_at, archived
-            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
+                anchor_x, anchor_y, created_at, last_active_at, archived
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name,
               sprite_id=excluded.sprite_id,
@@ -170,13 +227,14 @@ pub fn save_session(record: &StoredSession) -> Result<(), String> {
               project_id=excluded.project_id,
               backend=excluded.backend,
               model_id=excluded.model_id,
-              accent=excluded.accent,
               state=excluded.state,
               acp_session_id=excluded.acp_session_id,
               role_prompt=excluded.role_prompt,
               position_x=excluded.position_x,
               position_y=excluded.position_y,
               facing=excluded.facing,
+              anchor_x=excluded.anchor_x,
+              anchor_y=excluded.anchor_y,
               last_active_at=excluded.last_active_at,
               archived=excluded.archived
             "#,
@@ -188,13 +246,14 @@ pub fn save_session(record: &StoredSession) -> Result<(), String> {
                 record.project_id,
                 backend_str,
                 record.model_id,
-                record.accent,
                 record.state,
                 record.acp_session_id,
                 record.role_prompt,
                 record.position_x as f64,
                 record.position_y as f64,
                 record.facing,
+                record.anchor_x as f64,
+                record.anchor_y as f64,
                 record.created_at,
                 record.last_active_at,
                 if record.archived { 1 } else { 0 },
@@ -235,9 +294,9 @@ pub fn list_active_sessions() -> Result<Vec<StoredSession>, String> {
     with_conn(|conn| {
         let mut stmt = conn.prepare(
             r#"
-            SELECT id, name, sprite_id, role, project_id, backend, model_id, accent,
+            SELECT id, name, sprite_id, role, project_id, backend, model_id,
                    state, acp_session_id, role_prompt, position_x, position_y, facing,
-                   created_at, last_active_at, archived
+                   anchor_x, anchor_y, created_at, last_active_at, archived
             FROM command_sessions
             WHERE archived = 0
             ORDER BY created_at ASC
@@ -263,16 +322,17 @@ pub fn list_active_sessions() -> Result<Vec<StoredSession>, String> {
                 project_id: row.get(4)?,
                 backend,
                 model_id: row.get(6)?,
-                accent: row.get(7)?,
-                state: row.get(8)?,
-                acp_session_id: row.get(9)?,
-                role_prompt: row.get(10)?,
-                position_x: row.get::<_, f64>(11)? as f32,
-                position_y: row.get::<_, f64>(12)? as f32,
-                facing: row.get(13)?,
-                created_at: row.get(14)?,
-                last_active_at: row.get(15)?,
-                archived: row.get::<_, i64>(16)? != 0,
+                state: row.get(7)?,
+                acp_session_id: row.get(8)?,
+                role_prompt: row.get(9)?,
+                position_x: row.get::<_, f64>(10)? as f32,
+                position_y: row.get::<_, f64>(11)? as f32,
+                facing: row.get(12)?,
+                anchor_x: row.get::<_, f64>(13)? as f32,
+                anchor_y: row.get::<_, f64>(14)? as f32,
+                created_at: row.get(15)?,
+                last_active_at: row.get(16)?,
+                archived: row.get::<_, i64>(17)? != 0,
             })
         })?;
         let out = rows.filter_map(|r| r.ok()).collect();
@@ -308,9 +368,9 @@ pub fn list_archived_sessions() -> Result<Vec<StoredSession>, String> {
     with_conn(|conn| {
         let mut stmt = conn.prepare(
             r#"
-            SELECT id, name, sprite_id, role, project_id, backend, model_id, accent,
+            SELECT id, name, sprite_id, role, project_id, backend, model_id,
                    state, acp_session_id, role_prompt, position_x, position_y, facing,
-                   created_at, last_active_at, archived
+                   anchor_x, anchor_y, created_at, last_active_at, archived
             FROM command_sessions
             WHERE archived = 1
             ORDER BY last_active_at DESC
@@ -333,16 +393,17 @@ pub fn list_archived_sessions() -> Result<Vec<StoredSession>, String> {
                 project_id: row.get(4)?,
                 backend,
                 model_id: row.get(6)?,
-                accent: row.get(7)?,
-                state: row.get(8)?,
-                acp_session_id: row.get(9)?,
-                role_prompt: row.get(10)?,
-                position_x: row.get::<_, f64>(11)? as f32,
-                position_y: row.get::<_, f64>(12)? as f32,
-                facing: row.get(13)?,
-                created_at: row.get(14)?,
-                last_active_at: row.get(15)?,
-                archived: row.get::<_, i64>(16)? != 0,
+                state: row.get(7)?,
+                acp_session_id: row.get(8)?,
+                role_prompt: row.get(9)?,
+                position_x: row.get::<_, f64>(10)? as f32,
+                position_y: row.get::<_, f64>(11)? as f32,
+                facing: row.get(12)?,
+                anchor_x: row.get::<_, f64>(13)? as f32,
+                anchor_y: row.get::<_, f64>(14)? as f32,
+                created_at: row.get(15)?,
+                last_active_at: row.get(16)?,
+                archived: row.get::<_, i64>(17)? != 0,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -442,4 +503,77 @@ pub fn delete_session(session_id: &str) -> Result<(), String> {
         )?;
         Ok(())
     })
+}
+
+
+/// Upsert one grooming proposal for a session. `payload_json`
+/// holds the full GroomingProposal shape (changes, decisions,
+/// flags) — the row gets replaced wholesale on every update from
+/// the frontend rather than splitting into multiple tables.
+pub fn save_grooming_proposal(
+    session_id: &str,
+    proposal_id: &str,
+    ticket_key: &str,
+    payload_json: &str,
+    created_at_ms: i64,
+) -> Result<(), String> {
+    with_conn(|conn| {
+        conn.execute(
+            r#"
+            INSERT INTO command_grooming_proposals
+                (id, session_id, ticket_key, payload_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                payload_json = excluded.payload_json,
+                ticket_key = excluded.ticket_key
+            "#,
+            rusqlite::params![
+                proposal_id,
+                session_id,
+                ticket_key,
+                payload_json,
+                created_at_ms,
+            ],
+        )
+        .map(|_| ())
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// List every saved proposal across every session, returned as
+/// (session_id, payload_json) pairs. The store re-applies them by
+/// session id on hydration.
+pub fn list_grooming_proposals() -> Result<Vec<(String, String)>, String> {
+    with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT session_id, payload_json
+            FROM command_grooming_proposals
+            ORDER BY created_at ASC
+            "#,
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Remove a proposal — used when an in-memory delete (e.g. unit
+/// remove) needs to also drop the SQLite row. The FOREIGN KEY
+/// ON DELETE CASCADE handles session-level cleanup automatically.
+pub fn delete_grooming_proposal(proposal_id: &str) -> Result<(), String> {
+    with_conn(|conn| {
+        conn.execute(
+            "DELETE FROM command_grooming_proposals WHERE id = ?",
+            [proposal_id],
+        )
+        .map(|_| ())
+    })
+    .map_err(|e| e.to_string())
 }

@@ -1,0 +1,157 @@
+{
+  "group_id": null,
+  "objects": [
+    {
+      "id": "70f32bba-8e5d-4720-8b51-34630a844274",
+      "name": null,
+      "prompt": "Sci-fi heavy transport dropship, top-down 3/4 RTS view from above and slightly behind. Round-bodied military carrier vessel with prominent wings \u2014 fighter-bomber style transport. Body proportions are approximately 1.5\u00d7 the Marine's silhouette in length. Body: rounded fuselage with curved hull and rounded nose at the front, narrowing toward the rear cargo ramp. NO sharp corners on the main hull. Visible mechanical detail: panel seam lines dividing the hull into clear plate sections, small mechanical greebles and sensor protrusions, exposed structural ribbing along the fuselage sides. Wings: TWO prominent swept-back wings extending 12-15 pixels laterally from the body, clearly visible from above. Each wing has visible mechanical detail \u2014 panel lines, leading-edge slats, structural ribbing. Two-tone hull palette: main body is dark gunmetal gray (#3a3d42, like the Marine reference), but panel sections along the wings, nose, and dorsal surface are a slightly lighter steel-gray (#5a6068). The contrast between the two grays creates visual hierarchy. Accent markings: bright orange (#ff6b1a) safety/military stripes painted across the wing tips, a band along the side of the fuselage, and a small marker chevron on the dorsal surface near the nose. The orange marking provides a striking visual focal point against the dark hull. Engines: TWO large engine nacelles, one mounted on the underside of each wing. Each engine has a glowing exhaust point emitting cyan light (#00d4ff) with a bright glow halo. Small cyan running lights along the hull edges add additional points of light. Cargo bay: a closed ramp at the rear of the body for unit deployment. Same rendered shading as Marine reference \u2014 3-4 shade tones per surface. Heavy-duty military fighter-bomber transport aesthetic.",
+      "size": {
+        "width": 48,
+        "height": 48
+      },
+      "directions": 8,
+      "view": "low top-down",
+      "rotations": {
+        "south": "rotations/south.png",
+        "south-east": "rotations/south-east.png",
+        "east": "rotations/east.png",
+        "north-east": "rotations/north-east.png",
+        "north": "rotations/north.png",
+        "north-west": "rotations/north-west.png",
+        "west": "rotations/west.png",
+        "south-west": "rotations/south-west.png"
+      },
+      "animations": {
+        "descending from above into hover position above th": {
+          "directions": {
+            "south": {
+              "frames": [
+                "animations/descending from above into hover position above th/south/frame_000.png",
+                "animations/descending from above into hover position above th/south/frame_001.png",
+                "animations/descending from above into hover position above th/south/frame_002.png",
+                "animations/descending from above into hover position above th/south/frame_003.png",
+                "animations/descending from above into hover position above th/south/frame_004.png",
+                "animations/descending from above into hover position above th/south/frame_005.png",
+                "animations/descending from above into hover position above th/south/frame_006.png",
+                "animations/descending from above into hover position above th/south/frame_007.png",
+                "animations/descending from above into hover position above th/south/frame_008.png"
+              ],
+              "frame_count": 9
+            },
+            "east": {
+              "frames": [
+                "animations/descending from above into hover position above th/east/frame_000.png",
+                "animations/descending from above into hover position above th/east/frame_001.png",
+                "animations/descending from above into hover position above th/east/frame_002.png",
+                "animations/descending from above into hover position above th/east/frame_003.png",
+                "animations/descending from above into hover position above th/east/frame_004.png",
+                "animations/descending from above into hover position above th/east/frame_005.png",
+                "animations/descending from above into hover position above th/east/frame_006.png",
+                "animations/descending from above into hover position above th/east/frame_007.png",
+                "animations/descending from above into hover position above th/east/frame_008.png",
+                "animations/descending from above into hover position above th/east/frame_009.png",
+                "animations/descending from above into hover position above th/east/frame_010.png",
+                "animations/descending from above into hover position above th/east/frame_011.png",
+                "animations/descending from above into hover position above th/east/frame_012.png",
+                "animations/descending from above into hover position above th/east/frame_013.png",
+                "animations/descending from above into hover position above th/east/frame_014.png",
+                "animations/descending from above into hover position above th/east/frame_015.png"
+              ],
+              "frame_count": 16
+            },
+            "south-east": {
+              "frames": [
+                "animations/descending from above into hover position above th/south-east/frame_000.png",
+                "animations/descending from above into hover position above th/south-east/frame_001.png",
+                "animations/descending from above into hover position above th/south-east/frame_002.png",
+                "animations/descending from above into hover position above th/south-east/frame_003.png",
+                "animations/descending from above into hover position above th/south-east/frame_004.png",
+                "animations/descending from above into hover position above th/south-east/frame_005.png",
+                "animations/descending from above into hover position above th/south-east/frame_006.png",
+                "animations/descending from above into hover position above th/south-east/frame_007.png",
+                "animations/descending from above into hover position above th/south-east/frame_008.png",
+                "animations/descending from above into hover position above th/south-east/frame_009.png",
+                "animations/descending from above into hover position above th/south-east/frame_010.png",
+                "animations/descending from above into hover position above th/south-east/frame_011.png",
+                "animations/descending from above into hover position above th/south-east/frame_012.png",
+                "animations/descending from above into hover position above th/south-east/frame_013.png",
+                "animations/descending from above into hover position above th/south-east/frame_014.png",
+                "animations/descending from above into hover position above th/south-east/frame_015.png"
+              ],
+              "frame_count": 16
+            },
+            "north-east": {
+              "frames": [
+                "animations/descending from above into hover position above th/north-east/frame_000.png",
+                "animations/descending from above into hover position above th/north-east/frame_001.png",
+                "animations/descending from above into hover position above th/north-east/frame_002.png",
+                "animations/descending from above into hover position above th/north-east/frame_003.png",
+                "animations/descending from above into hover position above th/north-east/frame_004.png",
+                "animations/descending from above into hover position above th/north-east/frame_005.png",
+                "animations/descending from above into hover position above th/north-east/frame_006.png",
+                "animations/descending from above into hover position above th/north-east/frame_007.png",
+                "animations/descending from above into hover position above th/north-east/frame_008.png",
+                "animations/descending from above into hover position above th/north-east/frame_009.png",
+                "animations/descending from above into hover position above th/north-east/frame_010.png",
+                "animations/descending from above into hover position above th/north-east/frame_011.png",
+                "animations/descending from above into hover position above th/north-east/frame_012.png",
+                "animations/descending from above into hover position above th/north-east/frame_013.png",
+                "animations/descending from above into hover position above th/north-east/frame_014.png",
+                "animations/descending from above into hover position above th/north-east/frame_015.png"
+              ],
+              "frame_count": 16
+            },
+            "south-west": {
+              "frames": [
+                "animations/descending from above into hover position above th/south-west/frame_000.png",
+                "animations/descending from above into hover position above th/south-west/frame_001.png",
+                "animations/descending from above into hover position above th/south-west/frame_002.png",
+                "animations/descending from above into hover position above th/south-west/frame_003.png",
+                "animations/descending from above into hover position above th/south-west/frame_004.png",
+                "animations/descending from above into hover position above th/south-west/frame_005.png",
+                "animations/descending from above into hover position above th/south-west/frame_006.png",
+                "animations/descending from above into hover position above th/south-west/frame_007.png",
+                "animations/descending from above into hover position above th/south-west/frame_008.png",
+                "animations/descending from above into hover position above th/south-west/frame_009.png",
+                "animations/descending from above into hover position above th/south-west/frame_010.png",
+                "animations/descending from above into hover position above th/south-west/frame_011.png",
+                "animations/descending from above into hover position above th/south-west/frame_012.png",
+                "animations/descending from above into hover position above th/south-west/frame_013.png",
+                "animations/descending from above into hover position above th/south-west/frame_014.png",
+                "animations/descending from above into hover position above th/south-west/frame_015.png"
+              ],
+              "frame_count": 16
+            }
+          }
+        },
+        "the cargo bay doors on the underside open, and (im": {
+          "directions": {
+            "south": {
+              "frames": [
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_000.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_001.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_002.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_003.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_004.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_005.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_006.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_007.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_008.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_009.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_010.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_011.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_012.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_013.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_014.png",
+                "animations/the cargo bay doors on the underside open, and (im/south/frame_015.png"
+              ],
+              "frame_count": 16
+            }
+          }
+        }
+      }
+    }
+  ],
+  "export_version": "1.0",
+  "export_date": "2026-05-18T02:45:23.309234"
+}

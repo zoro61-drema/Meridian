@@ -3,7 +3,14 @@
 
 import { memo, type ComponentType } from "react";
 
-import { Engineer, FieldTech, Marine, type UnitProps } from "@/lib/commandSprites";
+import {
+  Engineer,
+  FieldTech,
+  LightWalker,
+  Marine,
+  SiegeWalker,
+  type UnitProps,
+} from "@/lib/commandSprites";
 import { type CommandUnit, useCommandStore } from "@/stores/command/store";
 
 const SPRITE_SIZE = 80;
@@ -12,16 +19,21 @@ const SPRITE_FOR_ID: Record<CommandUnit["spriteId"], ComponentType<UnitProps>> =
   marine: Marine as ComponentType<UnitProps>,
   engineer: Engineer as ComponentType<UnitProps>,
   "field-tech": FieldTech as ComponentType<UnitProps>,
+  "light-walker": LightWalker as ComponentType<UnitProps>,
+  "siege-walker": SiegeWalker as ComponentType<UnitProps>,
 };
 
 interface Props {
   unit: CommandUnit;
+  /** Hide the per-sprite name label + hover ring. Used inside the
+   *  MiniField tile where text would be too small to read. */
+  compact?: boolean;
 }
 
 // Memoised so a state change on one unit doesn't re-render every
 // sprite on the field. Zustand preserves unit references across
 // unrelated updates, so the default shallow compare is correct.
-export const UnitInstance = memo(function UnitInstance({ unit }: Props) {
+export const UnitInstance = memo(function UnitInstance({ unit, compact = false }: Props) {
   const selectedUnitId = useCommandStore((s) => s.selectedUnitId);
   const selectUnit = useCommandStore((s) => s.selectUnit);
   const isSelected = selectedUnitId === unit.id;
@@ -53,19 +65,20 @@ export const UnitInstance = memo(function UnitInstance({ unit }: Props) {
         <Sprite
           state={displayState}
           transient={unit.transient}
-          accent={unit.accent}
+          isMoving={unit.isWandering}
           size={SPRITE_SIZE}
-          /* The designed sprites are drawn top-down with the
-             helmet at the top edge of the canvas — `facing="S"`
-             (south = facing screen-down) is the canonical pose.
-             The store's left/right facing is a Phase 2 holdover
-             that doesn't translate cleanly; ignore it here. */
-          facing="S"
+          /* facing8 is driven by the cosmetic wander system
+             (spec §2.4) — defaults to S at launch and rotates
+             during walks. AgentCard thumbnails stay hardcoded
+             to S per spec §2.4 ("Card thumbnails"). */
+          facing={unit.facing8}
         />
       </div>
-      <div className="mt-1 text-center font-mono text-[10px] uppercase tracking-wide text-white/70">
-        {unit.name}
-      </div>
+      {!compact && (
+        <div className="mt-1 text-center font-mono text-[10px] uppercase tracking-wide text-white/70">
+          {unit.name}
+        </div>
+      )}
     </button>
   );
 });

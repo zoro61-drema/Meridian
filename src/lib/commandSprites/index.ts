@@ -1,11 +1,14 @@
+export { Marine } from "./Marine";
 export { Engineer } from "./Engineer";
 export { FieldTech } from "./FieldTech";
-export { Marine } from "./Marine";
+export { LightWalker } from "./LightWalker";
+export { SiegeWalker } from "./SiegeWalker";
+export { SpawnDropship } from "./SpawnDropship";
+
 export type {
-  AccentColor,
   AgentState,
   Facing,
   TransientAnimation,
   UnitProps,
 } from "./types";
-export { ACCENT_PALETTE } from "./types";
+export { FIELD_ACCENTS } from "./types";

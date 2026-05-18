@@ -1,0 +1,998 @@
+{
+  "group_id": null,
+  "states": [
+    {
+      "character": {
+        "id": "45facf4b-efcf-440f-a0d3-63a3578be1d1",
+        "name": "Sci-fi heavy artillery walker, top-down",
+        "prompt": "Sci-fi heavy artillery walker, top-down 3/4 RTS view. Low and broad, multiple legs splayed outward in star pattern (3-4 elongated leg tabs from central body), massive gun barrel protruding forward (longest weapon in the roster). Team-color zone: gun barrel band and dorsal armor stripe. Same dark palette as reference. Heavy industrial aesthetic.",
+        "size": {
+          "width": 96,
+          "height": 96
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-05-17T02:36:42.120137+00:00"
+      },
+      "folder": "Sci-fi_heavy_artillery_walker_top-down",
+      "frames": {
+        "rotations": {
+          "south": "Sci-fi_heavy_artillery_walker_top-down/rotations/south.png",
+          "south-east": "Sci-fi_heavy_artillery_walker_top-down/rotations/south-east.png",
+          "east": "Sci-fi_heavy_artillery_walker_top-down/rotations/east.png",
+          "north-east": "Sci-fi_heavy_artillery_walker_top-down/rotations/north-east.png",
+          "north": "Sci-fi_heavy_artillery_walker_top-down/rotations/north.png",
+          "north-west": "Sci-fi_heavy_artillery_walker_top-down/rotations/north-west.png",
+          "west": "Sci-fi_heavy_artillery_walker_top-down/rotations/west.png",
+          "south-west": "Sci-fi_heavy_artillery_walker_top-down/rotations/south-west.png"
+        },
+        "animations": {
+          "awaiting_permission-f1436c21": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south/frame_008.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/east/frame_008.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/west/frame_008.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north/frame_008.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-west/frame_008.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/south-east/frame_008.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-west/frame_008.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/awaiting_permission-f1436c21/north-east/frame_008.png"
+            ]
+          },
+          "tool_running-11907eb3": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south/frame_008.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/east/frame_008.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-west/frame_008.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-west/frame_008.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north-east/frame_008.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/south-east/frame_008.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/west/frame_008.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/tool_running-11907eb3/north/frame_008.png"
+            ]
+          },
+          "deploy-e9f24106": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south/frame_008.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-east/frame_008.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north/frame_008.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-east/frame_008.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/east/frame_008.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/south-west/frame_008.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/north-west/frame_008.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/deploy-e9f24106/west/frame_008.png"
+            ]
+          },
+          "animation-2518e811": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south/frame_008.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-west/frame_008.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/west/frame_008.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/south-east/frame_008.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north/frame_008.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-west/frame_008.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/east/frame_008.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-2518e811/north-east/frame_008.png"
+            ]
+          },
+          "walking-6d3ad494": {
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-east/frame_012.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/east/frame_012.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-east/frame_012.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/west/frame_012.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north-west/frame_012.png"
+            ],
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south/frame_012.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/south-west/frame_012.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/walking-6d3ad494/north/frame_012.png"
+            ]
+          },
+          "animation-061d7815": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south/frame_012.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-east/frame_012.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/south-west/frame_012.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north/frame_012.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-east/frame_012.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/north-west/frame_012.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/east/frame_012.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_010.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_011.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-061d7815/west/frame_012.png"
+            ]
+          },
+          "animation-135b9042": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south/frame_010.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-east/frame_010.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/east/frame_010.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north-west/frame_010.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-west/frame_010.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/south-east/frame_010.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/west/frame_010.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-135b9042/north/frame_010.png"
+            ]
+          },
+          "animation-275fd6b1": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south/frame_006.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/east/frame_006.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-east/frame_006.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-west/frame_006.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/west/frame_006.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/south-west/frame_006.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north-east/frame_006.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/animation-275fd6b1/north/frame_006.png"
+            ]
+          },
+          "streaming-034ce72b": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south/frame_010.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/east/frame_010.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/west/frame_010.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-east/frame_010.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-west/frame_010.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north-east/frame_010.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/north/frame_010.png"
+            ],
+            "south-west-36f0df2c": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-36f0df2c/frame_010.png"
+            ],
+            "south-west-4b20eff5": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_004.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_005.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_006.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_007.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_008.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_009.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/streaming-034ce72b/south-west-4b20eff5/frame_010.png"
+            ]
+          },
+          "thinking-acfb9915": {
+            "south": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south/frame_004.png"
+            ],
+            "east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/east/frame_004.png"
+            ],
+            "south-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-east/frame_004.png"
+            ],
+            "north": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north/frame_004.png"
+            ],
+            "north-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-west/frame_004.png"
+            ],
+            "south-west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/south-west/frame_004.png"
+            ],
+            "north-east": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-east/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-east/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-east/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-east/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/north-east/frame_004.png"
+            ],
+            "west": [
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/west/frame_000.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/west/frame_001.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/west/frame_002.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/west/frame_003.png",
+              "Sci-fi_heavy_artillery_walker_top-down/animations/thinking-acfb9915/west/frame_004.png"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "export_version": "3.0",
+  "export_date": "2026-05-18T02:54:58.724252"
+}

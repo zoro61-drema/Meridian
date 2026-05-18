@@ -19,13 +19,12 @@ import { SpaceEffectsOverlay } from "@/lib/spaceEffects/overlay";
 import { isMockMode, setJiraBaseUrlCache, setLocalLlmUrlCache, setMockClaudeMode, setMockMode } from "@/lib/tauri/core";
 import { bitbucketComplete, credentialStatusComplete, getCredentialStatus, getNonSecretConfig, jiraComplete, type CredentialStatus } from "@/lib/tauri/credentials";
 import { cancelAllAgents } from "@/lib/cancelAllAgents";
-import { setCurrentScreen } from "@/lib/currentScreen";
 import { installWindowFocusTracker } from "@/lib/windowFocus";
-import { attachPrReviewToasts } from "@/lib/prReviewNotifications";
 import { setRuntimeOverloadPct } from "@/lib/workloadClassifier";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AgentSkillsScreen } from "@/screens/AgentSkillsScreen";
 import { CommandScreen } from "@/screens/CommandScreen";
+import { SpriteDemo } from "@/lib/commandSprites/SpriteDemo";
 import { GroomTicketScreen } from "@/screens/GroomTicketScreen";
 import { LandingScreen } from "@/screens/LandingScreen";
 import { MeetingsScreen } from "@/screens/MeetingsScreen";
@@ -40,8 +39,7 @@ import { useAiDebugStore } from "@/stores/aiDebugStore";
 import { useCredentialStatusStore } from "@/stores/credentialStatusStore";
 import { hydrateMeetingsStore } from "@/stores/meetings/listeners";
 import { attachCommandListeners, hydrateCommandStore } from "@/stores/command/listeners";
-import { attachPrQueueListeners } from "@/stores/prQueue/listeners";
-import { usePrQueueStore } from "@/stores/prQueue/store";
+import { hydratePrReviewStore } from "@/stores/prReview/listeners";
 import { usePrTasksStore } from "@/stores/prTasksStore";
 import { hydrateTasksStore, useTasksStore } from "@/stores/tasksStore";
 import { hydrateTimeTrackingStore } from "@/stores/timeTrackingStore";
@@ -51,7 +49,7 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 
-type Screen = "loading" | "onboarding" | "landing" | "settings" | "agent-skills" | WorkflowId;
+type Screen = "loading" | "onboarding" | "landing" | "settings" | "agent-skills" | "command-sprites-demo" | WorkflowId;
 
 /** Screens the external control server (POST /navigate) can jump to.
  *  Mirrors the VALID_SCREENS list in `src-tauri/src/control_server.rs` —
@@ -71,6 +69,7 @@ const EXTERNAL_NAV_SCREENS: ReadonlySet<Screen> = new Set<Screen>([
   "meetings",
   "time-tracking",
   "command",
+  "command-sprites-demo",
 ]);
 
 function LoadingScreen() {
@@ -97,9 +96,6 @@ function isWorkflowId(s: Screen): s is WorkflowId {
 
 function AppInner() {
   const [screen, setScreen] = useState<Screen>("loading");
-  useEffect(() => {
-    setCurrentScreen(screen);
-  }, [screen]);
   const [credStatus, setCredStatusLocal] = useState<CredentialStatus | null>(null);
   const setCredentialStatusInStore = useCredentialStatusStore((s) => s.setStatus);
   const setCredStatus = useCallback(
@@ -134,6 +130,7 @@ function AppInner() {
 
     // Hydrate persisted stores from file cache before loading credentials
     Promise.allSettled([
+      hydratePrReviewStore(),
       hydrateMeetingsStore(),
       hydrateTasksStore(),
       hydrateTimeTrackingStore(),
@@ -141,16 +138,7 @@ function AppInner() {
       // applies them on the very first render — otherwise the user
       // sees noise tasks flash in for a moment before the filter loads.
       usePrTasksStore.getState().hydrateFilters(),
-      // Eagerly hydrate the PR Review queue + start its event listeners
-      // so toasts and background pane state work even before the user
-      // visits the PR Review screen.
-      usePrQueueStore.getState().init(),
     ]);
-    // PR Review queue listeners + cross-screen toast — session-long so
-    // background agents continue to surface state when the user is on
-    // other screens.
-    void attachPrQueueListeners();
-    void attachPrReviewToasts();
     // Command listener stays attached for the app lifetime so units
     // keep accumulating state and transcript when the user navigates
     // away from the Command screen. Fire-and-forget matches the
@@ -405,6 +393,8 @@ function AppInner() {
         <AgentSkillsScreen onBack={() => setScreen("landing")} />
       ) : screen === "command" ? (
         <CommandScreen onBack={() => setScreen("landing")} />
+      ) : screen === "command-sprites-demo" ? (
+        <SpriteDemo />
       ) : isWorkflowId(screen) ? (
         <WorkflowScreen workflowId={screen} onBack={() => setScreen("landing")} />
       ) : credStatus ? (

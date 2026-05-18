@@ -16,13 +16,39 @@
 
 import { create } from "zustand";
 
+import { DEFAULT_TERRAIN, isTerrainId, type TerrainId } from "@/lib/commandTerrains";
 import type {
-  AccentColor,
+  FieldDecision,
+  GroomingProposal,
+} from "@/lib/commandGrooming";
+import type { McpServerEntry } from "@/lib/commandMcpServers";
+import {
+  DEFAULT_STATUSLINE_SEGMENTS,
+  type StatuslineSegmentEntry,
+} from "@/lib/commandStatusline";
+
+export type TileSize = "sm" | "md" | "lg";
+export const DEFAULT_TILE_SIZE: TileSize = "md";
+const TILE_SIZES: TileSize[] = ["sm", "md", "lg"];
+export function isTileSize(value: unknown): value is TileSize {
+  return typeof value === "string" && (TILE_SIZES as string[]).includes(value);
+}
+
+import type {
   AgentState,
+  Facing,
   TransientAnimation,
 } from "@/lib/commandSprites";
 import {
+  initialSchedule as initialWanderSchedule,
+  planWanderMove,
+  scheduleNextPick,
+  easedPosition,
+  type WanderSchedule,
+} from "@/lib/commandWander";
+import {
   commandArchiveSession,
+  commandSaveGroomingProposal,
   commandSaveMessage,
   commandSaveSession,
   type A2AMessage,
@@ -30,7 +56,7 @@ import {
   type StoredSession,
 } from "@/lib/tauri/command";
 
-export type SpriteId = "marine" | "engineer" | "field-tech";
+export type SpriteId = "marine" | "engineer" | "field-tech" | "light-walker" | "siege-walker";
 
 export type BackendKind = "claudeAcp" | "geminiAcp" | "codexAcp" | "qwenAcp";
 
@@ -81,10 +107,25 @@ export interface CommandUnit {
   modelId: string;
   state: AgentState;
   transient?: TransientAnimation;
-  accent: AccentColor;
   positionX: number;
   positionY: number;
   facing: "left" | "right";
+  /** Anchor for cosmetic wander (spec §2.4). Fixed at launch; the
+   *  unit drifts a few pixels around it during idle. Persisted so
+   *  field layout survives reloads. */
+  anchorX: number;
+  anchorY: number;
+  /** 8-compass facing for sprite render. Independent of state —
+   *  rotates during wander and at launch. The legacy 2-direction
+   *  `facing` above is kept for backwards compat with archive
+   *  storage and isn't read by the renderer anymore. */
+  facing8: Facing;
+  /** True while a wander move is in progress (drives the `walk`
+   *  animation on the sprite). In-memory only — not persisted. */
+  isWandering: boolean;
+  /** Whether this unit may wander at all. Derived from spriteId at
+   *  launch (Sentinel Turret = false; all others = true). */
+  canWander: boolean;
   contextUsage: number;
   createdAt: number;
   lastActiveAt: number;
@@ -147,11 +188,22 @@ export interface CommandUnit {
    *  `contextSize` is the model's window. `cost` only arrives on
    *  some wrappers (Claude emits it; Gemini/Qwen don't yet). */
   usage: {
+    /** Cumulative total tokens (input + output) for the session. */
     tokens: number;
+    /** Input/prompt tokens this session, if the wrapper splits them
+     *  out. Null when only the cumulative total is available. */
+    inputTokens: number | null;
+    /** Output/completion tokens this session, same nullable contract. */
+    outputTokens: number | null;
     contextSize: number | null;
     costUsd: number | null;
     updatedAtMs: number;
   } | null;
+  /** Grooming queue — populated by ticket-groomer units when they
+   *  call the `submit_grooming_recommendations` MCP tool. One
+   *  proposal per ticket; the user reviews and decides per-field
+   *  in the focused panel's Tickets tab. */
+  groomingQueue: GroomingProposal[];
 }
 
 /** Transient parent→child arc drawn by the tactical field for a
@@ -193,7 +245,6 @@ interface AddUnitInput {
   spriteId?: SpriteId;
   name?: string;
   role?: string;
-  accent?: AccentColor;
   modelId?: string;
   projectId?: string;
   rolePrompt?: string;
@@ -217,8 +268,42 @@ interface CommandState {
   /** Currently-visible signal arcs. Cleared on TTL expiry by a
    *  periodic sweep kicked off when an arc is registered. */
   signalArcs: SignalArc[];
+  /** Selected terrain id for the tactical field. Hydrated from the
+   *  `command_terrain` preference on Command screen mount; setter
+   *  is fire-and-forget (caller persists to prefs separately). */
+  terrain: TerrainId;
+  /** Card grid density. Hydrated from `command_tile_size` pref. */
+  tileSize: TileSize;
+  /** Configurable statusline segments on every agent card.
+   *  Hydrated from `command_statusline` pref (JSON-encoded). */
+  statuslineSegments: StatuslineSegmentEntry[];
+  /** Per-role system-prompt overrides, keyed by role id. Empty/
+   *  missing entry means use the static default in commandRoles.
+   *  Hydrated from `command_role_overrides` pref (JSON map). */
+  roleOverrides: Record<string, string>;
+  /** Skill ids attached to each role. Selected skill bodies are
+   *  appended to the role's system prompt at launch. Hydrated
+   *  from `command_role_skills` pref (JSON map roleId → skillId[]). */
+  roleSkills: Record<string, string[]>;
+  /** In-memory cache of skills loaded from disk. Refreshed by
+   *  the Settings dialog whenever the user opens it. */
+  skills: { id: string; body: string; updatedAtMs: number }[];
+  /** Global MCP server list, filtered per-backend at launch.
+   *  Hydrated from `command_mcp_servers` pref (JSON array). */
+  mcpServers: McpServerEntry[];
 
   selectUnit: (id: string | null) => void;
+  setTerrain: (id: TerrainId) => void;
+  setTileSize: (size: TileSize) => void;
+  setStatuslineSegments: (segments: StatuslineSegmentEntry[]) => void;
+  setRoleOverride: (roleId: string, prompt: string) => void;
+  setRoleOverrides: (overrides: Record<string, string>) => void;
+  setRoleSkills: (roleId: string, skillIds: string[]) => void;
+  setAllRoleSkills: (map: Record<string, string[]>) => void;
+  setSkillsCache: (
+    skills: { id: string; body: string; updatedAtMs: number }[],
+  ) => void;
+  setMcpServers: (servers: McpServerEntry[]) => void;
   addUnit: (input: AddUnitInput) => void;
   addSubagent: (input: AddSubagentInput) => void;
   setUnitState: (id: string, state: AgentState) => void;
@@ -229,6 +314,10 @@ interface CommandState {
     text: string,
     options?: { newEntry?: boolean },
   ) => void;
+  /** Wipe a unit's transcript locally — used by the `/clear`
+   *  slash command. Doesn't touch the wrapper; the agent's
+   *  internal context is unaffected. */
+  clearTranscript: (id: string) => void;
   setPromptInFlight: (id: string, inFlight: boolean) => void;
   /** Read-and-clear the role's system prompt. Returns null when
    *  there's nothing to prepend (subsequent user turns). */
@@ -241,6 +330,12 @@ interface CommandState {
    *  clears wrapper-specific transient state (inbox / pending
    *  permission). Transcript / files / commands persist. */
   switchBackend: (id: string, backend: BackendKind, acpSessionId: string) => void;
+  /** Update a unit's model id — used by the `/model <id>` slash
+   *  command after the wrapper has been restarted with the new
+   *  env var. The actual model the agent talks to is governed by
+   *  what was injected into the wrapper's env at spawn time; this
+   *  field is just the UI's record of what the user picked. */
+  setUnitModel: (id: string, modelId: string) => void;
   /** Append an A2A message to the recipient's inbox and register
    *  a transient signal arc on the field. */
   receiveA2AMessage: (msg: A2AMessage) => void;
@@ -272,9 +367,39 @@ interface CommandState {
     sessionId: string,
     usage: {
       tokens: number;
+      inputTokens: number | null;
+      outputTokens: number | null;
       contextSize: number | null;
       costUsd: number | null;
     },
+  ) => void;
+  /** Drive the cosmetic wander system (spec §2.4). Called from
+   *  TacticalField's requestAnimationFrame loop. Advances any
+   *  in-flight moves, picks new destinations on schedule, and
+   *  cancels wander when state isn't `idle`. */
+  tickWander: (nowMs: number) => void;
+  /** Append (or replace, if a proposal for the same ticket key
+   *  already exists) a grooming proposal on the unit's queue. */
+  upsertGroomingProposal: (
+    sessionId: string,
+    proposal: GroomingProposal,
+  ) => void;
+  /** Set a single change's decision + approved value (the user's
+   *  per-field choice in the Tickets-tab detail UI). */
+  setGroomingFieldDecision: (
+    sessionId: string,
+    proposalId: string,
+    changeId: string,
+    decision: FieldDecision,
+    approvedValue: string | null,
+  ) => void;
+  /** Mark a proposal as skipped — moves it out of the user's
+   *  pending pile without touching JIRA. */
+  skipGroomingProposal: (sessionId: string, proposalId: string) => void;
+  /** Mark a proposal as submitted after successful JIRA push. */
+  markGroomingProposalSubmitted: (
+    sessionId: string,
+    proposalId: string,
   ) => void;
   removeUnit: (id: string, exitCode?: number | null) => void;
   /** Replace the store with units + transcripts loaded from SQLite
@@ -282,6 +407,7 @@ interface CommandState {
   hydrateFromStorage: (
     sessions: StoredSession[],
     messagesBySession: Record<string, StoredMessage[]>,
+    proposalsBySession?: Record<string, GroomingProposal[]>,
   ) => void;
 }
 
@@ -304,11 +430,7 @@ function nextSlot(used: number): { x: number; y: number } {
   return { x: 240 + (offset % 6) * 90, y: 460 + Math.floor(offset / 6) * 130 };
 }
 
-const ACCENT_CYCLE: AccentColor[] = ["blue", "orange", "green", "violet", "slate", "rose"];
 
-function defaultAccent(index: number): AccentColor {
-  return ACCENT_CYCLE[index % ACCENT_CYCLE.length];
-}
 
 function newEntryId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -321,13 +443,54 @@ const SPRITE_FOR_BACKEND: Record<BackendKind, SpriteId> = {
   qwenAcp: "engineer",
 };
 
+/** Wander capability per sprite. All current sprites can wander;
+ *  Sentinel Turret (not yet in the roster) will be `false` when it
+ *  ships per spec §2.4. */
+const CAN_WANDER_BY_SPRITE: Record<SpriteId, boolean> = {
+  marine: true,
+  engineer: true,
+  "field-tech": true,
+  "light-walker": true,
+  "siege-walker": true,
+};
+
+/** Per-unit wander schedule. In-memory only — not persisted. The
+ *  positions/facing are derived from this every tickWander call
+ *  and written back into the unit's positionX/Y, facing8,
+ *  isWandering fields. Keyed by unit id; cleaned up on removal. */
+const wanderSchedules = new Map<string, WanderSchedule>();
+
 export const useCommandStore = create<CommandState>((set, get) => ({
   units: {},
   unitOrder: [],
   selectedUnitId: null,
   signalArcs: [],
+  terrain: DEFAULT_TERRAIN,
+  tileSize: DEFAULT_TILE_SIZE,
+  statuslineSegments: DEFAULT_STATUSLINE_SEGMENTS,
+  roleOverrides: {},
+  roleSkills: {},
+  skills: [],
+  mcpServers: [],
 
   selectUnit: (id) => set({ selectedUnitId: id }),
+  setTerrain: (id) => set({ terrain: isTerrainId(id) ? id : DEFAULT_TERRAIN }),
+  setTileSize: (size) =>
+    set({ tileSize: isTileSize(size) ? size : DEFAULT_TILE_SIZE }),
+  setStatuslineSegments: (segments) =>
+    set({ statuslineSegments: segments }),
+  setRoleOverride: (roleId, prompt) =>
+    set((s) => ({
+      roleOverrides: { ...s.roleOverrides, [roleId]: prompt },
+    })),
+  setRoleOverrides: (overrides) => set({ roleOverrides: overrides }),
+  setRoleSkills: (roleId, skillIds) =>
+    set((s) => ({
+      roleSkills: { ...s.roleSkills, [roleId]: skillIds },
+    })),
+  setAllRoleSkills: (map) => set({ roleSkills: map }),
+  setSkillsCache: (skills) => set({ skills }),
+  setMcpServers: (servers) => set({ mcpServers: servers }),
 
   addUnit: ({
     sessionId,
@@ -336,7 +499,6 @@ export const useCommandStore = create<CommandState>((set, get) => ({
     spriteId,
     name,
     role,
-    accent,
     modelId,
     projectId,
     rolePrompt,
@@ -346,7 +508,6 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       const orderIndex = s.unitOrder.length;
       const pos = nextSlot(orderIndex);
       const chosenSprite: SpriteId = spriteId ?? SPRITE_FOR_BACKEND[backend];
-      const chosenAccent = accent ?? defaultAccent(orderIndex);
       const now = Date.now();
       const unit: CommandUnit = {
         id: sessionId,
@@ -358,10 +519,14 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         modelId: modelId ?? defaultModelFor(backend),
         state: "idle",
         transient: "spawning",
-        accent: chosenAccent,
         positionX: pos.x,
         positionY: pos.y,
         facing: "right",
+        anchorX: pos.x,
+        anchorY: pos.y,
+        facing8: "S",
+        isWandering: false,
+        canWander: CAN_WANDER_BY_SPRITE[chosenSprite] ?? true,
         contextUsage: 0,
         createdAt: now,
         lastActiveAt: now,
@@ -389,7 +554,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         commands: [],
         lastRawEvent: null,
         usage: null,
-      };
+        groomingQueue: [],
+};
       // Persist asynchronously — best effort; surfaces no error to
       // the UI because the unit is fully usable in memory regardless
       // of disk persistence outcome. SQLite write errors land in the
@@ -463,6 +629,18 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         units: {
           ...s.units,
           [id]: { ...u, transcript, lastActiveAt: now },
+        },
+      };
+    }),
+
+  clearTranscript: (id) =>
+    set((s) => {
+      const u = s.units[id];
+      if (!u) return s;
+      return {
+        units: {
+          ...s.units,
+          [id]: { ...u, transcript: [], lastActiveAt: Date.now() },
         },
       };
     }),
@@ -591,6 +769,126 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       return { units: { ...s.units, [sessionId]: { ...u, lastRawEvent: raw } } };
     }),
 
+  upsertGroomingProposal: (sessionId, proposal) =>
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const existingIdx = u.groomingQueue.findIndex(
+        (p) => p.ticketKey === proposal.ticketKey,
+      );
+      const nextQueue =
+        existingIdx >= 0
+          ? u.groomingQueue.map((p, i) => (i === existingIdx ? proposal : p))
+          : [...u.groomingQueue, proposal];
+      // Persist alongside the in-memory update — fire-and-forget;
+      // if the write fails the user still sees the queue, and the
+      // next mutation will retry the row.
+      void commandSaveGroomingProposal(
+        sessionId,
+        proposal.id,
+        proposal.ticketKey,
+        JSON.stringify(proposal),
+        proposal.createdAtMs,
+      ).catch((err: unknown) => {
+        console.warn("[command] failed to persist grooming proposal", err);
+      });
+      return {
+        units: { ...s.units, [sessionId]: { ...u, groomingQueue: nextQueue } },
+      };
+    }),
+
+  setGroomingFieldDecision: (sessionId, proposalId, changeId, decision, approvedValue) => {
+    let toPersist: GroomingProposal | null = null;
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const nextQueue = u.groomingQueue.map((p) => {
+        if (p.id !== proposalId) return p;
+        const updated: GroomingProposal = {
+          ...p,
+          changes: p.changes.map((c) =>
+            c.id === changeId ? { ...c, decision, approvedValue } : c,
+          ),
+        };
+        toPersist = updated;
+        return updated;
+      });
+      return {
+        units: { ...s.units, [sessionId]: { ...u, groomingQueue: nextQueue } },
+      };
+    });
+    if (toPersist) {
+      const p = toPersist as GroomingProposal;
+      void commandSaveGroomingProposal(
+        sessionId,
+        p.id,
+        p.ticketKey,
+        JSON.stringify(p),
+        p.createdAtMs,
+      ).catch((err: unknown) => {
+        console.warn("[command] failed to persist grooming decision", err);
+      });
+    }
+  },
+
+  skipGroomingProposal: (sessionId, proposalId) => {
+    let toPersist: GroomingProposal | null = null;
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const nextQueue = u.groomingQueue.map((p) => {
+        if (p.id !== proposalId) return p;
+        const updated = { ...p, skippedAt: Date.now() };
+        toPersist = updated;
+        return updated;
+      });
+      return {
+        units: { ...s.units, [sessionId]: { ...u, groomingQueue: nextQueue } },
+      };
+    });
+    if (toPersist) {
+      const p = toPersist as GroomingProposal;
+      void commandSaveGroomingProposal(
+        sessionId,
+        p.id,
+        p.ticketKey,
+        JSON.stringify(p),
+        p.createdAtMs,
+      ).catch((err: unknown) => {
+        console.warn("[command] failed to persist grooming skip", err);
+      });
+    }
+  },
+
+  markGroomingProposalSubmitted: (sessionId, proposalId) => {
+    let toPersist: GroomingProposal | null = null;
+    set((s) => {
+      const u = s.units[sessionId];
+      if (!u) return s;
+      const nextQueue = u.groomingQueue.map((p) => {
+        if (p.id !== proposalId) return p;
+        const updated = { ...p, submittedAt: Date.now() };
+        toPersist = updated;
+        return updated;
+      });
+      return {
+        units: { ...s.units, [sessionId]: { ...u, groomingQueue: nextQueue } },
+      };
+    });
+    if (toPersist) {
+      const p = toPersist as GroomingProposal;
+      void commandSaveGroomingProposal(
+        sessionId,
+        p.id,
+        p.ticketKey,
+        JSON.stringify(p),
+        p.createdAtMs,
+      ).catch((err: unknown) => {
+        console.warn("[command] failed to persist grooming submit", err);
+      });
+    }
+  },
+
   setUsage: (sessionId, usage) =>
     set((s) => {
       const u = s.units[sessionId];
@@ -604,6 +902,120 @@ export const useCommandStore = create<CommandState>((set, get) => ({
           },
         },
       };
+    }),
+
+  tickWander: (nowMs) =>
+    set((s) => {
+      // Snapshot positions of all units once so candidate-collision
+      // checks see a stable picture for the whole tick.
+      const positions: Array<{ id: string; x: number; y: number }> = [];
+      for (const id of s.unitOrder) {
+        const u = s.units[id];
+        if (u) positions.push({ id, x: u.positionX, y: u.positionY });
+      }
+
+      let changed = false;
+      const next: Record<string, CommandUnit> = { ...s.units };
+
+      for (const id of s.unitOrder) {
+        const u = s.units[id];
+        if (!u) continue;
+        // Stationary units (canWander=false) never wander.
+        // State must be idle, no active transient, and the unit
+        // must be live (don't wander disconnected units).
+        const wanderEligible =
+          u.canWander &&
+          u.state === "idle" &&
+          !u.transient &&
+          u.isLive &&
+          !u.isSubagent;
+
+        let schedule = wanderSchedules.get(id);
+        if (!schedule) {
+          schedule = initialWanderSchedule(nowMs);
+          wanderSchedules.set(id, schedule);
+        }
+
+        // Cancel an in-flight move if the unit is no longer
+        // eligible (state changed mid-walk). The sprite returns
+        // to its persistent state animation in place.
+        if (!wanderEligible && schedule.active) {
+          schedule.active = null;
+          schedule.nextPickAtMs = scheduleNextPick(nowMs);
+          if (u.isWandering) {
+            next[id] = { ...u, isWandering: false };
+            changed = true;
+          }
+          continue;
+        }
+
+        if (!wanderEligible) continue;
+
+        // Advance an in-flight move.
+        if (schedule.active) {
+          const r = easedPosition(schedule.active, nowMs);
+          const newX = r.x;
+          const newY = r.y;
+          const stillMoving = !r.done;
+          const facing = schedule.active.facing;
+          if (
+            u.positionX !== newX ||
+            u.positionY !== newY ||
+            u.facing8 !== facing ||
+            u.isWandering !== stillMoving
+          ) {
+            next[id] = {
+              ...u,
+              positionX: newX,
+              positionY: newY,
+              facing8: facing,
+              isWandering: stillMoving,
+            };
+            changed = true;
+          }
+          if (r.done) {
+            schedule.active = null;
+            schedule.nextPickAtMs = scheduleNextPick(nowMs);
+          }
+          continue;
+        }
+
+        // Resting between moves — check if it's time to pick.
+        if (nowMs >= schedule.nextPickAtMs) {
+          const others = positions
+            .filter((p) => p.id !== id)
+            .map((p) => ({ x: p.x, y: p.y }));
+          const move = planWanderMove({
+            anchorX: u.anchorX,
+            anchorY: u.anchorY,
+            currentX: u.positionX,
+            currentY: u.positionY,
+            others,
+            nowMs,
+          });
+          if (move) {
+            schedule.active = move;
+            next[id] = {
+              ...u,
+              facing8: move.facing,
+              isWandering: true,
+            };
+            changed = true;
+          } else {
+            // Couldn't find a non-colliding target — try again
+            // sooner than the standard 15-45s interval, but not
+            // every frame.
+            schedule.nextPickAtMs = nowMs + 1500;
+          }
+        }
+      }
+
+      // Drop schedules for units that no longer exist.
+      for (const id of wanderSchedules.keys()) {
+        if (!s.units[id]) wanderSchedules.delete(id);
+      }
+
+      return changed ? { units: next } : s;
     }),
 
   addSubagent: ({ parentId, sessionId, name, spriteId }) =>
@@ -625,10 +1037,15 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         modelId: parent.modelId,
         state: "thinking",
         transient: "spawning",
-        accent: parent.accent,
         positionX: parent.positionX + offsetX,
         positionY: parent.positionY + offsetY,
         facing: parent.facing,
+        anchorX: parent.positionX + offsetX,
+        anchorY: parent.positionY + offsetY,
+        facing8: parent.facing8,
+        isWandering: false,
+        canWander:
+          CAN_WANDER_BY_SPRITE[spriteId ?? "field-tech"] ?? true,
         contextUsage: 0,
         createdAt: now,
         lastActiveAt: now,
@@ -654,7 +1071,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         commands: [],
         lastRawEvent: null,
         usage: null,
-      };
+        groomingQueue: [],
+};
       return {
         units: {
           ...s.units,
@@ -702,6 +1120,18 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       };
     }),
 
+  setUnitModel: (id, modelId) =>
+    set((s) => {
+      const u = s.units[id];
+      if (!u) return s;
+      return {
+        units: {
+          ...s.units,
+          [id]: { ...u, modelId, lastActiveAt: Date.now() },
+        },
+      };
+    }),
+
   removeUnit: (id, _exitCode) =>
     set((s) => {
       const u = s.units[id];
@@ -730,13 +1160,12 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       };
     }),
 
-  hydrateFromStorage: (sessions, messagesBySession) =>
+  hydrateFromStorage: (sessions, messagesBySession, proposalsBySession) =>
     set(() => {
       const units: Record<string, CommandUnit> = {};
       const unitOrder: string[] = [];
       for (const s of sessions) {
         const sprite = parseSprite(s.spriteId);
-        const accent = parseAccent(s.accent);
         const transcript: TranscriptEntry[] = (messagesBySession[s.id] ?? []).map(
           (m) => ({
             id: m.id,
@@ -754,10 +1183,14 @@ export const useCommandStore = create<CommandState>((set, get) => ({
           backend: s.backend,
           modelId: s.modelId,
           state: parseAgentState(s.state),
-          accent,
           positionX: s.positionX,
           positionY: s.positionY,
           facing: s.facing === "left" ? "left" : "right",
+          anchorX: s.anchorX ?? s.positionX,
+          anchorY: s.anchorY ?? s.positionY,
+          facing8: parseFacing8(s.facing),
+          isWandering: false,
+          canWander: CAN_WANDER_BY_SPRITE[sprite] ?? true,
           contextUsage: 0,
           createdAt: s.createdAt,
           lastActiveAt: s.lastActiveAt,
@@ -776,6 +1209,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
           commands: [],
           lastRawEvent: null,
           usage: null,
+          groomingQueue: proposalsBySession?.[s.id] ?? [],
         };
         units[s.id] = unit;
         unitOrder.push(s.id);
@@ -799,13 +1233,15 @@ function toStoredSession(unit: CommandUnit): StoredSession {
     projectId: unit.projectId,
     backend: unit.backend,
     modelId: unit.modelId,
-    accent: unit.accent,
     state: unit.state,
     acpSessionId: unit.acpSessionId,
     rolePrompt: unit.rolePrompt,
     positionX: unit.positionX,
     positionY: unit.positionY,
-    facing: unit.facing,
+    // Persist the 8-direction facing.
+    facing: unit.facing8,
+    anchorX: unit.anchorX,
+    anchorY: unit.anchorY,
     createdAt: unit.createdAt,
     lastActiveAt: unit.lastActiveAt,
     archived: false,
@@ -821,27 +1257,15 @@ function parseSprite(raw: string): SpriteId {
   return VALID_SPRITES.has(raw as SpriteId) ? (raw as SpriteId) : "marine";
 }
 
-const VALID_ACCENTS: ReadonlySet<AccentColor> = new Set([
-  "slate",
-  "blue",
-  "violet",
-  "green",
-  "orange",
-  "rose",
+const VALID_FACING8: ReadonlySet<Facing> = new Set([
+  "N", "NE", "E", "SE", "S", "SW", "W", "NW",
 ]);
-/** Migration map: units persisted before the designed-sprite swap
- *  used a different accent palette. Map the old names onto their
- *  closest analogue in the new palette so existing transcripts
- *  don't all wash to blue on first boot post-swap. */
-const LEGACY_ACCENT_MIGRATIONS: Record<string, AccentColor> = {
-  amber: "orange",
-  red: "rose",
-  teal: "slate",
-};
-function parseAccent(raw: string): AccentColor {
-  if (VALID_ACCENTS.has(raw as AccentColor)) return raw as AccentColor;
-  const migrated = LEGACY_ACCENT_MIGRATIONS[raw];
-  return migrated ?? "blue";
+/** Translate the persisted `facing` column to an 8-direction value.
+ *  Pre-Phase-13 rows held the legacy "left"/"right" pair — those
+ *  collapse to "S" (canonical S-facing card pose). */
+function parseFacing8(raw: string): Facing {
+  if (VALID_FACING8.has(raw as Facing)) return raw as Facing;
+  return "S";
 }
 
 const VALID_STATES: ReadonlySet<AgentState> = new Set([

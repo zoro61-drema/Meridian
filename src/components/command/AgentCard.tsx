@@ -15,7 +15,9 @@ import { memo, useEffect, useState, type ComponentType } from "react";
 import type { StatuslineSegmentId } from "@/lib/commandStatusline";
 import { Engineer } from "@/lib/commandSprites/Engineer";
 import { FieldTech } from "@/lib/commandSprites/FieldTech";
+import { LightWalker } from "@/lib/commandSprites/LightWalker";
 import { Marine } from "@/lib/commandSprites/Marine";
+import { SiegeWalker } from "@/lib/commandSprites/SiegeWalker";
 import type { UnitProps } from "@/lib/commandSprites/types";
 import type { CommandUnit } from "@/stores/command/store";
 import { useCommandStore } from "@/stores/command/store";
@@ -44,6 +46,8 @@ const SPRITE_FOR_ID: Record<CommandUnit["spriteId"], ComponentType<UnitProps>> =
   marine: Marine as ComponentType<UnitProps>,
   engineer: Engineer as ComponentType<UnitProps>,
   "field-tech": FieldTech as ComponentType<UnitProps>,
+  "light-walker": LightWalker as ComponentType<UnitProps>,
+  "siege-walker": SiegeWalker as ComponentType<UnitProps>,
 };
 
 const CARD_SPRITE_SIZE = 36;
@@ -84,7 +88,6 @@ export const AgentCard = memo(function AgentCard({ unitId }: AgentCardProps) {
           <Sprite
             state={displayState}
             transient={unit.transient}
-            accent={unit.accent}
             size={CARD_SPRITE_SIZE}
             facing="S"
           />

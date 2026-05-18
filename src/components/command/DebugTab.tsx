@@ -97,7 +97,6 @@ export function DebugTab({ unit }: { unit: CommandUnit }) {
         <KV k="Backend" v={unit.backend} mono />
         <KV k="Sprite" v={unit.spriteId} />
         <KV k="Role" v={unit.role} />
-        <KV k="Accent" v={unit.accent} />
         <KV k="Model" v={unit.modelId} />
         <KV k="Project dir" v={unit.projectId} mono />
       </Section>
@@ -201,7 +200,25 @@ export function DebugTab({ unit }: { unit: CommandUnit }) {
       <Section title="Usage">
         {unit.usage ? (
           <>
-            <KV k="Tokens" v={unit.usage.tokens.toLocaleString()} mono />
+            <KV k="Tokens (total)" v={unit.usage.tokens.toLocaleString()} mono />
+            <KV
+              k="Tokens in"
+              v={
+                unit.usage.inputTokens != null
+                  ? unit.usage.inputTokens.toLocaleString()
+                  : "(not reported)"
+              }
+              mono
+            />
+            <KV
+              k="Tokens out"
+              v={
+                unit.usage.outputTokens != null
+                  ? unit.usage.outputTokens.toLocaleString()
+                  : "(not reported)"
+              }
+              mono
+            />
             <KV
               k="Context"
               v={
@@ -217,14 +234,6 @@ export function DebugTab({ unit }: { unit: CommandUnit }) {
                 v={`${((unit.usage.tokens / unit.usage.contextSize) * 100).toFixed(2)}%`}
               />
             )}
-            <KV
-              k="Cost (USD)"
-              v={
-                unit.usage.costUsd != null
-                  ? `$${unit.usage.costUsd.toFixed(4)}`
-                  : "(wrapper doesn't report cost)"
-              }
-            />
             <KV
               k="Updated"
               v={new Date(unit.usage.updatedAtMs).toLocaleTimeString()}

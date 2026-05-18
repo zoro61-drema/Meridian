@@ -1,20 +1,79 @@
-// TacticalField — Badlands terrain background + per-unit positioning.
+// TacticalField — terrain background + unit positioning + tethers + arcs.
 //
-// Spec §2.3: v1 ships a single Badlands terrain — dusty rocky planet
-// surface, warm neutral tones, sparse decoration. Phase 2 stubs this
-// as a CSS gradient + procedural-noise overlay; Phase 3 swaps in
-// actual 32×32 pixel-art tiles. Subagent tethers (§5.2) and signal
-// arcs (§6.4) are also drawn at this layer when those phases land —
-// for Phase 2 we render units only.
+// Spec §2.3 (v1.1): terrain is pluggable via `src/lib/commandTerrains/`.
+// The selected terrain id lives on the command store and is rendered
+// here as a child layer. `bleedThrough` terrains (Space Station)
+// don't paint an opaque background, so Meridian's global space
+// theme shows through outside the platform polygon.
 
-import { ACCENT_PALETTE } from "@/lib/commandSprites";
+import { FIELD_ACCENTS } from "@/lib/commandSprites";
+import { getTerrain } from "@/lib/commandTerrains";
 import { useCommandStore } from "@/stores/command/store";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { UnitInstance } from "./UnitInstance";
 
-export function TacticalField() {
+interface TacticalFieldProps {
+  /** When true, suppresses per-unit name labels and the hover ring
+   *  for use inside the MiniField tile where labels would be too
+   *  small to read. */
+  compact?: boolean;
+}
+
+export function TacticalField({ compact = false }: TacticalFieldProps = {}) {
   const units = useCommandStore((s) => s.units);
   const unitOrder = useCommandStore((s) => s.unitOrder);
   const signalArcs = useCommandStore((s) => s.signalArcs);
+  const tickWander = useCommandStore((s) => s.tickWander);
+
+  // Cosmetic idle-wander rAF loop (spec §2.4). Pure read-from-store
+  // side effect — the tick action no-ops when nothing changes, so
+  // an empty field doesn't churn React. Disabled under
+  // prefers-reduced-motion per spec §10.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    );
+    if (reducedMotion?.matches) return;
+
+    let rafId = 0;
+    const loop = (now: number) => {
+      tickWander(now);
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [tickWander]);
+
+  const terrainId = useCommandStore((s) => s.terrain);
+  const terrain = getTerrain(terrainId);
+
+  // Measure the container so the terrain SVG can size + scale to it.
+  // ResizeObserver keeps the dimensions current as the panel resizes.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 800, h: 420 });
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      // offsetWidth/Height returns the *layout-box* size,
+      // unaffected by ancestor CSS transforms. The MiniField
+      // wraps us in `transform: scale(...)`; getBoundingClientRect
+      // would return the visible (scaled-down) rect, causing the
+      // terrain SVG to render at the post-transform size and only
+      // fill the top-left quadrant of our 800×420 logical box.
+      setSize({
+        w: Math.max(1, el.offsetWidth),
+        h: Math.max(1, el.offsetHeight),
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const Terrain = terrain.Background;
 
   // Collect parent→child position pairs for tether rendering.
   const tethers: Array<{
@@ -37,56 +96,18 @@ export function TacticalField() {
         y1: u.positionY,
         x2: child.positionX,
         y2: child.positionY,
-        color: ACCENT_PALETTE[u.accent].primary,
+        color: FIELD_ACCENTS.tether.primary,
       });
     }
   }
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-md border border-amber-950/40"
-      style={{
-        // Badlands base: warm brown-tan radial gradient suggesting a
-        // lit surface, with a darker vignette toward the edges so the
-        // field reads as a contained tactical area rather than the
-        // global page background.
-        backgroundImage: [
-          "radial-gradient(ellipse at 35% 30%, rgba(214,178,128,0.42), transparent 60%)",
-          "radial-gradient(ellipse at 70% 75%, rgba(143,107,76,0.45), transparent 65%)",
-          "linear-gradient(180deg, rgba(82,60,42,0.95) 0%, rgba(58,42,30,0.95) 100%)",
-        ].join(", "),
-        backgroundColor: "#3a2a1e",
-        imageRendering: "pixelated",
-      }}
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden rounded-md"
       role="region"
       aria-label="Tactical field"
     >
-      {/* Procedural rocky noise — repeating SVG that breaks up the
-          gradient so it feels like terrain instead of a flat fill.
-          Phase 3 replaces this with proper Badlands tiles. */}
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(
-            `<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'>
-               <rect width='48' height='48' fill='transparent'/>
-               <rect x='4'  y='6'  width='2' height='2' fill='rgba(255,220,170,0.10)'/>
-               <rect x='15' y='14' width='2' height='2' fill='rgba(0,0,0,0.18)'/>
-               <rect x='28' y='10' width='3' height='2' fill='rgba(255,220,170,0.07)'/>
-               <rect x='38' y='22' width='2' height='2' fill='rgba(0,0,0,0.18)'/>
-               <rect x='9'  y='30' width='2' height='3' fill='rgba(0,0,0,0.18)'/>
-               <rect x='22' y='34' width='2' height='2' fill='rgba(255,220,170,0.08)'/>
-               <rect x='34' y='38' width='2' height='2' fill='rgba(0,0,0,0.18)'/>
-               <rect x='44' y='6'  width='2' height='2' fill='rgba(255,220,170,0.06)'/>
-             </svg>`,
-          )}")`,
-          backgroundRepeat: "repeat",
-          opacity: 0.9,
-          mixBlendMode: "overlay",
-        }}
-      />
-      {/* Optional faint grid overlay — keeps the bird's-eye perspective
-          legible. Per spec §2.3 it's configurable; default off. */}
+      <Terrain width={size.w} height={size.h} />
       {(tethers.length > 0 || signalArcs.length > 0) && (
         <svg
           aria-hidden
@@ -159,7 +180,7 @@ export function TacticalField() {
             const cx = mx + nx * lift;
             const cy = my + ny * lift;
             const path = `M ${from.positionX} ${from.positionY} Q ${cx} ${cy}, ${to.positionX} ${to.positionY}`;
-            const color = ACCENT_PALETTE[from.accent].highlight;
+            const color = FIELD_ACCENTS.signal.highlight;
             return (
               <g key={arc.id}>
                 <path
@@ -189,7 +210,7 @@ export function TacticalField() {
       {unitOrder.map((id) => {
         const u = units[id];
         if (!u) return null;
-        return <UnitInstance key={id} unit={u} />;
+        return <UnitInstance key={id} unit={u} compact={compact} />;
       })}
     </div>
   );

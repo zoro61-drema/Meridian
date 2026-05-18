@@ -1,32 +1,70 @@
-// Shared sprite types — re-exported from Marine.tsx, which is the
-// canonical source (the design brief calls Marine the "pilot"
-// component; Engineer + FieldTech derive their props from the same
-// shape). All three sprite files duplicate the type declarations
-// internally so they remain individually importable; this barrel
-// just gives the rest of the app a single place to pull from.
+// Shared sprite types — source of truth for the commandSprites
+// library. Per-unit components (Marine, Engineer, …) import from
+// here; they used to export the types themselves, but the raster
+// sprites moved that ownership up.
 
-export type {
-  AccentColor,
-  AgentState,
-  ArmorTemplate,
-  Facing,
-  GunTemplate,
-  TransientAnimation,
-  UnitProps,
-} from "./Marine";
+export type Facing =
+  | "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
-/** Field-level accent colors — used by TacticalField for tethers
- *  and signal arcs (the sprites embed their own palette internally
- *  via ACCENTS map). Hex values match the sprites' base accent so
- *  field annotations read consistently next to their owning unit. */
-export const ACCENT_PALETTE: Record<
-  "slate" | "blue" | "violet" | "green" | "orange" | "rose",
-  { primary: string; highlight: string; shadow: string }
-> = {
-  slate: { primary: "#64748b", highlight: "#94a3b8", shadow: "#334155" },
-  blue: { primary: "#3b82f6", highlight: "#7aa8ff", shadow: "#1d4ed8" },
-  violet: { primary: "#8b5cf6", highlight: "#b89cff", shadow: "#5b21b6" },
-  green: { primary: "#22c55e", highlight: "#6ee7a0", shadow: "#15803d" },
-  orange: { primary: "#f97316", highlight: "#fdba74", shadow: "#9a3412" },
-  rose: { primary: "#f43f5e", highlight: "#fb7185", shadow: "#9f1239" },
+export type AgentState =
+  | "idle"
+  | "thinking"
+  | "tool_running"
+  | "streaming"
+  | "awaiting_permission"
+  | "done"
+  | "error";
+
+export type TransientAnimation = "spawning" | "deploying";
+
+export interface UnitProps {
+  state: AgentState;
+  transient?: TransientAnimation;
+  /** When true and no transient is active, the unit plays the
+   *  `walk` locomotion loop in place of the persistent state
+   *  animation. Driven by `TacticalField` during cosmetic wander
+   *  (spec §2.4). Stationary units never receive `isMoving=true`.
+   *  Precedence: transient > isMoving > state. */
+  isMoving?: boolean;
+  size?: number;
+  facing: Facing;
+  /** Fired exactly once when a one-shot transient reaches its
+   *  final frame, so the parent can clear `transient` and return
+   *  to the persistent state. Never fired for looping animations. */
+  onTransientComplete?: () => void;
+}
+
+/** Field annotation colors used by TacticalField for tethers and
+ *  signal arcs. Single palette now that per-unit accent colors
+ *  are gone — tethers read as "structural" cyan, signals as
+ *  "transient" amber so the two layers stay distinguishable. */
+export const FIELD_ACCENTS = {
+  tether: { primary: "#3b82f6", highlight: "#7aa8ff" },
+  signal: { primary: "#f59e0b", highlight: "#fcd34d" },
+} as const;
+
+export const FACING_TO_DIR: Record<Facing, string> = {
+  N: "north",
+  NE: "north-east",
+  E: "east",
+  SE: "south-east",
+  S: "south",
+  SW: "south-west",
+  W: "west",
+  NW: "north-west",
+};
+
+export const STATE_TO_ANIM: Record<AgentState, string> = {
+  idle: "idle",
+  thinking: "thinking",
+  tool_running: "tool_running",
+  streaming: "streaming",
+  awaiting_permission: "awaiting_permission",
+  done: "done",
+  error: "error",
+};
+
+export const TRANSIENT_TO_ANIM: Record<TransientAnimation, string> = {
+  spawning: "spawning",
+  deploying: "deploy", // PixelLab folder is "deploy"; state enum is "deploying".
 };

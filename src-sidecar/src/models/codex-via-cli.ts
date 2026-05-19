@@ -30,7 +30,7 @@
 //   4. Yield a final `{ usage }` chunk so token-tracking callers see
 //      the real input/output counts.
 
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 import type {
   ChatMessage,
@@ -86,7 +86,7 @@ export class CodexCliChatModel implements ChatModel {
 
   constructor(input: CodexCliChatModelInput) {
     this.model = input.model;
-    this.codexBinary = input.codexBinary ?? "codex";
+    this.codexBinary = input.codexBinary ?? defaultCodexBinary();
     this.cwd = input.cwd;
   }
 
@@ -107,7 +107,7 @@ export class CodexCliChatModel implements ChatModel {
     }
     args.push(prompt);
 
-    const proc = spawn(this.codexBinary, args, {
+    const proc = spawnCodex(this.codexBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       ...(this.cwd ? { cwd: this.cwd } : {}),
     });
@@ -187,6 +187,31 @@ export class CodexCliChatModel implements ChatModel {
 
     yield { usage };
   }
+}
+
+function defaultCodexBinary(): string {
+  return process.platform === "win32" ? "codex.cmd" : "codex";
+}
+
+function spawnCodex(
+  binary: string,
+  args: string[],
+  options: Parameters<typeof spawn>[2],
+): ChildProcessWithoutNullStreams {
+  if (process.platform !== "win32" || !binary.toLowerCase().endsWith(".cmd")) {
+    return spawn(binary, args, options) as ChildProcessWithoutNullStreams;
+  }
+
+  const command = [windowsShellQuote(binary), ...args.map(windowsShellQuote)].join(" ");
+  return spawn(
+    process.env.ComSpec ?? "cmd.exe",
+    ["/d", "/s", "/c", command],
+    options,
+  ) as ChildProcessWithoutNullStreams;
+}
+
+function windowsShellQuote(value: string): string {
+  return `"${value.replace(/(["^&|<>])/g, "^$1")}"`;
 }
 
 /** Convert a `ChatMessage[]` into a single prompt string for

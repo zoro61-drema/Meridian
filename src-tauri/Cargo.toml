@@ -11,9 +11,6 @@ default-run = "meridian"
 name = "meridian_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-# Mock ACP server used by `src/command/acp_client.rs` unit tests.
-# Cargo exposes the built path via `CARGO_BIN_EXE_mock_acp` so the
-# test code can spawn it without hardcoding a target dir.
 [[bin]]
 name = "mock_acp"
 path = "tests/fixtures/mock_acp.rs"
@@ -41,27 +38,14 @@ sha2 = "0.10"
 glob = "0.3"
 regex-lite = "0.1"
 cpal = "0.15"
-whisper-rs = { version = "0.13", default-features = false, features = ["metal"] }
-# Speaker diarization for the Transcribe Meeting workflow. `coreml` enables
-# Apple Silicon acceleration; the `online` default feature auto-downloads the
-# pyannote-compatible models from HuggingFace on first use.
-speakrs = { version = "0.4", features = ["coreml"] }
-# Time tracking — minimal core-foundation wrappers so we can read the macOS
-# session dictionary (lock state) and call CGEventSource* (idle time) without
-# hand-rolled FFI boilerplate.
-core-foundation = "0.10"
-# Local SQLite for the cross-meeting search index. `bundled` ships the SQLite
-# source compiled in (FTS5 is enabled by default in the bundled build) so we
-# don't depend on the platform's sqlite version — meetings indexing has to
-# work the same on every macOS the app lands on.
+whisper-rs = { version = "0.16", default-features = false }
 rusqlite = { version = "0.32", features = ["bundled"] }
 
-# macOS-only — read the main window's CGWindowID for the screenshot
-# control endpoint. Lets `screencapture -l <id>` grab the window's
-# pixels without bringing it to the front (so we don't steal focus
-# from whichever app the user was just in).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
+core-foundation = "0.10.1"
+whisper-rs = { version = "0.16", default-features = false, features = ["metal"] }
+speakrs = { version = "0.4", default-features = false, features = ["online", "coreml", "openblas-static"] }
 
 [profile.release]
 codegen-units = 1

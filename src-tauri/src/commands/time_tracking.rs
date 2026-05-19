@@ -22,17 +22,23 @@
 //! also avoids the objc2/AppKit dependency footprint and the lifecycle
 //! quirks of registering Cocoa observers from a Tauri-spawned thread.
 
+#[cfg(target_os = "macos")]
 use core_foundation::{
     base::{CFType, TCFType},
     boolean::CFBoolean,
     dictionary::CFDictionary,
     string::CFString,
 };
+#[cfg(target_os = "macos")]
 use std::ffi::c_void;
+#[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_os = "macos")]
 use std::time::Duration;
+#[cfg(target_os = "macos")]
 use tauri::Emitter;
 
+#[cfg(target_os = "macos")]
 const POLL_INTERVAL_SEC: u64 = 5;
 
 // macOS system constants ------------------------------------------------------
@@ -40,17 +46,18 @@ const POLL_INTERVAL_SEC: u64 = 5;
 // `kCGEventSourceStateCombinedSessionState` (= 1) gives us idle time
 // across both HID and software-injected events. `kCGAnyInputEventType` is
 // represented as the all-ones u32 (0xFFFFFFFF) per the CoreGraphics headers.
+#[cfg(target_os = "macos")]
 const CG_EVENT_SOURCE_STATE_COMBINED: i32 = 1;
+#[cfg(target_os = "macos")]
 const CG_ANY_INPUT_EVENT_TYPE: u32 = 0xFFFFFFFF;
 
+#[cfg(target_os = "macos")]
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
-    fn CGEventSourceSecondsSinceLastEventType(
-        source_state_id: i32,
-        event_type: u32,
-    ) -> f64;
+    fn CGEventSourceSecondsSinceLastEventType(source_state_id: i32, event_type: u32) -> f64;
 }
 
+#[cfg(target_os = "macos")]
 #[link(name = "CoreGraphics", kind = "framework")]
 extern "C" {
     fn CGSessionCopyCurrentDictionary() -> *const c_void;
@@ -61,13 +68,20 @@ extern "C" {
 /// Spawn the polling thread. Idempotent — repeated calls after the first are
 /// no-ops, since the thread runs for the lifetime of the process.
 pub fn start_time_tracking_poller(app: tauri::AppHandle) {
-    static STARTED: AtomicBool = AtomicBool::new(false);
-    if STARTED.swap(true, Ordering::SeqCst) {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
         return;
     }
 
-    std::thread::spawn(move || {
-        loop {
+    #[cfg(target_os = "macos")]
+    {
+        static STARTED: AtomicBool = AtomicBool::new(false);
+        if STARTED.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        std::thread::spawn(move || loop {
             let snapshot = read_system_state();
             let _ = app.emit(
                 "time-tracker:state",
@@ -77,8 +91,8 @@ pub fn start_time_tracking_poller(app: tauri::AppHandle) {
                 }),
             );
             std::thread::sleep(Duration::from_secs(POLL_INTERVAL_SEC));
-        }
-    });
+        });
+    }
 }
 
 /// One-shot snapshot of the system's current state. Exposed as a Tauri command
@@ -123,46 +137,61 @@ fn read_system_state() -> SystemActivitySnapshot {
 }
 
 fn idle_seconds() -> f64 {
-    // Safe: the function takes two scalar arguments and returns a double; no
-    // Rust references cross the FFI boundary.
-    unsafe {
-        CGEventSourceSecondsSinceLastEventType(
-            CG_EVENT_SOURCE_STATE_COMBINED,
-            CG_ANY_INPUT_EVENT_TYPE,
-        )
+    #[cfg(not(target_os = "macos"))]
+    {
+        return 0.0;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Safe: the function takes two scalar arguments and returns a double; no
+        // Rust references cross the FFI boundary.
+        unsafe {
+            CGEventSourceSecondsSinceLastEventType(
+                CG_EVENT_SOURCE_STATE_COMBINED,
+                CG_ANY_INPUT_EVENT_TYPE,
+            )
+        }
     }
 }
 
 fn is_screen_locked() -> bool {
-    // CGSessionCopyCurrentDictionary returns a CFDictionary owned by the
-    // caller (Copy rule). Wrapping it via TCFType::wrap_under_create_rule
-    // takes ownership and releases on drop.
-    let dict_ref = unsafe { CGSessionCopyCurrentDictionary() };
-    if dict_ref.is_null() {
-        // No active GUI session — treat as locked. Happens at the login
-        // window before the user signs in.
-        return true;
+    #[cfg(not(target_os = "macos"))]
+    {
+        return false;
     }
 
-    let dict: CFDictionary<CFString, CFType> = unsafe {
-        CFDictionary::wrap_under_create_rule(dict_ref as *const _)
-    };
-
-    // `CGSSessionScreenIsLocked` is only present (and `true`) while the
-    // screen is locked. Absence means unlocked.
-    let key = CFString::new("CGSSessionScreenIsLocked");
-    match dict.find(&key) {
-        Some(value_item) => {
-            // The value is a CFBoolean. Anything else we treat as "not
-            // locked" rather than panicking — Apple has been known to add
-            // keys with other shapes over time.
-            let value: &CFType = &*value_item;
-            if let Some(b) = value.downcast::<CFBoolean>() {
-                bool::from(b)
-            } else {
-                false
-            }
+    #[cfg(target_os = "macos")]
+    {
+        // CGSessionCopyCurrentDictionary returns a CFDictionary owned by the
+        // caller (Copy rule). Wrapping it via TCFType::wrap_under_create_rule
+        // takes ownership and releases on drop.
+        let dict_ref = unsafe { CGSessionCopyCurrentDictionary() };
+        if dict_ref.is_null() {
+            // No active GUI session — treat as locked. Happens at the login
+            // window before the user signs in.
+            return true;
         }
-        None => false,
+
+        let dict: CFDictionary<CFString, CFType> =
+            unsafe { CFDictionary::wrap_under_create_rule(dict_ref as *const _) };
+
+        // `CGSSessionScreenIsLocked` is only present (and `true`) while the
+        // screen is locked. Absence means unlocked.
+        let key = CFString::new("CGSSessionScreenIsLocked");
+        match dict.find(&key) {
+            Some(value_item) => {
+                // The value is a CFBoolean. Anything else we treat as "not
+                // locked" rather than panicking — Apple has been known to add
+                // keys with other shapes over time.
+                let value: &CFType = &*value_item;
+                if let Some(b) = value.downcast::<CFBoolean>() {
+                    bool::from(b)
+                } else {
+                    false
+                }
+            }
+            None => false,
+        }
     }
 }

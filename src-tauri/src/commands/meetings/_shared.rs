@@ -14,9 +14,10 @@ use std::time::{Duration, Instant};
 use tauri::Emitter;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-use super::types::{
-    MeetingRecord, MeetingSegment, SpeakerCandidate, SpeakerRegistry, SpeakerRegistryEntry,
-};
+use super::types::{MeetingRecord, MeetingSegment, SpeakerRegistry, SpeakerRegistryEntry};
+
+#[cfg(target_os = "macos")]
+use super::types::SpeakerCandidate;
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -30,11 +31,14 @@ pub(super) const CHUNK_SECONDS: f32 = 10.0;
 pub(super) const SUPPORTED_MODELS: &[&str] = &["tiny.en", "base.en", "small.en", "medium.en"];
 
 // Confident auto-assign: top name's best sample is at least this similar.
+#[cfg(target_os = "macos")]
 const RECOGNIZE_HIGH_THRESHOLD: f32 = 0.70;
 // Floor for even considering a name as a candidate in the ambiguous case.
+#[cfg(target_os = "macos")]
 const RECOGNIZE_LOW_THRESHOLD: f32 = 0.55;
 // If top1 - top2 (across distinct names) is below this, we treat as ambiguous
 // and surface the top candidates instead of auto-assigning.
+#[cfg(target_os = "macos")]
 const RECOGNIZE_AMBIGUITY_MARGIN: f32 = 0.05;
 
 // Registry maintenance. The goal: bound growth per person and avoid storing
@@ -52,10 +56,12 @@ const REGISTRY_MERGE_THRESHOLD: f32 = 0.92;
 // threshold, so low-confidence auto-matches (which could drift the registry
 // if wrong) don't contaminate future recognitions. Manual names always feed
 // back regardless — the user vouched for them.
+#[cfg(target_os = "macos")]
 pub(super) const REGISTRY_AUTO_UPDATE_THRESHOLD: f32 = 0.80;
 
 // Minimum usable audio length — below ~3s the pipeline produces noisy clusters
 // and the speaker_count estimator often collapses to zero.
+#[cfg(target_os = "macos")]
 pub(super) const DIARIZE_MIN_SAMPLES: usize = TARGET_SR as usize * 3;
 
 // ── Paths ─────────────────────────────────────────────────────────────────
@@ -93,16 +99,13 @@ pub(super) fn load_registry(app: &tauri::AppHandle) -> Result<SpeakerRegistry, S
     if !path.exists() {
         return Ok(SpeakerRegistry::default());
     }
-    let content = fs::read_to_string(&path)
-        .map_err(|e| format!("Read {}: {e}", path.display()))?;
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Parse {}: {e}", path.display()))
+    let content = fs::read_to_string(&path).map_err(|e| format!("Read {}: {e}", path.display()))?;
+    serde_json::from_str(&content).map_err(|e| format!("Parse {}: {e}", path.display()))
 }
 
 pub(super) fn save_registry(app: &tauri::AppHandle, reg: &SpeakerRegistry) -> Result<(), String> {
     let path = registry_path(app)?;
-    let json = serde_json::to_string_pretty(reg)
-        .map_err(|e| format!("Serialise registry: {e}"))?;
+    let json = serde_json::to_string_pretty(reg).map_err(|e| format!("Serialise registry: {e}"))?;
     fs::write(&path, json).map_err(|e| format!("Write {}: {e}", path.display()))
 }
 
@@ -188,11 +191,7 @@ fn average_vector_in_place(existing: &mut [f32], incoming: &[f32]) {
     }
 }
 
-pub(super) fn remove_registry_entry(
-    reg: &mut SpeakerRegistry,
-    meeting_id: &str,
-    cluster_id: &str,
-) {
+pub(super) fn remove_registry_entry(reg: &mut SpeakerRegistry, meeting_id: &str, cluster_id: &str) {
     reg.entries
         .retain(|e| !(e.meeting_id == meeting_id && e.cluster_id == cluster_id));
 }
@@ -219,10 +218,8 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 
 // For a single query embedding, return (name, best_similarity) for every
 // distinct name in the registry, sorted descending by best similarity.
-pub(super) fn best_per_name(
-    registry: &SpeakerRegistry,
-    query: &[f32],
-) -> Vec<(String, f32)> {
+#[cfg(target_os = "macos")]
+pub(super) fn best_per_name(registry: &SpeakerRegistry, query: &[f32]) -> Vec<(String, f32)> {
     use std::collections::BTreeMap;
     let mut best: BTreeMap<String, f32> = BTreeMap::new();
     for entry in &registry.entries {
@@ -242,6 +239,7 @@ pub(super) fn best_per_name(
 //   - confident match  → (Some(name), [])
 //   - ambiguous        → (None,       [top candidates above the floor])
 //   - no useful match  → (None,       [])
+#[cfg(target_os = "macos")]
 pub(super) fn decide_recognition(
     scored: &[(String, f32)],
 ) -> (Option<String>, Vec<SpeakerCandidate>) {
@@ -363,11 +361,9 @@ pub(super) fn spawn_recording_thread(
             stream.play().map_err(|e| format!("stream.play: {e}"))?;
 
             // Initialise whisper context once per session.
-            let ctx = WhisperContext::new_with_params(
-                &model_path.to_string_lossy(),
-                WhisperContextParameters::default(),
-            )
-            .map_err(|e| format!("WhisperContext: {e}"))?;
+            let ctx =
+                WhisperContext::new_with_params(&model_path, WhisperContextParameters::default())
+                    .map_err(|e| format!("WhisperContext: {e}"))?;
 
             let chunk_samples = (sample_rate as f32 * CHUNK_SECONDS) as usize * channels as usize;
             let mut buffer: Vec<f32> = Vec::with_capacity(chunk_samples * 2);
@@ -426,14 +422,8 @@ pub(super) fn spawn_recording_thread(
                 if let Ok(mut g) = audio_buffer.lock() {
                     g.extend_from_slice(&resampled);
                 }
-                let _ = transcribe_chunk(
-                    &ctx,
-                    &resampled,
-                    offset_sec,
-                    &app,
-                    &meeting_id,
-                    &segments,
-                );
+                let _ =
+                    transcribe_chunk(&ctx, &resampled, offset_sec, &app, &meeting_id, &segments);
             }
 
             drop(stream);
@@ -452,7 +442,9 @@ fn transcribe_chunk(
     meeting_id: &str,
     segments: &Mutex<Vec<MeetingSegment>>,
 ) -> Result<(), String> {
-    let mut state = ctx.create_state().map_err(|e| format!("create_state: {e}"))?;
+    let mut state = ctx
+        .create_state()
+        .map_err(|e| format!("create_state: {e}"))?;
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some("en"));
     params.set_translate(false);
@@ -468,21 +460,16 @@ fn transcribe_chunk(
         .full(params, samples)
         .map_err(|e| format!("whisper full: {e}"))?;
 
-    let n = state
-        .full_n_segments()
-        .map_err(|e| format!("full_n_segments: {e}"))?;
+    let n = state.full_n_segments();
     for i in 0..n {
-        let text = state
-            .full_get_segment_text(i)
+        let whisper_segment = state
+            .get_segment(i)
+            .ok_or_else(|| format!("segment {i} out of bounds"))?;
+        let text = whisper_segment
+            .to_str_lossy()
             .map_err(|e| format!("segment_text: {e}"))?;
-        let t0 = state
-            .full_get_segment_t0(i)
-            .map_err(|e| format!("segment_t0: {e}"))? as f32
-            / 100.0; // whisper timestamps are in hundredths of a second
-        let t1 = state
-            .full_get_segment_t1(i)
-            .map_err(|e| format!("segment_t1: {e}"))? as f32
-            / 100.0;
+        let t0 = whisper_segment.start_timestamp() as f32 / 100.0;
+        let t1 = whisper_segment.end_timestamp() as f32 / 100.0;
         let seg = MeetingSegment {
             start_sec: offset_sec + t0,
             end_sec: offset_sec + t1,
@@ -531,8 +518,7 @@ fn resample_to_16k(samples: &[f32], from_sr: u32) -> Vec<f32> {
     if from_sr == TARGET_SR {
         return samples.to_vec();
     }
-    let target_len =
-        (samples.len() as u64 * TARGET_SR as u64 / from_sr as u64) as usize;
+    let target_len = (samples.len() as u64 * TARGET_SR as u64 / from_sr as u64) as usize;
     if target_len == 0 {
         return Vec::new();
     }
@@ -606,8 +592,8 @@ pub(super) fn meeting_path(app: &tauri::AppHandle, id: &str) -> Result<PathBuf, 
 
 pub(super) fn write_meeting(app: &tauri::AppHandle, record: &MeetingRecord) -> Result<(), String> {
     let path = meeting_path(app, &record.id)?;
-    let json = serde_json::to_string_pretty(record)
-        .map_err(|e| format!("Serialise meeting: {e}"))?;
+    let json =
+        serde_json::to_string_pretty(record).map_err(|e| format!("Serialise meeting: {e}"))?;
     fs::write(&path, json).map_err(|e| format!("Write {}: {e}", path.display()))?;
     // Mirror every write — save_meeting, create_notes, update_notes,
     // diarise, summarise, etc. all funnel through here, so wiring
@@ -624,6 +610,7 @@ pub(super) fn write_meeting(app: &tauri::AppHandle, record: &MeetingRecord) -> R
 // Pick the diarization speaker that overlaps a whisper segment for the most
 // cumulative time. Returns None if the whisper segment does not overlap any
 // diarized speech (e.g. entirely inside an unclassified gap).
+#[cfg(target_os = "macos")]
 pub(super) fn dominant_overlap_speaker(
     segments: &[speakrs::Segment],
     start: f64,
@@ -642,4 +629,3 @@ pub(super) fn dominant_overlap_speaker(
         .max_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(sp, _)| sp.to_string())
 }
-

@@ -1,11 +1,16 @@
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
+#[cfg(target_os = "macos")]
 use crate::storage::credentials::get_credential;
+#[cfg(target_os = "macos")]
 use crate::storage::preferences::get_pref;
 
 /// Look up the user's preferred macOS terminal app (same key the PR
 /// Review terminal launcher uses). Falls back to iTerm2.
+#[cfg(target_os = "macos")]
 fn default_terminal() -> String {
     get_pref("pr_review_terminal")
         .or_else(|| get_credential("pr_review_terminal"))
@@ -34,34 +39,42 @@ fn default_terminal() -> String {
 /// install transcript.
 #[tauri::command]
 pub async fn setup_ai_cli(provider: String) -> Result<(), String> {
-    let script_body = match provider.as_str() {
-        "anthropic" | "claude" => CLAUDE_CODE_SETUP_SH,
-        "google" | "gemini" => GEMINI_CLI_SETUP_SH,
-        "copilot" | "github" => COPILOT_CLI_SETUP_SH,
-        "codex" | "openai" => CODEX_CLI_SETUP_SH,
-        other => return Err(format!("Unknown provider for CLI setup: {other}")),
-    };
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = provider;
+        return Err("AI CLI guided setup is currently only available on macOS.".into());
+    }
 
-    let mut path = std::env::temp_dir();
-    path.push(format!("meridian-setup-{provider}.sh"));
-    std::fs::write(&path, script_body)
-        .map_err(|e| format!("Failed to write setup script: {e}"))?;
+    #[cfg(target_os = "macos")]
+    {
+        let script_body = match provider.as_str() {
+            "anthropic" | "claude" => CLAUDE_CODE_SETUP_SH,
+            "google" | "gemini" => GEMINI_CLI_SETUP_SH,
+            "copilot" | "github" => COPILOT_CLI_SETUP_SH,
+            "codex" | "openai" => CODEX_CLI_SETUP_SH,
+            other => return Err(format!("Unknown provider for CLI setup: {other}")),
+        };
 
-    let mut perms = std::fs::metadata(&path)
-        .map_err(|e| format!("Failed to stat setup script: {e}"))?
-        .permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms)
-        .map_err(|e| format!("Failed to chmod setup script: {e}"))?;
+        let mut path = std::env::temp_dir();
+        path.push(format!("meridian-setup-{provider}.sh"));
+        std::fs::write(&path, script_body)
+            .map_err(|e| format!("Failed to write setup script: {e}"))?;
 
-    let path_str = path.to_string_lossy().to_string();
+        let mut perms = std::fs::metadata(&path)
+            .map_err(|e| format!("Failed to stat setup script: {e}"))?
+            .permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&path, perms)
+            .map_err(|e| format!("Failed to chmod setup script: {e}"))?;
 
-    let terminal = default_terminal();
+        let path_str = path.to_string_lossy().to_string();
 
-    let script_cmd = format!("sh {path_str}");
-    let osa_script = if terminal.eq_ignore_ascii_case("iterm2") {
-        format!(
-            r#"tell application "iTerm2"
+        let terminal = default_terminal();
+
+        let script_cmd = format!("sh {path_str}");
+        let osa_script = if terminal.eq_ignore_ascii_case("iterm2") {
+            format!(
+                r#"tell application "iTerm2"
     activate
     if (count of windows) > 0 then
         tell current window
@@ -77,10 +90,10 @@ pub async fn setup_ai_cli(provider: String) -> Result<(), String> {
         end tell
     end if
 end tell"#
-        )
-    } else {
-        format!(
-            r#"tell application "{terminal}"
+            )
+        } else {
+            format!(
+                r#"tell application "{terminal}"
     activate
     if (count of windows) > 0 then
         tell front window
@@ -90,22 +103,24 @@ end tell"#
         do script "{script_cmd}"
     end if
 end tell"#
-        )
-    };
+            )
+        };
 
-    let out = Command::new("osascript")
-        .arg("-e")
-        .arg(&osa_script)
-        .output()
-        .map_err(|e| format!("Failed to launch {terminal}: {e}"))?;
+        let out = Command::new("osascript")
+            .arg("-e")
+            .arg(&osa_script)
+            .output()
+            .map_err(|e| format!("Failed to launch {terminal}: {e}"))?;
 
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("{terminal} launch failed: {stderr}"));
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            return Err(format!("{terminal} launch failed: {stderr}"));
+        }
+        Ok(())
     }
-    Ok(())
 }
 
+#[cfg(target_os = "macos")]
 const CLAUDE_CODE_SETUP_SH: &str = r#"#!/bin/sh
 clear
 cat <<'BANNER'
@@ -151,6 +166,7 @@ echo ""
 claude /login
 "#;
 
+#[cfg(target_os = "macos")]
 const GEMINI_CLI_SETUP_SH: &str = r#"#!/bin/sh
 clear
 cat <<'BANNER'
@@ -197,6 +213,7 @@ echo ""
 gemini
 "#;
 
+#[cfg(target_os = "macos")]
 const COPILOT_CLI_SETUP_SH: &str = r#"#!/bin/sh
 clear
 cat <<'BANNER'
@@ -243,6 +260,7 @@ echo ""
 copilot login
 "#;
 
+#[cfg(target_os = "macos")]
 const CODEX_CLI_SETUP_SH: &str = r#"#!/bin/sh
 clear
 cat <<'BANNER'

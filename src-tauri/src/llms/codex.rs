@@ -21,32 +21,83 @@
 // stores via `store_credential`.
 
 use reqwest::StatusCode;
+use std::path::Path;
 use std::time::Duration;
 
 use crate::http::make_corporate_client;
 use crate::storage::credentials::{get_credential, store_credential};
 
-/// Look up `codex` on PATH and return its absolute path.
+const CODEX_NOT_FOUND: &str =
+    "Codex CLI not found on PATH. Install with: npm install -g @openai/codex";
+
+/// Look up the Codex CLI on PATH and return its absolute path.
 #[tauri::command]
 pub async fn detect_codex_cli() -> Result<String, String> {
+    resolve_codex_cli()
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_codex_cli() -> Result<String, String> {
+    for name in ["codex.cmd", "codex"] {
+        if let Some(path) = resolve_windows_path(name)? {
+            return Ok(path);
+        }
+    }
+    Err(CODEX_NOT_FOUND.to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_windows_path(name: &str) -> Result<Option<String>, String> {
+    let output = std::process::Command::new("where.exe")
+        .arg(name)
+        .output()
+        .map_err(|e| format!("Failed to run `where.exe {name}`: {e}"))?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(ToOwned::to_owned))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn resolve_codex_cli() -> Result<String, String> {
     let output = std::process::Command::new("which")
         .arg("codex")
         .output()
         .map_err(|e| format!("Failed to run `which codex`: {e}"))?;
     if !output.status.success() {
-        return Err(
-            "Codex CLI not found on PATH. Install with: npm install -g @openai/codex"
-                .to_string(),
-        );
+        return Err(CODEX_NOT_FOUND.to_string());
     }
     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if path.is_empty() {
-        return Err(
-            "Codex CLI not found on PATH. Install with: npm install -g @openai/codex"
-                .to_string(),
-        );
+        return Err(CODEX_NOT_FOUND.to_string());
     }
     Ok(path)
+}
+
+fn codex_command(path: &str) -> tokio::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        if path.to_ascii_lowercase().ends_with(".cmd") {
+            let mut command = tokio::process::Command::new("cmd.exe");
+            command.args(["/d", "/s", "/c", path]);
+            return command;
+        }
+    }
+
+    tokio::process::Command::new(path)
+}
+
+fn codex_display_name(path: &str) -> &str {
+    Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("codex")
 }
 
 /// Switch the active Codex auth mode to CLI delegation. Verifies the
@@ -74,11 +125,9 @@ pub async fn validate_openai_api_key(api_key: String) -> Result<String, String> 
         return Err("API key cannot be empty.".to_string());
     }
     if !key.starts_with("sk-") {
-        return Err(
-            "Expected an OpenAI API key starting with `sk-`. \
+        return Err("Expected an OpenAI API key starting with `sk-`. \
              For ChatGPT subscription auth, use the Codex CLI delegation option instead."
-                .to_string(),
-        );
+            .to_string());
     }
     store_credential("openai_api_key", key)?;
     store_credential("codex_auth_method", "api_key")?;
@@ -90,8 +139,7 @@ pub async fn validate_openai_api_key(api_key: String) -> Result<String, String> 
 /// codex_cli mode just re-detects the binary on PATH.
 #[tauri::command]
 pub async fn test_codex_stored() -> Result<String, String> {
-    let method =
-        get_credential("codex_auth_method").unwrap_or_else(|| "api_key".to_string());
+    let method = get_credential("codex_auth_method").unwrap_or_else(|| "api_key".to_string());
     if method == "codex_cli" {
         let path = detect_codex_cli().await?;
         return Ok(format!("Codex CLI detected at {path}."));
@@ -99,9 +147,7 @@ pub async fn test_codex_stored() -> Result<String, String> {
     let key = get_credential("openai_api_key")
         .ok_or("No OpenAI API key found. Add one in Settings → Codex.")?;
     if key.trim().is_empty() {
-        return Err(
-            "No OpenAI API key found. Add one in Settings → Codex.".to_string(),
-        );
+        return Err("No OpenAI API key found. Add one in Settings → Codex.".to_string());
     }
     test_openai_connectivity(&key, false).await
 }
@@ -111,23 +157,27 @@ pub async fn test_codex_stored() -> Result<String, String> {
 /// out to `codex exec` (which respects `codex login` or `CODEX_API_KEY`).
 #[tauri::command]
 pub async fn ping_codex() -> Result<String, String> {
-    let method =
-        get_credential("codex_auth_method").unwrap_or_else(|| "api_key".to_string());
+    let method = get_credential("codex_auth_method").unwrap_or_else(|| "api_key".to_string());
     if method == "codex_cli" {
         // Re-detect first so the user gets a clean error before we
         // burn time on the subprocess.
-        detect_codex_cli().await?;
-        let output = tokio::process::Command::new("codex")
+        let codex_path = detect_codex_cli().await?;
+        let mut command = codex_command(&codex_path);
+        let output = command
             .args(["exec", "--yolo", "Say hello."])
             .output()
             .await
-            .map_err(|e| format!("Failed to spawn `codex`: {e}"))?;
+            .map_err(|e| format!("Failed to spawn `{}`: {e}", codex_display_name(&codex_path)))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Err(format!(
                 "Codex CLI exited with status {}: {}",
                 output.status,
-                if stderr.is_empty() { "(no stderr)" } else { &stderr }
+                if stderr.is_empty() {
+                    "(no stderr)"
+                } else {
+                    &stderr
+                }
             ));
         }
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -145,9 +195,7 @@ pub async fn ping_codex() -> Result<String, String> {
     let api_key = get_credential("openai_api_key")
         .ok_or("No OpenAI API key found. Add one in Settings → Codex.")?;
     if api_key.trim().is_empty() {
-        return Err(
-            "No OpenAI API key found. Add one in Settings → Codex.".to_string(),
-        );
+        return Err("No OpenAI API key found. Add one in Settings → Codex.".to_string());
     }
 
     let model = crate::storage::preferences::get_pref("codex_model")
@@ -171,8 +219,7 @@ pub async fn ping_codex() -> Result<String, String> {
         .await
         .map_err(|e| {
             if e.is_connect() || e.is_timeout() {
-                "Could not reach api.openai.com. Check your internet connection."
-                    .to_string()
+                "Could not reach api.openai.com. Check your internet connection.".to_string()
             } else {
                 format!("Request failed: {e}")
             }

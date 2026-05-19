@@ -5,20 +5,38 @@
 // registry against them so confident matches auto-fill display names.
 
 use std::fs;
+
+#[cfg(target_os = "macos")]
 use tauri::Emitter;
 
+#[cfg(target_os = "macos")]
 use super::_shared::{
-    best_per_name, decide_recognition, dominant_overlap_speaker, enroll_registry_entry,
-    load_registry, meeting_path, remove_registry_entry, save_registry, write_meeting,
-    DIARIZE_MIN_SAMPLES, LAST_AUDIO, REGISTRY_AUTO_UPDATE_THRESHOLD, TARGET_SR,
+    best_per_name, decide_recognition, dominant_overlap_speaker, DIARIZE_MIN_SAMPLES, LAST_AUDIO,
+    REGISTRY_AUTO_UPDATE_THRESHOLD, TARGET_SR,
 };
-use super::types::{MeetingRecord, MeetingSpeaker};
+use super::_shared::{
+    enroll_registry_entry, load_registry, meeting_path, remove_registry_entry, save_registry,
+    write_meeting,
+};
+use super::types::MeetingRecord;
+
+#[cfg(target_os = "macos")]
+use super::types::MeetingSpeaker;
 
 #[tauri::command]
+#[cfg(not(target_os = "macos"))]
 pub fn diarize_meeting(
-    app: tauri::AppHandle,
-    meeting_id: String,
+    _app: tauri::AppHandle,
+    _meeting_id: String,
 ) -> Result<MeetingRecord, String> {
+    Err(
+        "Speaker diarization is currently only enabled on macOS. Windows keeps live transcription available without compiling speakrs/CoreML/MKL dependencies.".into(),
+    )
+}
+
+#[tauri::command]
+#[cfg(target_os = "macos")]
+pub fn diarize_meeting(app: tauri::AppHandle, meeting_id: String) -> Result<MeetingRecord, String> {
     use speakrs::{ExecutionMode, OwnedDiarizationPipeline};
 
     // Pull the audio buffer that stop_meeting_recording stashed. If the id
@@ -54,8 +72,8 @@ pub fn diarize_meeting(
 
     let mut record = {
         let path = meeting_path(&app, &meeting_id)?;
-        let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Read {}: {e}", path.display()))?;
+        let content =
+            fs::read_to_string(&path).map_err(|e| format!("Read {}: {e}", path.display()))?;
         serde_json::from_str::<MeetingRecord>(&content)
             .map_err(|e| format!("Parse {}: {e}", path.display()))?
     };
@@ -65,12 +83,9 @@ pub fn diarize_meeting(
         serde_json::json!({ "meetingId": &meeting_id, "stage": "loading-models" }),
     );
 
-    // CoreMl for Apple Silicon. speakrs falls back gracefully on other platforms
-    // via its Cpu mode; we force that path on non-macOS targets at compile time.
-    #[cfg(target_os = "macos")]
+    // CoreML is macOS-only; the Windows command stub above keeps the app buildable
+    // without pulling speakrs' x86_64 MKL backend into non-macOS builds.
     let mode = ExecutionMode::CoreMl;
-    #[cfg(not(target_os = "macos"))]
-    let mode = ExecutionMode::Cpu;
 
     let mut pipeline = OwnedDiarizationPipeline::from_pretrained(mode)
         .map_err(|e| format!("Diarization pipeline init failed: {e}"))?;
@@ -88,11 +103,8 @@ pub fn diarize_meeting(
     //    returns `Vec<Segment>` already merged into speaker turns, keyed by
     //    labels like "SPEAKER_00".
     for seg in record.segments.iter_mut() {
-        let best = dominant_overlap_speaker(
-            &result.segments,
-            seg.start_sec as f64,
-            seg.end_sec as f64,
-        );
+        let best =
+            dominant_overlap_speaker(&result.segments, seg.start_sec as f64, seg.end_sec as f64);
         seg.speaker_id = best;
     }
 
@@ -225,14 +237,18 @@ pub fn rename_meeting_speaker(
 ) -> Result<MeetingRecord, String> {
     let mut record = {
         let path = meeting_path(&app, &meeting_id)?;
-        let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Read {}: {e}", path.display()))?;
+        let content =
+            fs::read_to_string(&path).map_err(|e| format!("Read {}: {e}", path.display()))?;
         serde_json::from_str::<MeetingRecord>(&content)
             .map_err(|e| format!("Parse {}: {e}", path.display()))?
     };
     let trimmed = display_name.and_then(|s| {
         let t = s.trim();
-        if t.is_empty() { None } else { Some(t.to_string()) }
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
+        }
     });
 
     // Pull the vector before mutating so we can push it into the registry.

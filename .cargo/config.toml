@@ -1,0 +1,4 @@
+[build]
+# whisper-rs-sys drives MSBuild through CMake on Windows. Parallel Cargo jobs can
+# make that native install target fail without surfacing a compiler error.
+jobs = 1

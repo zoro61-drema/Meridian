@@ -106,11 +106,30 @@ const QWEN_COMMANDS: SlashCommand[] = [
   { name: "quit", description: "Exit the session" },
 ];
 
+/** Meridian-specific slash commands. These get prepended to every
+ *  backend's command list so the menu surfaces them in the chat.
+ *  Each one passes through to the agent verbatim (the CLI doesn't
+ *  intercept them); the role's system prompt teaches the agent
+ *  what to do when it receives them — e.g. PR Reviewer's prompt
+ *  knows `/prs` means "call `list_my_assigned_prs` and enumerate." */
+const MERIDIAN_COMMANDS: SlashCommand[] = [
+  {
+    name: "prs",
+    description:
+      "List the open PRs assigned to me for review (re-populates the list)",
+  },
+  {
+    name: "tickets",
+    description:
+      "List my JIRA tickets in the current sprint (re-populates the list)",
+  },
+];
+
 export const SLASH_COMMANDS_BY_BACKEND: Record<BackendKind, SlashCommand[]> = {
-  claudeAcp: CLAUDE_COMMANDS,
-  codexAcp: CODEX_COMMANDS,
-  geminiAcp: GEMINI_COMMANDS,
-  qwenAcp: QWEN_COMMANDS,
+  claudeAcp: [...MERIDIAN_COMMANDS, ...CLAUDE_COMMANDS],
+  codexAcp: [...MERIDIAN_COMMANDS, ...CODEX_COMMANDS],
+  geminiAcp: [...MERIDIAN_COMMANDS, ...GEMINI_COMMANDS],
+  qwenAcp: [...MERIDIAN_COMMANDS, ...QWEN_COMMANDS],
 };
 
 /** Filter a command list against the user's typed prefix

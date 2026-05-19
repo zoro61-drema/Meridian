@@ -1,5 +1,5 @@
 use super::super::client::BitbucketClient;
-use super::super::types::BitbucketTask;
+use super::super::BitbucketTask;
 
 impl BitbucketClient {
     pub async fn get_pr_tasks(&self, pr_id: i64) -> Result<Vec<BitbucketTask>, String> {

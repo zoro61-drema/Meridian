@@ -6,9 +6,7 @@ import {
     type AppPreferences,
     getAppPreferences,
     setAiDebugEnabled,
-    setAnthropicMaxOutputTokens,
     setDailyTokenBudget,
-    setGeminiMaxOutputTokens,
   setCommandStateBadgesEnabled,
   setCommandBugFilingBoards,
   setPreferredIdeId,
@@ -301,12 +299,6 @@ export function useAppPreferencesEditor() {
           break;
         case "meetingsSearchMinScore":
           await setMeetingsSearchMinScore(value as number);
-          break;
-        case "anthropicMaxOutputTokens":
-          await setAnthropicMaxOutputTokens(value as number);
-          break;
-        case "geminiMaxOutputTokens":
-          await setGeminiMaxOutputTokens(value as number);
           break;
         case "commandStateBadgesEnabled":
           await setCommandStateBadgesEnabled(value as boolean);

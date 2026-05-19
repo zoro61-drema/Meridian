@@ -30,11 +30,12 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
     DefaultModelCard,
-    MaxOutputTokensSection,
     PerPanelAiSection,
 } from "./settings/ai-defaults";
 import { AnthropicSection } from "./settings/anthropic";
 import { BitbucketSection } from "./settings/bitbucket";
+import { GithubSection } from "./settings/github";
+import { VcsReposSection } from "./settings/repositories";
 import { CacheSection } from "./settings/cache";
 import { ConfigSection } from "./settings/config";
 import { CodexSection } from "./settings/codex";
@@ -225,7 +226,6 @@ export function SettingsScreen({ onClose, onNavigate }: SettingsScreenProps) {
                 />
                 <DefaultModelCard />
                 <PerPanelAiSection />
-                <MaxOutputTokensSection />
                 <p className="text-xs text-muted-foreground pt-1">
                   All credentials are stored in your macOS Keychain and never
                   leave your machine. They are used exclusively in the Tauri
@@ -278,6 +278,11 @@ export function SettingsScreen({ onClose, onNavigate }: SettingsScreenProps) {
                   isConfigured={bitbucketCredentialsSet(credStatus)}
                   onSaved={refresh}
                 />
+                <GithubSection
+                  isConfigured={!!credStatus.githubPat}
+                  onSaved={refresh}
+                />
+                <VcsReposSection />
                 <ConfigSection
                   jiraBoardId={credStatus.jiraBoardId}
                   bitbucketRepoSlug={credStatus.bitbucketRepoSlug}

@@ -9,7 +9,7 @@ import { LocalLlmAuthForm } from "./local-llm-auth-form";
 
 export const MASKED_SENTINEL = "••••••••";
 
-export const TOTAL_STEPS = 4;
+export const TOTAL_STEPS = 6;
 
 export type ValidationState = "idle" | "loading" | "success" | "error";
 

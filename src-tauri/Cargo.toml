@@ -33,6 +33,7 @@ serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "multipart", "native-tls", "stream"] }
 tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "net", "time", "macros", "sync"] }
 futures-util = "0.3"
+async-trait = "0.1"
 base64 = "0.22.1"
 dirs = "6.0.0"
 aes-gcm = "0.10"

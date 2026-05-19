@@ -18,6 +18,7 @@ pub mod tasks;
 pub mod time_tracking;
 pub mod trend_analyses;
 pub mod validate;
+pub mod vcs_repos;
 pub mod workflows;
 
 use crate::agents;
@@ -64,13 +65,17 @@ pub use meetings::{
     active_meeting_id, clear_meetings_embeddings, create_notes_meeting, delete_meeting,
     diarize_meeting, download_whisper_model, get_meetings_dir, list_meetings, list_microphones,
     list_whisper_models, load_meeting, meetings_index_status, pause_meeting_recording,
-    reindex_all_meetings, rename_meeting_speaker, resume_meeting_recording, save_meeting,
+    recommend_whisper_model, reindex_all_meetings, rename_meeting_speaker, resume_meeting_recording,
+    save_meeting,
     start_meeting_recording, stop_meeting_recording, update_meeting_notes,
 };
 pub use llms::embeddings::probe_ollama_cmd;
 pub use meetings_search::{get_meeting_segment, search_meetings};
 pub use llms::claude::{cancel_review, get_claude_models};
-pub use llms::codex::{detect_codex_cli, enable_codex_cli_delegation, test_codex_stored};
+pub use llms::codex::{
+    detect_codex_cli, enable_codex_cli_delegation, ping_codex, test_codex_stored,
+    validate_openai_api_key,
+};
 pub use llms::copilot::{
     add_custom_copilot_model, detect_copilot_cli, enable_copilot_cli_delegation,
     get_copilot_models, get_custom_copilot_models, remove_custom_copilot_model,
@@ -122,5 +127,7 @@ pub use workflows::{
 pub use validate::{
     debug_jira_endpoints, detect_claude_code_cli, enable_claude_code_delegation, ping_anthropic,
     ping_copilot, ping_gemini, setup_ai_cli, test_anthropic_stored, test_bitbucket_stored,
-    test_jira_stored, validate_anthropic, validate_bitbucket, validate_jira,
+    test_github_stored, test_jira_stored, validate_anthropic, validate_bitbucket, validate_github,
+    validate_jira,
 };
+pub use vcs_repos::{delete_vcs_repo, list_vcs_repos, replace_vcs_repos, upsert_vcs_repo};

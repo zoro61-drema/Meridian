@@ -287,6 +287,30 @@ fn tool_specs() -> Value {
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
+            "name": "list_my_assigned_prs",
+            "description": "Fetch the open Bitbucket PRs where the user is listed as a reviewer (status: review pending). Returns an enumerated list the user can pick from by number. Use this on launch in the PR Reviewer role, and re-call it any time the user asks for a fresh list (e.g. types `/prs`). Use the returned `prs[].id`, `branch`, `url`, etc. when the user selects a number.",
+            "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
+            "name": "list_my_sprint_tickets",
+            "description": "Fetch the JIRA tickets assigned to the user in the currently active sprint (ordered by priority). Returns an enumerated list the user can pick from by number. Use this on launch in the Implementer role, and re-call it any time the user asks for a fresh list (e.g. types `/tickets`). Use the returned `tickets[].key` with `get_jira_ticket` to pull full detail (description, acceptance criteria, etc.) once the user picks a number.",
+            "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
+            "name": "get_jira_ticket",
+            "description": "Fetch the full detail for a single JIRA ticket by its key (e.g. \"PROJ-1234\"). Returns description, structured description sections, acceptance criteria, steps to reproduce, observed / expected behaviour, story points, status, and any extra custom fields configured in the user's JIRA workspace. Use this after `list_my_sprint_tickets` once the user picks a ticket — the list call returns slimmer summaries, this returns everything you need to plan an implementation.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["key"],
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "JIRA ticket key, e.g. \"PROJ-1234\"."
+                    }
+                }
+            }
+        },
+        {
             "name": "submit_bug_report",
             "description": "Submit one bug report for the user to review in the Bugs tab. Call this once per distinct bug you find while hunting through a feature. The user reviews each report and decides whether to push it to JIRA — you don't open tickets yourself. After calling this, keep hunting; don't block waiting for review.",
             "inputSchema": {
@@ -590,6 +614,208 @@ async fn handle_tool_call(
                             "text": "No more tickets in the queue. Stop calling get_next_ticket and send a one-paragraph summary of the batch you just groomed."
                         }],
                         "structuredContent": { "remaining": 0, "done": true }
+                    }),
+                ),
+            }
+        }
+        "list_my_assigned_prs" => {
+            // Reuse the same Tauri command the React layer hits. It
+            // returns Vec<BitbucketPr> from the configured workspace,
+            // filtered to PRs where the user (matched by Atlassian
+            // accountId) is a reviewer. If JIRA hasn't been validated
+            // yet, the underlying call falls back to "all open PRs" —
+            // not a fatal error here; we just label that fallback in
+            // the user-facing text so the agent can flag it.
+            match crate::commands::get_prs_for_review().await {
+                Ok(prs) => {
+                    if prs.is_empty() {
+                        return ok(
+                            id,
+                            json!({
+                                "content": [{
+                                    "type": "text",
+                                    "text": "You have no PRs assigned to you for review right now."
+                                }],
+                                "structuredContent": { "prs": [], "count": 0 }
+                            }),
+                        );
+                    }
+                    let mut lines = Vec::with_capacity(prs.len() + 1);
+                    lines.push(format!(
+                        "{} PR(s) assigned to you for review. Reply with the number you'd like reviewed.",
+                        prs.len()
+                    ));
+                    lines.push(String::new());
+                    for (idx, pr) in prs.iter().enumerate() {
+                        let n = idx + 1;
+                        let jira_tag = pr
+                            .jira_issue_key
+                            .as_deref()
+                            .map(|k| format!("  ·  JIRA: {k}"))
+                            .unwrap_or_default();
+                        let draft_tag = if pr.draft { "  ·  DRAFT" } else { "" };
+                        let changes_tag = if pr.changes_requested {
+                            "  ·  changes requested"
+                        } else {
+                            ""
+                        };
+                        lines.push(format!(
+                            "{n}. PR #{pr_id} — {title}{draft_tag}",
+                            pr_id = pr.id,
+                            title = pr.title,
+                            draft_tag = draft_tag,
+                        ));
+                        lines.push(format!(
+                            "   Branch: {src} → {dst}",
+                            src = pr.source_branch,
+                            dst = pr.destination_branch,
+                        ));
+                        lines.push(format!(
+                            "   Author: {author}  ·  Comments: {c}, Tasks: {t}{changes}{jira}",
+                            author = pr.author.display_name,
+                            c = pr.comment_count,
+                            t = pr.task_count,
+                            changes = changes_tag,
+                            jira = jira_tag,
+                        ));
+                        lines.push(format!("   URL: {}", pr.url));
+                        lines.push(String::new());
+                    }
+                    let summary = lines.join("\n");
+                    let prs_json = serde_json::to_value(&prs).unwrap_or(Value::Null);
+                    ok(
+                        id,
+                        json!({
+                            "content": [{ "type": "text", "text": summary }],
+                            "structuredContent": {
+                                "count": prs.len(),
+                                "prs": prs_json
+                            }
+                        }),
+                    )
+                }
+                Err(e) => ok(
+                    id,
+                    json!({
+                        "isError": true,
+                        "content": [{
+                            "type": "text",
+                            "text": format!("Failed to fetch assigned PRs: {e}. Check Bitbucket + JIRA credentials in Settings.")
+                        }]
+                    }),
+                ),
+            }
+        }
+        "list_my_sprint_tickets" => {
+            // Issues assigned to the currently-authenticated user in
+            // an open sprint, ordered by priority. Uses the same JIRA
+            // command path the Sprint Dashboard hits. The slim payload
+            // (no AC / steps_to_reproduce / extra custom fields) is
+            // enough to enumerate; the agent calls `get_jira_ticket`
+            // once the user picks a number to get the full body.
+            match crate::commands::get_my_sprint_issues().await {
+                Ok(issues) => {
+                    if issues.is_empty() {
+                        return ok(
+                            id,
+                            json!({
+                                "content": [{
+                                    "type": "text",
+                                    "text": "You have no tickets assigned to you in the current sprint."
+                                }],
+                                "structuredContent": { "tickets": [], "count": 0 }
+                            }),
+                        );
+                    }
+                    let mut lines = Vec::with_capacity(issues.len() + 2);
+                    lines.push(format!(
+                        "{} ticket(s) assigned to you in the current sprint. Reply with the number you'd like to plan and implement.",
+                        issues.len()
+                    ));
+                    lines.push(String::new());
+                    for (idx, t) in issues.iter().enumerate() {
+                        let n = idx + 1;
+                        let points = t
+                            .story_points
+                            .map(|p| format!("  ·  {p} pts"))
+                            .unwrap_or_default();
+                        let epic = t
+                            .epic_key
+                            .as_deref()
+                            .map(|k| format!("  ·  Epic: {k}"))
+                            .unwrap_or_default();
+                        lines.push(format!(
+                            "{n}. [{type_}] {key} — {summary}",
+                            type_ = t.issue_type,
+                            key = t.key,
+                            summary = t.summary,
+                        ));
+                        lines.push(format!(
+                            "   Status: {status}{points}{epic}",
+                            status = t.status,
+                        ));
+                        lines.push(format!("   URL: {}", t.url));
+                        lines.push(String::new());
+                    }
+                    let summary = lines.join("\n");
+                    let tickets_json = serde_json::to_value(&issues).unwrap_or(Value::Null);
+                    ok(
+                        id,
+                        json!({
+                            "content": [{ "type": "text", "text": summary }],
+                            "structuredContent": {
+                                "count": issues.len(),
+                                "tickets": tickets_json
+                            }
+                        }),
+                    )
+                }
+                Err(e) => ok(
+                    id,
+                    json!({
+                        "isError": true,
+                        "content": [{
+                            "type": "text",
+                            "text": format!("Failed to fetch sprint tickets: {e}. Check JIRA credentials and board configuration in Settings.")
+                        }]
+                    }),
+                ),
+            }
+        }
+        "get_jira_ticket" => {
+            let key = arguments
+                .get("key")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if key.is_empty() {
+                return err(id, -32602, "missing `key`");
+            }
+            match crate::commands::get_issue(key.clone()).await {
+                Ok(issue) => {
+                    let issue_json = serde_json::to_value(&issue).unwrap_or(Value::Null);
+                    let text = serde_json::to_string_pretty(&issue_json)
+                        .unwrap_or_else(|_| "(failed to serialise ticket)".to_string());
+                    ok(
+                        id,
+                        json!({
+                            "content": [{
+                                "type": "text",
+                                "text": format!("Ticket {key} — full detail:\n\n{text}")
+                            }],
+                            "structuredContent": { "ticket": issue_json }
+                        }),
+                    )
+                }
+                Err(e) => ok(
+                    id,
+                    json!({
+                        "isError": true,
+                        "content": [{
+                            "type": "text",
+                            "text": format!("Failed to fetch ticket {key}: {e}")
+                        }]
                     }),
                 ),
             }

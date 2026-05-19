@@ -23,6 +23,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { VcsRepoPicker } from "@/components/VcsRepoPicker";
+import {
+  COMMANDER_DEFAULT_REPO_PREF,
+  vcsRepoLabel,
+  type VcsRepo,
+} from "@/lib/tauri/vcs";
 import {
   COMMAND_ROLES,
   type CommandRole,
@@ -183,6 +189,17 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
   const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
   const [manualTicketsRaw, setManualTicketsRaw] = useState("");
 
+  /** PR-reviewing roles get a repo dropdown — the launch payload carries
+   *  the chosen repo's metadata in the role prompt so the unit knows
+   *  which workspace/slug to act on. Independent default from PR Review:
+   *  the picker reads `commander_default_repo_id`, which it also writes
+   *  on change. */
+  const [commanderRepo, setCommanderRepo] = useState<VcsRepo | null>(null);
+  const isPrRole =
+    role.id === "pr-reviewer" ||
+    role.id === "pr-auto-review" ||
+    role.id === "address-pr-tasks";
+
   useEffect(() => {
     if (!open) return;
     setSpriteId(role.defaultSprite);
@@ -195,6 +212,7 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
     setGroomerMode("sprint");
     setSelectedSprintId(null);
     setManualTicketsRaw("");
+    setCommanderRepo(null);
   }, [open, role, defaultProjectDir]);
 
   // Pull the per-backend model list whenever the modal opens or
@@ -325,6 +343,27 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
           setLaunching(false);
           return;
         }
+        // Skip story-type tickets — grooming is most valuable on bugs
+        // (missing repro / AC), tasks, and spikes. Stories typically
+        // already have AC vetted at planning time and adding noise
+        // from the groomer just creates churn.
+        const beforeStoryFilter = issues.length;
+        issues = issues.filter(
+          (i) => i.issueType?.toLowerCase() !== "story",
+        );
+        const skippedStories = beforeStoryFilter - issues.length;
+        if (issues.length === 0) {
+          toast.error(
+            `No tickets to groom — all ${beforeStoryFilter} fetched were stories (groomer skips stories).`,
+          );
+          setLaunching(false);
+          return;
+        }
+        if (skippedStories > 0) {
+          toast.info(
+            `Skipped ${skippedStories} story ticket${skippedStories === 1 ? "" : "s"} (groomer focuses on bugs / tasks / spikes).`,
+          );
+        }
         // Header: small metadata block, NOT the full ticket data —
         // tickets get dispensed one at a time via get_next_ticket.
         const headerLines = [
@@ -407,6 +446,27 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
           ? `${systemPrompt}\n\n---\n\n${groomerHeader}`
           : groomerHeader;
       }
+      // PR-reviewing roles get the chosen repo's coordinates appended
+      // to the role prompt so the unit knows which host/workspace/slug
+      // its PR-related tool calls should target.
+      if (isPrRole && commanderRepo) {
+        const repoBlock = [
+          "## Repository context",
+          `Provider: ${commanderRepo.kind === "github" ? "GitHub" : "Bitbucket"}`,
+          `Workspace/Owner: ${commanderRepo.workspace}`,
+          `Repository: ${commanderRepo.slug}`,
+          `Default branch: ${commanderRepo.baseBranch}`,
+          `Display name: ${vcsRepoLabel(commanderRepo)}`,
+          commanderRepo.worktreePath
+            ? `Worktree path: ${commanderRepo.worktreePath}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        systemPrompt = systemPrompt
+          ? `${systemPrompt}\n\n---\n\n${repoBlock}`
+          : repoBlock;
+      }
       addUnit({
         sessionId,
         backend,
@@ -422,10 +482,17 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
       toast.success(`Launched ${role.title}`);
       onOpenChange(false);
 
-      // Auto-kickoff for roles that should start acting on launch.
+      // Auto-kickoff for roles that should act on launch instead of
+      // sitting idle. Two paths:
+      //   1. Ticket Groomer with a pre-fetched batch — bespoke
+      //      because the kickoff wording depends on the live count.
+      //   2. Every other role with `autoKickoff` declared on its
+      //      CommandRole — either an autonomous start (PR Auto-
+      //      Review) or a "ask the user for input first" directive
+      //      (PR Reviewer, Bug Hunter, Implementer, …).
       // ACP agents stay idle until they get the first session/prompt
-      // even when the role prompt says "begin immediately" — these
-      // branches fire that first prompt on the user's behalf.
+      // even when the role prompt says "begin immediately", so we
+      // synthesise that first user message on their behalf.
       if (groomerTickets.length > 0) {
         autoKickoffUnit(
           sessionId,
@@ -434,11 +501,11 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
           }).`,
           "Begin grooming the queue. Call get_next_ticket now to fetch the first ticket.",
         );
-      } else if (role.id === "pr-auto-review") {
+      } else if (role.autoKickoff) {
         autoKickoffUnit(
           sessionId,
-          "Auto-starting PR auto-review run.",
-          "Begin the auto-review now. List the PRs assigned to me where the review is still pending, then work through them one at a time as described — separate worktree per PR, five-lens review, submit_pr_review_finding per issue, submit_pr_review_complete when each PR is done.",
+          role.autoKickoff.systemNotice,
+          role.autoKickoff.prompt,
         );
       }
     } catch (err) {
@@ -561,6 +628,24 @@ export function LaunchUnitModal({ open, onOpenChange, defaultProjectDir }: Props
               className="bg-black/30"
             />
           </div>
+
+          {isPrRole && (
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Repository
+              </Label>
+              <VcsRepoPicker
+                prefKey={COMMANDER_DEFAULT_REPO_PREF}
+                placeholder="Pick a repository for this PR role…"
+                onChange={setCommanderRepo}
+              />
+              <p className="text-xs text-muted-foreground">
+                The unit's PR tools target this repo. The choice is
+                remembered as the Commander default — separate from PR
+                Review's selection.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label

@@ -1,6 +1,8 @@
 import { APP_HEADER_TITLE, WorkflowPanelHeader } from "@/components/appHeaderLayout";
 import { type ToolRequest } from "@/components/ToolRequestCard";
 import { Button } from "@/components/ui/button";
+import { VcsRepoPicker } from "@/components/VcsRepoPicker";
+import { PR_REVIEW_ACTIVE_REPO_PREF } from "@/lib/tauri/vcs";
 import { type BitbucketComment, getPrFileContent } from "@/lib/tauri/bitbucket";
 import { openUrl } from "@/lib/tauri/core";
 import { type CredentialStatus, aiProviderComplete, bitbucketComplete, jiraComplete } from "@/lib/tauri/credentials";
@@ -376,32 +378,46 @@ export function PrReviewScreen({ credStatus, onBack }: PrReviewScreenProps) {
           </>
         }
         trailing={
-          selectedPr ? (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => selectedPr?.url && openUrl(selectedPr.url)}
-              >
-                <ExternalLink className="mr-1 h-3.5 w-3.5" /> Bitbucket
-              </Button>
-              {linkedIssue && (
+          <div className="flex shrink-0 items-center gap-2">
+            <VcsRepoPicker
+              prefKey={PR_REVIEW_ACTIVE_REPO_PREF}
+              placeholder="Select repo…"
+              className="w-48"
+              onChange={() => {
+                // Switching repos invalidates the current selection — clear it
+                // and refetch the PR lists for the newly active repo so the
+                // selector shows the right options.
+                store().clearSelection();
+                store().loadPrLists(jiraAvailable, bbAvailable, true);
+              }}
+            />
+            {selectedPr && (
+              <>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => linkedIssue.url && openUrl(linkedIssue.url)}
+                  onClick={() => selectedPr?.url && openUrl(selectedPr.url)}
                 >
-                  <ExternalLink className="mr-1 h-3.5 w-3.5" /> {linkedIssue.key}
+                  <ExternalLink className="mr-1 h-3.5 w-3.5" /> Open in browser
                 </Button>
-              )}
-              {report && (
-                <Button variant="ghost" size="sm" onClick={copySummary} className="gap-1">
-                  {copiedSummary ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copiedSummary ? "Copied" : "Copy report"}
-                </Button>
-              )}
-            </div>
-          ) : null
+                {linkedIssue && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => linkedIssue.url && openUrl(linkedIssue.url)}
+                  >
+                    <ExternalLink className="mr-1 h-3.5 w-3.5" /> {linkedIssue.key}
+                  </Button>
+                )}
+                {report && (
+                  <Button variant="ghost" size="sm" onClick={copySummary} className="gap-1">
+                    {copiedSummary ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedSummary ? "Copied" : "Copy report"}
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         }
       />
 

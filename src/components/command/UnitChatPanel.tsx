@@ -35,8 +35,9 @@ import {
   useSlashCommandState,
 } from "@/components/command/SlashCommandMenu";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { unitAttention } from "@/lib/commandAttention";
 import {
   filterServersForBackend,
   toWrapperPayload,
@@ -135,6 +136,14 @@ export function UnitChatPanel() {
   const showMyPrsTab = isAddressPrsRole || (unit?.addressedPrs.length ?? 0) > 0;
   const showReviewedPrsTab =
     isPrReviewerRole || (unit?.reviewedPrs.length ?? 0) > 0;
+
+  // Per-tab attention counts — drives the yellow indicator on the
+  // tab strip. Computed from structured queues only; chat state
+  // (thinking/streaming/etc.) is already conveyed by the unit
+  // sprite + state pills elsewhere.
+  const attention = unit
+    ? unitAttention(unit)
+    : { tickets: 0, bugs: 0, myPrs: 0, reviewedPrs: 0 };
 
   // Local interceptor for slash commands the CLI's interactive
   // REPL would normally handle. Returns true if the command was
@@ -584,31 +593,37 @@ export function UnitChatPanel() {
             Commands {unit.commands.length > 0 ? `(${unit.commands.length})` : ""}
           </TabsTrigger>
           {isGroomerRole && (
-            <TabsTrigger value="tickets" className="h-6 px-2 text-[11px]">
+            <TabsTrigger value="tickets" className="relative h-6 px-2 text-[11px]">
               <ClipboardList className="mr-1 h-3 w-3" />
               Tickets {unit.groomingQueue.length > 0 ? `(${unit.groomingQueue.length})` : ""}
+              {attention.tickets > 0 && <AttentionDot count={attention.tickets} />}
             </TabsTrigger>
           )}
           {showBugsTab && (
-            <TabsTrigger value="bugs" className="h-6 px-2 text-[11px]">
+            <TabsTrigger value="bugs" className="relative h-6 px-2 text-[11px]">
               <Bug className="mr-1 h-3 w-3" />
               Bugs {unit.bugReports.length > 0 ? `(${unit.bugReports.length})` : ""}
+              {attention.bugs > 0 && <AttentionDot count={attention.bugs} />}
             </TabsTrigger>
           )}
           {showMyPrsTab && (
-            <TabsTrigger value="my-prs" className="h-6 px-2 text-[11px]">
+            <TabsTrigger value="my-prs" className="relative h-6 px-2 text-[11px]">
               My PRs{" "}
               {unit.addressedPrs.length > 0
                 ? `(${unit.addressedPrs.length})`
                 : ""}
+              {attention.myPrs > 0 && <AttentionDot count={attention.myPrs} />}
             </TabsTrigger>
           )}
           {showReviewedPrsTab && (
-            <TabsTrigger value="reviewed-prs" className="h-6 px-2 text-[11px]">
+            <TabsTrigger value="reviewed-prs" className="relative h-6 px-2 text-[11px]">
               Reviewed PRs{" "}
               {unit.reviewedPrs.length > 0
                 ? `(${unit.reviewedPrs.length})`
                 : ""}
+              {attention.reviewedPrs > 0 && (
+                <AttentionDot count={attention.reviewedPrs} />
+              )}
             </TabsTrigger>
           )}
           <TabsTrigger value="debug" className="h-6 px-2 text-[11px]">
@@ -707,6 +722,21 @@ export function UnitChatPanel() {
  *  popover. Keyboard handling: ↑/↓ navigate the menu when open,
  *  Tab/Enter accepts the highlighted command (without submitting),
  *  Enter submits when the menu is closed, Esc closes the menu. */
+/** Yellow dot indicator for a TabsTrigger — signals the tab holds
+ *  N items the user hasn't reviewed yet (grooming proposals pending
+ *  review, bug reports not yet pushed to JIRA, PR reviews awaiting
+ *  a verdict, etc.). The parent TabsTrigger needs `relative` so the
+ *  absolute positioning lands on its top-right edge. */
+function AttentionDot({ count }: { count: number }) {
+  return (
+    <span
+      title={`${count} item${count === 1 ? "" : "s"} need your review`}
+      className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-yellow-300 shadow-[0_0_6px_rgba(253,224,71,0.7)]"
+      aria-hidden
+    />
+  );
+}
+
 function SlashAwareInputForm({
   text,
   setText,
@@ -744,7 +774,40 @@ function SlashAwareInputForm({
     setText(filled);
   };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Auto-grow the textarea as the user types or pastes multi-line
+  // content. Resets to 'auto' first so removing lines shrinks the
+  // height — without that the textarea would only ever grow. A
+  // max-height on the className caps growth; anything beyond
+  // scrolls inside the textarea.
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter without Shift submits — or accepts the highlighted slash
+    // command when the menu is open with results. Shift+Enter falls
+    // through to the textarea's default behaviour (insert newline).
+    if (e.key === "Enter" && !e.shiftKey) {
+      if (open && filtered.length > 0) {
+        e.preventDefault();
+        accept(highlight);
+        return;
+      }
+      e.preventDefault();
+      if (!disabled && text.trim().length > 0) {
+        // requestSubmit walks the same path a click on the submit
+        // button does, so the form's onSubmit handler still gets
+        // the open/filtered guard treatment.
+        e.currentTarget.form?.requestSubmit();
+      }
+      return;
+    }
+
+    // Remaining keys are slash-menu navigation only.
     if (!open) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -754,7 +817,7 @@ function SlashAwareInputForm({
       setHighlight(
         (h) => (h - 1 + Math.max(1, filtered.length)) % Math.max(1, filtered.length),
       );
-    } else if (e.key === "Tab" || (e.key === "Enter" && filtered.length > 0)) {
+    } else if (e.key === "Tab") {
       e.preventDefault();
       accept(highlight);
     } else if (e.key === "Escape") {
@@ -770,7 +833,7 @@ function SlashAwareInputForm({
 
   return (
     <form
-      className="relative flex gap-2"
+      className="relative flex items-end gap-2"
       onSubmit={(e) => {
         // If the menu is open with results, Enter is handled by
         // onKeyDown for accept; the form's submit only fires when
@@ -792,9 +855,11 @@ function SlashAwareInputForm({
           setText(filled);
         }}
       />
-      <Input
+      <Textarea
+        ref={textareaRef}
         disabled={disabled}
         value={text}
+        rows={1}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={
@@ -802,9 +867,12 @@ function SlashAwareInputForm({
             ? "Disconnected — click Resume to reconnect"
             : inFlight
               ? "Awaiting agent response…"
-              : "Send a prompt — try / for commands…"
+              : "Send a prompt — Enter to send, Shift+Enter for newline. Try / for commands…"
         }
-        className="flex-1 bg-black/30"
+        // Override the shadcn Textarea defaults: drop the 80px min
+        // (chat input should start single-line), match the Input's
+        // bg, cap growth at ~8 lines (~192px) with scroll past that.
+        className="flex-1 min-h-0 max-h-48 resize-none overflow-y-auto bg-black/30"
       />
       <Button
         type="submit"

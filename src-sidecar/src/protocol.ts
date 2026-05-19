@@ -16,6 +16,7 @@ export type ProviderCredentials =
   | { provider: "google"; mode: "gemini_cli" }
   | { provider: "ollama"; baseUrl: string }
   | { provider: "copilot"; mode: "copilot_cli" }
+  | { provider: "codex"; mode: "api_key"; apiKey: string }
   | { provider: "codex"; mode: "codex_cli" };
 
 export type ModelSelection = {

@@ -119,6 +119,15 @@ export async function downloadWhisperModel(modelId: string): Promise<string> {
   return invoke<string>("download_whisper_model", { modelId });
 }
 
+export interface WhisperRecommendation {
+  recommended: string;
+  totalRamBytes: number;
+}
+
+export async function recommendWhisperModel(): Promise<WhisperRecommendation> {
+  return invoke<WhisperRecommendation>("recommend_whisper_model");
+}
+
 export async function startMeetingRecording(
   req: StartMeetingRequest,
 ): Promise<StartMeetingResult> {

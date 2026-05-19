@@ -10,6 +10,8 @@ const ALLOWED_KEYS: &[&str] = &[
     "gemini_api_key",
     "gemini_auth_method",
     "copilot_auth_method",
+    "codex_auth_method",
+    "openai_api_key",
     "local_llm_url",
     "local_llm_api_key",
     "jira_base_url",
@@ -20,6 +22,9 @@ const ALLOWED_KEYS: &[&str] = &[
     "bitbucket_email",
     "bitbucket_access_token",
     "bitbucket_username",
+    "github_pat",
+    "github_username",
+    "github_base_url",
 ];
 
 /// Keys whose values may be returned to the frontend (not secrets).
@@ -34,6 +39,7 @@ const NON_SECRET_KEYS: &[&str] = &[
     "claude_auth_method",
     "gemini_auth_method",
     "copilot_auth_method",
+    "codex_auth_method",
     "local_llm_url",
     "jira_base_url",
     "jira_email",
@@ -43,6 +49,8 @@ const NON_SECRET_KEYS: &[&str] = &[
     "bitbucket_email",
     "bitbucket_username",
     "bitbucket_repo_slug",
+    "github_username",
+    "github_base_url",
     "repo_worktree_path",
     "repo_base_branch",
     "pr_review_worktree_path",
@@ -62,9 +70,13 @@ pub struct CredentialStatus {
     /// path — this flag is what "Copilot is configured" means.
     pub copilot_cli: bool,
     /// True when the user has enabled Codex CLI delegation
-    /// (`codex_auth_method=codex_cli`). Codex is CLI-only — used by
-    /// the Commander panel's `codexAcp` backend.
+    /// (`codex_auth_method=codex_cli`).
     pub codex_cli: bool,
+    /// True when the user has stored an OpenAI API key
+    /// (`openai_api_key`). Independent of `codex_cli` — the user
+    /// can have both stored at once and toggle the active path via
+    /// `codex_auth_method`.
+    pub codex_api_key: bool,
     pub local_llm_url: bool,
     pub jira_base_url: bool,
     pub jira_email: bool,
@@ -74,6 +86,9 @@ pub struct CredentialStatus {
     pub bitbucket_email: bool,
     pub bitbucket_access_token: bool,
     pub bitbucket_repo_slug: bool,
+    /// True when a GitHub PAT has been stored — gates the GitHub
+    /// Settings card's "configured" badge.
+    pub github_pat: bool,
 }
 
 impl CredentialStatus {
@@ -87,7 +102,7 @@ impl CredentialStatus {
         self.copilot_cli
     }
     pub fn codex_complete(&self) -> bool {
-        self.codex_cli
+        self.codex_cli || self.codex_api_key
     }
     pub fn local_llm_complete(&self) -> bool {
         self.local_llm_url
@@ -122,6 +137,7 @@ pub fn credential_status() -> Result<CredentialStatus, String> {
         gemini_api_key: has("gemini_api_key"),
         copilot_cli: copilot_method == "copilot_cli",
         codex_cli: codex_method == "codex_cli",
+        codex_api_key: has("openai_api_key"),
         local_llm_url: has("local_llm_url"),
         jira_base_url: has("jira_base_url"),
         jira_email: has("jira_email"),
@@ -131,6 +147,7 @@ pub fn credential_status() -> Result<CredentialStatus, String> {
         bitbucket_email: has("bitbucket_email"),
         bitbucket_access_token: has("bitbucket_access_token"),
         bitbucket_repo_slug: has_config("bitbucket_repo_slug"),
+        github_pat: has("github_pat"),
     })
 }
 

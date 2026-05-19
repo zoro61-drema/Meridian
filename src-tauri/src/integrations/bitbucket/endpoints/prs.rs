@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use super::super::client::BitbucketClient;
 use super::super::parsing::parse_pr;
-use super::super::types::BitbucketPr;
+use super::super::BitbucketPr;
 
 impl BitbucketClient {
     // ── Pull Requests ─────────────────────────────────────────────────────────

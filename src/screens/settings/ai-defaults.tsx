@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { AlertCircle, Gauge } from "lucide-react";
-import { APP_PREFERENCE_DEFAULTS } from "@/lib/appPreferences";
+import { AlertCircle } from "lucide-react";
 import {
   useAiSelectionStore,
   PANEL_LABELS,
@@ -22,7 +21,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { NumberPreferenceField, useAppPreferencesEditor } from "./_shared";
 
 const PROVIDER_META: Record<
   string,
@@ -362,58 +360,4 @@ export function PerPanelAiSection() {
   );
 }
 
-export function MaxOutputTokensSection() {
-  const { prefs, error, update } = useAppPreferencesEditor();
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Gauge className="h-4 w-4 text-muted-foreground" />
-          Max output tokens
-        </CardTitle>
-        <CardDescription className="text-xs mt-0.5">
-          Per-provider response-token ceiling. <span className="font-mono">max_tokens</span> is a cap, not an
-          allocation — typical responses are 1–4K, but Plan / Test Plan /
-          Code Review can blow past 8K and silently truncate at the
-          adapter's historical default. A larger cap costs nothing on
-          normal calls but prevents truncation when the model genuinely
-          needs the headroom.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {!prefs ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : (
-          <>
-            <NumberPreferenceField
-              label="Anthropic (Claude)"
-              helper="Applies to the API-key path. CLI delegation ignores this setting — Claude Code uses its own defaults. Sonnet 4.6 / Haiku 4.5 support up to 64K output tokens; Opus 4.x caps at 32K."
-              value={prefs.anthropicMaxOutputTokens}
-              defaultValue={APP_PREFERENCE_DEFAULTS.anthropicMaxOutputTokens}
-              min={1024}
-              max={65536}
-              step={1024}
-              unit="tokens"
-              onChange={(n) => void update("anthropicMaxOutputTokens", n)}
-            />
-            <NumberPreferenceField
-              label="Google (Gemini)"
-              helper="Applies to the API-key path. CLI delegation ignores this setting — the Gemini CLI uses its own defaults. Gemini 2.x models commonly support up to 64K output."
-              value={prefs.geminiMaxOutputTokens}
-              defaultValue={APP_PREFERENCE_DEFAULTS.geminiMaxOutputTokens}
-              min={1024}
-              max={65536}
-              step={1024}
-              unit="tokens"
-              onChange={(n) => void update("geminiMaxOutputTokens", n)}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Ollama is omitted on purpose — its server enforces the loaded model's native context window, and overriding it produces confusing mid-response truncation when models with different limits get loaded.
-            </p>
-          </>
-        )}
-        {error && <p className="text-xs text-destructive">{error}</p>}
-      </CardContent>
-    </Card>
-  );
-}
+

@@ -22,8 +22,6 @@ const KEY = {
   aiDebugDockMode: "ai_debug_dock_mode",
   meetingsEmbeddingModel: "meetings_embedding_model",
   meetingsSearchMinScore: "meetings_search_min_score",
-  anthropicMaxOutputTokens: "anthropic_max_output_tokens",
-  geminiMaxOutputTokens: "gemini_max_output_tokens",
   commandStateBadgesEnabled: "command_state_badges_enabled",
   commandBugFilingBoards: "command_bug_filing_boards",
   preferredIdeId: "preferred_ide_id",
@@ -90,8 +88,6 @@ export const APP_PREFERENCE_DEFAULTS = {
    *  adapter's historical default. Ollama is intentionally absent —
    *  its server enforces the loaded model's native context window,
    *  and overriding it produces confusing mid-response truncation. */
-  anthropicMaxOutputTokens: 32768,
-  geminiMaxOutputTokens: 32768,
   /** Show the emoji bubble above each command unit when its state
    *  changes. Useful at a glance; some users prefer the quieter
    *  read of just the animation. */
@@ -122,8 +118,6 @@ export type AppPreferences = {
   aiDebugDockMode: AiDebugDockMode;
   meetingsEmbeddingModel: string;
   meetingsSearchMinScore: number;
-  anthropicMaxOutputTokens: number;
-  geminiMaxOutputTokens: number;
   commandStateBadgesEnabled: boolean;
   commandBugFilingBoards: BugFilingBoard[];
   preferredIdeId: string;
@@ -215,14 +209,6 @@ export async function getAppPreferences(): Promise<AppPreferences> {
       APP_PREFERENCE_DEFAULTS.meetingsSearchMinScore,
       0,
       1,
-    ),
-    anthropicMaxOutputTokens: parsePositiveInt(
-      prefs[KEY.anthropicMaxOutputTokens],
-      APP_PREFERENCE_DEFAULTS.anthropicMaxOutputTokens,
-    ),
-    geminiMaxOutputTokens: parsePositiveInt(
-      prefs[KEY.geminiMaxOutputTokens],
-      APP_PREFERENCE_DEFAULTS.geminiMaxOutputTokens,
     ),
     commandStateBadgesEnabled: parseBool(
       prefs[KEY.commandStateBadgesEnabled],
@@ -326,12 +312,6 @@ export async function setMeetingsSearchMinScore(value: number): Promise<void> {
   const clamped = Math.min(1, Math.max(0, value));
   // Format with 2 decimals to keep the on-disk pref readable.
   await setPreference(KEY.meetingsSearchMinScore, clamped.toFixed(2));
-}
-export async function setAnthropicMaxOutputTokens(value: number): Promise<void> {
-  await setPreference(KEY.anthropicMaxOutputTokens, String(value));
-}
-export async function setGeminiMaxOutputTokens(value: number): Promise<void> {
-  await setPreference(KEY.geminiMaxOutputTokens, String(value));
 }
 export async function setCommandStateBadgesEnabled(value: boolean): Promise<void> {
   await setPreference(KEY.commandStateBadgesEnabled, value ? "true" : "false");

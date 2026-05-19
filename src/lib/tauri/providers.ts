@@ -26,6 +26,19 @@ export async function validateBitbucket(
   });
 }
 
+
+export async function validateGithub(
+  pat: string,
+  username: string,
+  baseUrl: string,
+): Promise<string> {
+  return invoke<string>("validate_github", {
+    pat,
+    username,
+    baseUrl: baseUrl || null,
+  });
+}
+
 /** Test the stored Anthropic key without passing it through the frontend. */
 export async function testAnthropicStored(): Promise<string> {
   return invoke<string>("test_anthropic_stored");
@@ -254,6 +267,11 @@ export async function testBitbucketStored(): Promise<string> {
   return invoke<string>("test_bitbucket_stored");
 }
 
+
+export async function testGithubStored(): Promise<string> {
+  return invoke<string>("test_github_stored");
+}
+
 /** Run a full diagnostic sweep of every JIRA endpoint, returning a plain-text report. */
 export async function debugJiraEndpoints(): Promise<string> {
   return invoke<string>("debug_jira_endpoints");
@@ -276,7 +294,20 @@ export async function enableCodexCliDelegation(): Promise<string> {
   return invoke<string>("enable_codex_cli_delegation");
 }
 
-/** Re-detect the stored Codex CLI without re-saving the auth pref. */
+/** Re-detect the stored Codex CLI or re-test the stored API key,
+ *  depending on the active `codex_auth_method`. */
 export async function testCodexStored(): Promise<string> {
   return invoke<string>("test_codex_stored");
+}
+
+/** Validate an OpenAI API key (must start with `sk-`). Saves it,
+ *  switches `codex_auth_method=api_key`, and probes /v1/models. */
+export async function validateOpenAiApiKey(apiKey: string): Promise<string> {
+  return invoke<string>("validate_openai_api_key", { apiKey });
+}
+
+/** Send a real "Say hello." message via the active Codex auth path
+ *  (API key or CLI) and return the model's reply. */
+export async function pingCodex(): Promise<string> {
+  return invoke<string>("ping_codex");
 }

@@ -27,7 +27,13 @@ import { getAppPreferences } from "@/lib/appPreferences";
 import { ContextProgressRing } from "@/components/ContextProgressRing";
 import { getModelContextWindow } from "@/lib/modelContext";
 
-const PROVIDER_OPTIONS: AiProvider[] = ["claude", "gemini", "local", "copilot"];
+const PROVIDER_OPTIONS: AiProvider[] = [
+  "claude",
+  "gemini",
+  "copilot",
+  "codex",
+  "local",
+];
 
 /** Bridge the aiSelectionStore's PanelId enum to the tokenUsageStore's
  *  PanelKey enum. They share the same set of ids today, so this is a

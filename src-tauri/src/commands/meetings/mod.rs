@@ -35,4 +35,4 @@ pub use recording::{
     list_microphones, pause_meeting_recording, resume_meeting_recording, start_meeting_recording,
     stop_meeting_recording,
 };
-pub use whisper::{download_whisper_model, list_whisper_models};
+pub use whisper::{download_whisper_model, list_whisper_models, recommend_whisper_model};

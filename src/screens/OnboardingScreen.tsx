@@ -5,10 +5,12 @@ import { setMockClaudeMode, setMockMode } from "@/lib/tauri/core";
 import { useState } from "react";
 import { StepIndicator, TOTAL_STEPS } from "./onboarding/_shared";
 import { AiProvidersStep } from "./onboarding/ai-providers-step";
-import { BitbucketStep } from "./onboarding/bitbucket-step";
+import { CodeHostingStep } from "./onboarding/code-hosting-step";
 import { CosmicBackdrop } from "./onboarding/cosmic-backdrop";
+import { FeaturesStep } from "./onboarding/features-step";
 import { JiraStep } from "./onboarding/jira-step";
 import { WelcomeStep } from "./onboarding/welcome-step";
+import { WorktreesStep } from "./onboarding/worktrees-step";
 
 interface OnboardingScreenProps {
   onComplete: () => void;
@@ -29,7 +31,9 @@ export function OnboardingScreen({ onComplete, onMockMode }: OnboardingScreenPro
     <WelcomeStep key="welcome" onNext={() => setStep(1)} onMockMode={handleMockMode} />,
     <AiProvidersStep key="ai" onNext={() => setStep(2)} onBack={() => setStep(0)} stepNum={1} />,
     <JiraStep key="jira" onNext={() => setStep(3)} onBack={() => setStep(1)} stepNum={2} />,
-    <BitbucketStep key="bitbucket" onNext={onComplete} onBack={() => setStep(2)} stepNum={3} />,
+    <CodeHostingStep key="code-hosting" onNext={() => setStep(4)} onBack={() => setStep(2)} stepNum={3} />,
+    <WorktreesStep key="worktrees" onNext={() => setStep(5)} onBack={() => setStep(3)} stepNum={4} />,
+    <FeaturesStep key="features" onNext={onComplete} onBack={() => setStep(4)} stepNum={5} />,
   ];
 
   return (
@@ -42,7 +46,7 @@ export function OnboardingScreen({ onComplete, onMockMode }: OnboardingScreenPro
         </div>
       </header>
       <div className="relative z-10 flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-4xl">
           {step > 0 && (
             <div className="mb-5 flex justify-center">
               <StepIndicator current={step} total={TOTAL_STEPS} />

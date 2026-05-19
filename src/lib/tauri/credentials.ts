@@ -10,9 +10,12 @@ export interface CredentialStatus {
    *  (`copilot_auth_method=copilot_cli`). Copilot has no API-key path. */
   copilotCli: boolean;
   /** True when the user has enabled Codex CLI delegation
-   *  (`codex_auth_method=codex_cli`). Codex is CLI-only — used by
-   *  the Commander panel's `codexAcp` backend. */
+   *  (`codex_auth_method=codex_cli`). */
   codexCli: boolean;
+  /** True when the user has stored an OpenAI API key (`openai_api_key`).
+   *  Independent of `codexCli` — both can be stored simultaneously
+   *  and the active path is selected via `codex_auth_method`. */
+  codexApiKey: boolean;
   localLlmUrl: boolean;
   jiraBaseUrl: boolean;
   jiraEmail: boolean;
@@ -22,6 +25,8 @@ export interface CredentialStatus {
   bitbucketEmail: boolean;
   bitbucketAccessToken: boolean;
   bitbucketRepoSlug: boolean;
+  /** True when a GitHub PAT has been stored. */
+  githubPat: boolean;
 }
 
 export function credentialStatusComplete(s: CredentialStatus) {
@@ -46,7 +51,7 @@ export function copilotComplete(s: CredentialStatus) {
 }
 
 export function codexComplete(s: CredentialStatus) {
-  return s.codexCli;
+  return s.codexCli || s.codexApiKey;
 }
 
 /** True when at least one AI provider (Anthropic, Gemini, Copilot, or local LLM) is configured. */
@@ -92,6 +97,7 @@ const EMPTY_STATUS: CredentialStatus = {
   geminiApiKey: false,
   copilotCli: false,
   codexCli: false,
+  codexApiKey: false,
   localLlmUrl: false,
   jiraBaseUrl: false,
   jiraEmail: false,
@@ -101,6 +107,7 @@ const EMPTY_STATUS: CredentialStatus = {
   bitbucketEmail: false,
   bitbucketAccessToken: false,
   bitbucketRepoSlug: false,
+  githubPat: false,
 };
 
 export async function getCredentialStatus(): Promise<CredentialStatus> {

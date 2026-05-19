@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::types::{
+use super::{
     BitbucketComment, BitbucketInlineContext, BitbucketPr, BitbucketReviewer, BitbucketUser,
 };
 

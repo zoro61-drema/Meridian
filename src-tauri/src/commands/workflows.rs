@@ -97,17 +97,29 @@ pub async fn resolve_credentials(provider: &str) -> Result<ProviderCredentials, 
             Ok(ProviderCredentials::Copilot(CopilotCreds::CopilotCli))
         }
         "codex" => {
-            // CLI delegation only. The user signs in via `codex login`
-            // against their ChatGPT account; Meridian never holds a
-            // credential. Same auth-method gate shape as Copilot.
-            let method = get_credential("codex_auth_method").unwrap_or_default();
-            if method != "codex_cli" {
+            // Two auth paths (parallel to Anthropic + Gemini):
+            //   - api_key: OpenAI API key against api.openai.com via
+            //     the sidecar's `OpenAIDirectChatModel` adapter.
+            //   - codex_cli: shell out to the user's `codex` install
+            //     (uses `codex login` against their ChatGPT account).
+            // `codex_auth_method` is the source of truth; if unset we
+            // assume api_key so a key entered without explicitly
+            // toggling the mode still works.
+            let method = get_credential("codex_auth_method")
+                .unwrap_or_else(|| "api_key".to_string());
+            if method == "codex_cli" {
+                return Ok(ProviderCredentials::Codex(CodexCreds::CodexCli));
+            }
+            let api_key = get_credential("openai_api_key").ok_or_else(|| {
+                "OpenAI API key not configured. Open Settings → Codex and either paste an API key or switch on Codex CLI delegation.".to_string()
+            })?;
+            if !api_key.starts_with("sk-") {
                 return Err(
-                    "Codex CLI delegation is not enabled. Open Settings → Codex and switch on Codex CLI."
+                    "Stored Codex credential isn't an OpenAI API key (expected `sk-…`). Re-enter your key in Settings → Codex, or switch to Codex CLI delegation."
                         .to_string(),
                 );
             }
-            Ok(ProviderCredentials::Codex(CodexCreds::CodexCli))
+            Ok(ProviderCredentials::Codex(CodexCreds::ApiKey { api_key }))
         }
         other => Err(format!("Unsupported provider for sidecar workflows: {other}")),
     }
@@ -132,12 +144,11 @@ pub async fn resolve_model_for_context(ctx: &AiContext) -> Result<ModelSelection
         ));
     }
     let credentials = resolve_credentials(sidecar_provider).await?;
-    let max_tokens = resolve_max_output_tokens(sidecar_provider);
     Ok(ModelSelection {
         provider: sidecar_provider.to_string(),
         model: resolved.model,
         credentials,
-        max_tokens,
+        max_tokens: None,
     })
 }
 
@@ -156,25 +167,7 @@ fn resolve_worktree_path() -> Option<String> {
         .filter(|p| !p.is_empty())
 }
 
-/// Per-provider response-token ceiling, read live on every workflow
-/// dispatch so the user's Settings choice takes effect on the very
-/// next call. Returns None for Ollama (the local server enforces the
-/// loaded model's context window — overriding it produces confusing
-/// mid-response truncation when models with different limits get
-/// loaded).
-fn resolve_max_output_tokens(provider: &'static str) -> Option<u32> {
-    let key = match provider {
-        "anthropic" => "anthropic_max_output_tokens",
-        "google" => "gemini_max_output_tokens",
-        // Copilot CLI has no max-tokens flag (same as Claude Code /
-        // Gemini CLI delegation paths) — return None so the sidecar
-        // adapter's default takes effect.
-        _ => return None,
-    };
-    crate::storage::preferences::get_pref(key)
-        .and_then(|raw| raw.parse::<u32>().ok())
-        .filter(|&n| n > 0)
-}
+
 
 #[tauri::command]
 pub async fn run_grooming_workflow(

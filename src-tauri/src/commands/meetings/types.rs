@@ -179,6 +179,19 @@ pub struct WhisperModelStatus {
     pub size_bytes: u64,
 }
 
+
+#[derive(Serialize, Clone, Debug)]
+pub struct WhisperRecommendation {
+    /// Suggested whisper model id given the host's RAM. One of
+    /// SUPPORTED_MODELS — never an unknown id.
+    pub recommended: String,
+    /// Total physical RAM in bytes, or 0 if detection failed on this
+    /// platform. Exposed so the UI can show "your machine has 16 GB"
+    /// alongside the suggestion.
+    #[serde(rename = "totalRamBytes")]
+    pub total_ram_bytes: u64,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StartMeetingRequest {
     pub title: String,

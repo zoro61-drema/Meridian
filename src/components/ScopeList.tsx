@@ -66,6 +66,29 @@ export const BITBUCKET_SCOPES = {
   ] satisfies Scope[],
 };
 
+
+export const GITHUB_SCOPES = {
+  title: "Required PAT scopes",
+  note: "Generate at github.com → Settings → Developer settings → Personal access tokens. Fine-grained tokens scoped to the repos you want Meridian to access are recommended; classic tokens with the scopes below also work.",
+  scopes: [
+    {
+      name: "repo",
+      reason: "list repositories, read commits, branches, diffs, and PRs",
+      required: true,
+    },
+    {
+      name: "read:user",
+      reason: "identify the authenticated user (matches the username field)",
+      required: true,
+    },
+    {
+      name: "read:org",
+      reason: "list PRs across organisation repos",
+      required: false,
+    },
+  ] satisfies Scope[],
+};
+
 // JIRA — Classic API tokens (ATATT3x…) inherit your Atlassian account permissions.
 // No scope selection exists when generating the token. This list shows the account-level
 // project permissions your account needs in JIRA — not token scopes.

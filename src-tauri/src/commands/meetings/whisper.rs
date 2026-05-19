@@ -107,3 +107,68 @@ pub async fn download_whisper_model(
     );
     Ok(path.to_string_lossy().into_owned())
 }
+
+
+// Suggest a whisper.cpp model to default to in onboarding, based on
+// the host's physical RAM. Conservative on small machines (transcription
+// happens in-process and runs alongside whatever the user is doing), and
+// optimistic on workstations where medium.en's noticeably-better accuracy
+// is worth the load time. The user can still pick any model — this is
+// only the default the wizard pre-selects.
+#[tauri::command]
+pub fn recommend_whisper_model() -> Result<super::types::WhisperRecommendation, String> {
+    let total_ram_bytes = detect_total_ram_bytes();
+    let recommended = pick_whisper_model(total_ram_bytes);
+    Ok(super::types::WhisperRecommendation {
+        recommended: recommended.to_string(),
+        total_ram_bytes,
+    })
+}
+
+fn pick_whisper_model(total_ram_bytes: u64) -> &'static str {
+    const GB: u64 = 1024 * 1024 * 1024;
+    if total_ram_bytes >= 24 * GB {
+        "medium.en"
+    } else if total_ram_bytes >= 16 * GB {
+        "small.en"
+    } else if total_ram_bytes >= 8 * GB {
+        "base.en"
+    } else {
+        // Includes the "couldn't detect" case (total = 0). Pick the
+        // safest default — tiny.en runs anywhere and the user can
+        // upgrade later.
+        "tiny.en"
+    }
+}
+
+fn detect_total_ram_bytes() -> u64 {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(out) = std::process::Command::new("sysctl")
+            .args(["-n", "hw.memsize"])
+            .output()
+        {
+            if let Ok(s) = std::str::from_utf8(&out.stdout) {
+                if let Ok(n) = s.trim().parse::<u64>() {
+                    return n;
+                }
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(text) = std::fs::read_to_string("/proc/meminfo") {
+            for line in text.lines() {
+                if let Some(rest) = line.strip_prefix("MemTotal:") {
+                    let parts: Vec<&str> = rest.split_whitespace().collect();
+                    if let Some(kb_str) = parts.first() {
+                        if let Ok(kb) = kb_str.parse::<u64>() {
+                            return kb * 1024;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    0
+}

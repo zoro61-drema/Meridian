@@ -108,18 +108,33 @@ fn build_model_env(
     model_override: Option<&str>,
 ) -> HashMap<String, String> {
     let mut env = HashMap::new();
-    let Some(model) = model_override.map(|s| s.trim()).filter(|s| !s.is_empty())
-    else {
-        return env;
-    };
-    let key = match kind {
-        BackendKind::ClaudeAcp => "ANTHROPIC_MODEL",
-        BackendKind::GeminiAcp => "GEMINI_MODEL",
-        // Codex CLI reads OPENAI_MODEL for the default model;
-        // CODEX_MODEL is an internal alias used in some forks.
-        BackendKind::CodexAcp => "OPENAI_MODEL",
-        BackendKind::QwenAcp => "QWEN_MODEL",
-    };
-    env.insert(key.to_string(), model.to_string());
+    if let Some(model) = model_override.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let key = match kind {
+            BackendKind::ClaudeAcp => "ANTHROPIC_MODEL",
+            BackendKind::GeminiAcp => "GEMINI_MODEL",
+            // Codex CLI reads OPENAI_MODEL for the default model;
+            // CODEX_MODEL is an internal alias used in some forks.
+            BackendKind::CodexAcp => "OPENAI_MODEL",
+            BackendKind::QwenAcp => "QWEN_MODEL",
+        };
+        env.insert(key.to_string(), model.to_string());
+    }
+    // Codex CLI honours OPENAI_API_KEY (and CODEX_API_KEY) when set —
+    // injecting it here lets the user pick the API-key auth path in
+    // Settings → Codex and have the Commander ACP wrapper authenticate
+    // without ever running `codex login`. CLI-delegation users have no
+    // key stored, so the env var stays unset and the CLI falls back to
+    // its own auth.
+    if matches!(kind, BackendKind::CodexAcp) {
+        if let Some(api_key) =
+            crate::storage::credentials::get_credential("openai_api_key")
+        {
+            let trimmed = api_key.trim();
+            if !trimmed.is_empty() {
+                env.insert("OPENAI_API_KEY".to_string(), trimmed.to_string());
+                env.insert("CODEX_API_KEY".to_string(), trimmed.to_string());
+            }
+        }
+    }
     env
 }

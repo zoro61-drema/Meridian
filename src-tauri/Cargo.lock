@@ -2893,6 +2893,7 @@ name = "meridian"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "async-trait",
  "base64 0.22.1",
  "core-foundation 0.10.1",
  "cpal",

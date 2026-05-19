@@ -7,6 +7,7 @@ import { ClaudeCodeChatModel } from "./anthropic-via-claude-code.js";
 import { GeminiCliChatModel } from "./gemini-via-cli.js";
 import { CopilotCliChatModel } from "./copilot-via-cli.js";
 import { CodexCliChatModel } from "./codex-via-cli.js";
+import { OpenAIDirectChatModel } from "./openai-direct.js";
 import { wrapWithAiCapture } from "../ai-capture.js";
 
 /** Optional, per-call passthroughs that don't belong on ModelSelection
@@ -96,10 +97,17 @@ function buildModelInner(
       });
     }
     case "codex": {
-      return new CodexCliChatModel({
+      if (credentials.mode === "codex_cli") {
+        return new CodexCliChatModel({
+          model,
+          maxTokens,
+          cwd: options.worktreePath,
+        });
+      }
+      return new OpenAIDirectChatModel({
+        apiKey: credentials.apiKey,
         model,
         maxTokens,
-        cwd: options.worktreePath,
       });
     }
     case "ollama": {

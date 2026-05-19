@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::super::client::BitbucketClient;
 use super::super::parsing::parse_comment;
-use super::super::types::BitbucketComment;
+use super::super::BitbucketComment;
 
 impl BitbucketClient {
     pub async fn get_pr_comments(&self, pr_id: i64) -> Result<Vec<BitbucketComment>, String> {

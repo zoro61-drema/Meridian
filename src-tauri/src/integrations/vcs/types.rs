@@ -1,10 +1,12 @@
-use serde::Serialize;
+// Provider-neutral PR/comment/task/user shapes used by every `VcsProvider`
+// impl. Field-level serde renames preserve the camelCase wire format that
+// the frontend already consumes.
 
-// ── Output types ──────────────────────────────────────────────────────────────
+use serde::Serialize;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct BitbucketUser {
+pub struct User {
     pub display_name: String,
     pub nickname: String,
     pub account_id: Option<String>,
@@ -12,21 +14,21 @@ pub struct BitbucketUser {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct BitbucketReviewer {
-    pub user: BitbucketUser,
+pub struct Reviewer {
+    pub user: User,
     pub approved: bool,
     pub state: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct BitbucketPr {
+pub struct Pr {
     pub id: i64,
     pub title: String,
     pub description: Option<String>,
     pub state: String,
-    pub author: BitbucketUser,
-    pub reviewers: Vec<BitbucketReviewer>,
+    pub author: User,
+    pub reviewers: Vec<Reviewer>,
     pub source_branch: String,
     pub destination_branch: String,
     pub created_on: String,
@@ -41,19 +43,19 @@ pub struct BitbucketPr {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct BitbucketComment {
+pub struct Comment {
     pub id: i64,
     pub content: String,
-    pub author: BitbucketUser,
+    pub author: User,
     pub created_on: String,
     pub updated_on: String,
-    pub inline: Option<BitbucketInlineContext>,
+    pub inline: Option<InlineContext>,
     pub parent_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct BitbucketInlineContext {
+pub struct InlineContext {
     pub path: String,
     pub from_line: Option<i64>,
     pub to_line: Option<i64>,
@@ -61,10 +63,9 @@ pub struct BitbucketInlineContext {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct BitbucketTask {
+pub struct Task {
     pub id: i64,
     pub content: String,
     pub resolved: bool,
-    /// The comment this task is anchored to, if any.
     pub comment_id: Option<i64>,
 }

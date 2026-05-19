@@ -174,6 +174,13 @@ pub enum CopilotCreds {
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "mode")]
 pub enum CodexCreds {
+    /// OpenAI API key (sk-…). Used by the sidecar's
+    /// `OpenAIDirectChatModel` adapter against api.openai.com.
+    #[serde(rename = "api_key")]
+    ApiKey {
+        #[serde(rename = "apiKey")]
+        api_key: String,
+    },
     /// Delegation to the user's locally-installed OpenAI Codex CLI.
     /// No credential payload — the CLI handles auth internally (the user
     /// signs in once via `codex login` against their ChatGPT account).

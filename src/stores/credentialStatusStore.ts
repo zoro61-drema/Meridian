@@ -49,6 +49,6 @@ export function authenticatedProviders(
   if (status.geminiApiKey) out.add("gemini");
   if (status.localLlmUrl) out.add("local");
   if (status.copilotCli) out.add("copilot");
-  if (status.codexCli) out.add("codex");
+  if (status.codexCli || status.codexApiKey) out.add("codex");
   return out;
 }

@@ -16,6 +16,21 @@ import { getPendingCrashReport, reportJsCrash } from "@/lib/tauri/crash";
 
 let handlersInstalled = false;
 
+/** True if this error came from Vite's React-Refresh path in dev mode.
+ *  Those errors fire when HMR keeps a stale module closure alive that
+ *  references a symbol that's since been removed — React's reconciler
+ *  recovers, but our window.error listener still sees the throw. Suppress
+ *  in dev so transient refresh state doesn't pollute the crash log. */
+function isHmrRefreshNoise(_message: string, stack: string | undefined): boolean {
+  if (!import.meta.env.DEV) return false;
+  if (!stack) return false;
+  return (
+    stack.includes("@react-refresh") ||
+    stack.includes("performReactRefresh") ||
+    stack.includes("/@vite/client")
+  );
+}
+
 export function installJsCrashHandlers(): void {
   if (handlersInstalled) return;
   handlersInstalled = true;
@@ -27,6 +42,17 @@ export function installJsCrashHandlers(): void {
       ev.error instanceof Error
         ? ev.error.stack
         : `${ev.filename}:${ev.lineno}:${ev.colno}`;
+    if (isHmrRefreshNoise(message, stack)) {
+      // Dev-only: Vite/React-Refresh keeps stale closures alive after a
+      // top-level symbol is removed. The thrown ReferenceError lands here
+      // on the next HMR even though the source on disk is clean. React's
+      // error-recovery still re-renders correctly — a hard reload would
+      // clear the stale module entirely. Don't escalate this to a crash
+      // report; just log it so it's still visible while developing.
+      // eslint-disable-next-line no-console
+      console.warn("[crash] suppressed HMR refresh error:", message);
+      return;
+    }
     void reportJsCrash(message, stack).catch(() => {
       // If we can't even write the report, there's nowhere left to
       // signal — swallow.
@@ -42,6 +68,11 @@ export function installJsCrashHandlers(): void {
           ? reason
           : "Unhandled promise rejection";
     const stack = reason instanceof Error ? reason.stack : undefined;
+    if (isHmrRefreshNoise(message, stack)) {
+      // eslint-disable-next-line no-console
+      console.warn("[crash] suppressed HMR refresh rejection:", message);
+      return;
+    }
     void reportJsCrash(message, stack).catch(() => {});
   });
 }

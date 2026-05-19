@@ -186,6 +186,7 @@ use commands::{
     test_github_stored,
     test_jira_stored,
     test_local_llm_stored,
+    ping_local_llm,
     unapprove_pr,
     unrequest_changes_pr,
     update_jira_fields,
@@ -364,6 +365,7 @@ pub fn run() {
             get_local_models,
             validate_local_llm,
             test_local_llm_stored,
+            ping_local_llm,
             // Workflows
             run_grooming_file_probe_workflow,
             run_grooming_chat_workflow,

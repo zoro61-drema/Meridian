@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setLocalLlmUrlCache } from "@/lib/tauri/core";
 import { deleteCredential, getNonSecretConfig, saveCredential } from "@/lib/tauri/credentials";
-import { getLocalModels, testLocalLlmStored, validateLocalLlm } from "@/lib/tauri/providers";
+import { getLocalModels, pingLocalLlm, validateLocalLlm } from "@/lib/tauri/providers";
 import { useAiSelectionStore } from "@/stores/aiSelectionStore";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -99,11 +99,11 @@ export function LocalLlmSection({
     }
   }
 
-  async function handleTestStored() {
-    setStatus({ state: "loading", message: "Testing connection…" });
+  async function handlePing() {
+    setStatus({ state: "loading", message: "Sending test message…" });
     setTestResult("untested");
     try {
-      const msg = await testLocalLlmStored();
+      const msg = await pingLocalLlm();
       setTestResult("success");
       setStatus({ state: "success", message: msg });
     } catch (err) {
@@ -180,15 +180,15 @@ export function LocalLlmSection({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleTestStored}
+                onClick={handlePing}
                 disabled={status.state === "loading"}
               >
                 {status.state === "loading" ? (
                   <>
-                    <Loader2 className="h-3 w-3 animate-spin" /> Testing…
+                    <Loader2 className="h-3 w-3 animate-spin" /> Sending…
                   </>
                 ) : (
-                  "Test connection"
+                  "Send test message"
                 )}
               </Button>
             )}

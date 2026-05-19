@@ -188,3 +188,55 @@ pub async fn test_local_llm_stored() -> Result<String, String> {
         ))
     }
 }
+
+
+/// Send a real "Say hello." message to the configured local LLM server and
+/// return the reply. Tests the full inference path — server up, model
+/// loaded, auth (if any) — not just connectivity.
+#[tauri::command]
+pub async fn ping_local_llm() -> Result<String, String> {
+    let base = local_llm_base_url().ok_or("Local LLM server URL is not configured.")?;
+    let model = get_local_llm_model()
+        .ok_or("No local LLM model is set. Pick one in Settings → Local LLM.")?;
+    let key_opt = get_credential("local_llm_api_key").filter(|k| !k.trim().is_empty());
+
+    let client = make_local_client()?;
+
+    let body = serde_json::json!({
+        "model": model,
+        "max_tokens": 32,
+        "messages": [{ "role": "user", "content": "Say hello." }],
+    });
+
+    let mut req = client.post(format!("{base}/chat/completions"));
+    if let Some(ref k) = key_opt {
+        req = req.header("Authorization", format!("Bearer {k}"));
+    }
+
+    let resp = req.json(&body).send().await.map_err(|e| {
+        if e.is_connect() || e.is_timeout() {
+            format!("Could not reach {base}. Is the server running?")
+        } else {
+            format!("Request failed: {e}")
+        }
+    })?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body_text = resp.text().await.unwrap_or_default();
+        return Err(format!("Local LLM error {status}: {body_text}"));
+    }
+
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {e}"))?;
+
+    let reply = json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("(no text in response)");
+
+    Ok(format!(
+        "Message sent successfully. {model} replied: \"{reply}\""
+    ))
+}

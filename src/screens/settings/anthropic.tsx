@@ -15,7 +15,6 @@ import {
     enableClaudeCodeDelegation,
     pingAnthropic,
     setupAiCli,
-    testAnthropicStored,
     validateAnthropic,
 } from "@/lib/tauri/providers";
 import { cn } from "@/lib/utils";
@@ -171,36 +170,7 @@ export function AnthropicSection({
     }
   }
 
-  async function handleTest() {
-    setStatus({ state: "loading", message: "Testing connection…" });
-    setTestResult("untested");
-    try {
-      const msg =
-        apiKey === MASKED_SENTINEL
-          ? await testAnthropicStored()
-          : await validateAnthropic(apiKey.trim());
-      setTestResult("success");
-      setStatus({ state: "success", message: msg });
-    } catch (err) {
-      setTestResult("error");
-      setStatus({ state: "error", message: String(err) });
-    }
-  }
-
-  async function handleTestStored() {
-    setStatus({ state: "loading", message: "Testing connection…" });
-    setTestResult("untested");
-    try {
-      const msg = await testAnthropicStored();
-      setTestResult("success");
-      setStatus({ state: "success", message: msg });
-    } catch (err) {
-      setTestResult("error");
-      setStatus({ state: "error", message: String(err) });
-    }
-  }
-
-  async function handlePing() {
+    async function handlePing() {
     setStatus({ state: "loading", message: "Sending test message…" });
     setTestResult("untested");
     try {
@@ -283,22 +253,6 @@ export function AnthropicSection({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleTestStored}
-                  disabled={status.state === "loading"}
-                >
-                  {status.state === "loading" ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" /> Testing…
-                    </>
-                  ) : (
-                    "Test connection"
-                  )}
-                </Button>
-              )}
-              {isConfigured && (
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={handlePing}
                   disabled={status.state === "loading"}
                 >
@@ -351,14 +305,6 @@ export function AnthropicSection({
                   ) : (
                     "Save key"
                   )}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleTest}
-                  disabled={!apiKey.trim() || status.state === "loading"}
-                >
-                  Test connection
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleCancel}>
                   Cancel
@@ -415,16 +361,6 @@ export function AnthropicSection({
               >
                 {isConfigured ? "Re-detect CLI" : "Use Claude Code CLI"}
               </Button>
-              {isConfigured && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTestStored}
-                  disabled={status.state === "loading"}
-                >
-                  Test
-                </Button>
-              )}
               {isConfigured && (
                 <Button
                   variant="outline"

@@ -86,7 +86,9 @@ pub use llms::gemini::{
     get_custom_gemini_models, get_gemini_models, remove_custom_gemini_model, test_gemini_stored,
     validate_gemini,
 };
-pub use llms::local_llm::{get_local_models, test_local_llm_stored, validate_local_llm};
+pub use llms::local_llm::{
+    get_local_models, ping_local_llm, test_local_llm_stored, validate_local_llm,
+};
 pub use preferences::{delete_preference, get_preferences, set_preference};
 pub use crate::storage::preferences::{
     clear_ai_debug_log_cmd, data_directory_has_content, get_ai_debug_log_path_cmd, get_data_dir,

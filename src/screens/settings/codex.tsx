@@ -15,7 +15,6 @@ import {
     enableCodexCliDelegation,
     pingCodex,
     setupAiCli,
-    testCodexStored,
     validateOpenAiApiKey,
 } from "@/lib/tauri/providers";
 import { cn } from "@/lib/utils";
@@ -140,19 +139,6 @@ export function CodexSection({
     }
   }
 
-  async function handleTestStored() {
-    setStatus({ state: "loading", message: "Testing connection…" });
-    setTestResult("untested");
-    try {
-      const msg = await testCodexStored();
-      setTestResult("success");
-      setStatus({ state: "success", message: msg });
-    } catch (err) {
-      setTestResult("error");
-      setStatus({ state: "error", message: String(err) });
-    }
-  }
-
   async function handlePing() {
     setStatus({ state: "loading", message: "Sending test message…" });
     setTestResult("untested");
@@ -264,22 +250,6 @@ export function CodexSection({
               <Button variant="outline" size="sm" onClick={startEditing}>
                 {isConfigured ? "Update key" : "Add key"}
               </Button>
-              {isConfigured && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTestStored}
-                  disabled={status.state === "loading"}
-                >
-                  {status.state === "loading" ? (
-                    <>
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Testing…
-                    </>
-                  ) : (
-                    "Test connection"
-                  )}
-                </Button>
-              )}
               {isConfigured && (
                 <Button
                   variant="outline"
@@ -422,16 +392,6 @@ export function CodexSection({
                   "Use Codex CLI"
                 )}
               </Button>
-              {isConfigured && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTestStored}
-                  disabled={status.state === "loading"}
-                >
-                  Test
-                </Button>
-              )}
               {isConfigured && (
                 <Button
                   variant="outline"

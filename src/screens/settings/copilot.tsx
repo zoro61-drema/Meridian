@@ -21,7 +21,6 @@ import {
     pingCopilot,
     removeCustomCopilotModel,
     setupAiCli,
-    testCopilotStored,
 } from "@/lib/tauri/providers";
 import { useAiSelectionStore } from "@/stores/aiSelectionStore";
 import { ExternalLink, Loader2, Trash2 } from "lucide-react";
@@ -168,19 +167,6 @@ export function CopilotSection({
     }
   }
 
-  async function handleTestStored() {
-    setStatus({ state: "loading", message: "Testing connection…" });
-    setTestResult("untested");
-    try {
-      const msg = await testCopilotStored();
-      setTestResult("success");
-      setStatus({ state: "success", message: msg });
-    } catch (err) {
-      setTestResult("error");
-      setStatus({ state: "error", message: String(err) });
-    }
-  }
-
   async function handlePing() {
     setStatus({ state: "loading", message: "Sending test message…" });
     setTestResult("untested");
@@ -269,16 +255,6 @@ export function CopilotSection({
                 "Use Copilot CLI"
               )}
             </Button>
-            {isConfigured && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTestStored}
-                disabled={status.state === "loading"}
-              >
-                Test
-              </Button>
-            )}
             {isConfigured && (
               <Button
                 variant="outline"

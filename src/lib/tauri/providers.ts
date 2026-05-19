@@ -257,6 +257,13 @@ export async function testLocalLlmStored(): Promise<string> {
   return invoke<string>("test_local_llm_stored");
 }
 
+
+/** Send a real "Say hello." message via the configured local LLM and
+ *  return the reply. Tests the full inference path, not just connectivity. */
+export async function pingLocalLlm(): Promise<string> {
+  return invoke<string>("ping_local_llm");
+}
+
 /** Test the stored JIRA credentials without passing secrets through the frontend. */
 export async function testJiraStored(): Promise<string> {
   return invoke<string>("test_jira_stored");

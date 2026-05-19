@@ -27,6 +27,7 @@ export function TacticalField({ compact = false }: TacticalFieldProps = {}) {
   const unitOrder = useCommandStore((s) => s.unitOrder);
   const signalArcs = useCommandStore((s) => s.signalArcs);
   const tickWander = useCommandStore((s) => s.tickWander);
+  const setFieldBounds = useCommandStore((s) => s.setFieldBounds);
 
   // Cosmetic idle-wander rAF loop (spec §2.4). Pure read-from-store
   // side effect — the tick action no-ops when nothing changes, so
@@ -88,16 +89,35 @@ export function TacticalField({ compact = false }: TacticalFieldProps = {}) {
       // would return the visible (scaled-down) rect, causing the
       // terrain SVG to render at the post-transform size and only
       // fill the top-left quadrant of our 800×420 logical box.
-      setSize({
-        w: Math.max(1, el.offsetWidth),
-        h: Math.max(1, el.offsetHeight),
-      });
+      const w = Math.max(1, el.offsetWidth);
+      const h = Math.max(1, el.offsetHeight);
+      setSize({ w, h });
+      // Non-compact (ExpandedField) drives the store-side field
+      // bounds so wander + clamp use the full available area.
+      // MiniField's TacticalField stays out of this — it sits inside
+      // a `width: FIELD_W, height: FIELD_H` scaled wrapper that
+      // measures 800×420 anyway, so updating bounds from there
+      // would just race with the expanded view.
+      if (!compact) setFieldBounds(w, h);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [compact, setFieldBounds]);
+
+  // Reset bounds to the MiniField logical size when the non-compact
+  // view unmounts. Without this, units that fanned out across the
+  // expanded area would stay at logical positions > 800/420 when
+  // the user closes the modal and the MiniField becomes the only
+  // visible field — leaving them rendered outside MiniField's
+  // visible 800×420 box.
+  useEffect(() => {
+    if (compact) return;
+    return () => {
+      setFieldBounds(800, 420);
+    };
+  }, [compact, setFieldBounds]);
 
   const Terrain = terrain.Background;
 

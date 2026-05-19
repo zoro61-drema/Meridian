@@ -116,17 +116,25 @@ export const UnitInstance = memo(function UnitInstance({ unit, compact = false }
           }`}
           style={{ width: SPRITE_SIZE * 0.75, height: SPRITE_SIZE * 0.75 }}
         />
-        <Sprite
-          state={displayState}
-          transient={unit.transient}
-          isMoving={unit.isWandering}
-          size={SPRITE_SIZE}
-          /* facing8 is driven by the cosmetic wander system
-             (spec §2.4) — defaults to S at launch and rotates
-             during walks. AgentCard thumbnails stay hardcoded
-             to S per spec §2.4 ("Card thumbnails"). */
-          facing={unit.facing8}
-        />
+        {/* Centered absolute wrapper so smaller-than-container sprites
+            (Medic / Engineer — shrunk by per-unit scale to compensate
+            for tighter native crops) sit in the middle of the
+            SPRITE_SIZE box instead of anchoring top-left like a plain
+            block child would. Marine still fills the box edge-to-edge,
+            so for him this is a no-op. */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <Sprite
+            state={displayState}
+            transient={unit.transient}
+            isMoving={unit.isWandering}
+            size={SPRITE_SIZE}
+            /* facing8 is driven by the cosmetic wander system
+               (spec §2.4) — defaults to S at launch and rotates
+               during walks. AgentCard thumbnails stay hardcoded
+               to S per spec §2.4 ("Card thumbnails"). */
+            facing={unit.facing8}
+          />
+        </div>
         {badge && (
           /* `key` is the badge content itself — when state flips
              (e.g. thinking → tool_running) React remounts the

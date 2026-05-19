@@ -22,12 +22,21 @@ interface CreateUnitOpts {
   component: string;
   /** Default render size in px. Spec §10 defaults infantry to 96. */
   defaultSize?: number;
+  /** Per-unit scale factor applied to whatever `size` the caller
+   *  passes. Compensates for PixelLab cropping each character's
+   *  source PNG tight to the silhouette — Marine is 86px native,
+   *  Medic 72px native, etc. — which would otherwise make smaller-
+   *  native units render larger on screen because they get upscaled
+   *  more aggressively to fit the same display box. 1.0 (default) =
+   *  caller's size used verbatim; <1 shrinks; >1 enlarges. */
+  scale?: number;
 }
 
 export function createUnit({
   displayName,
   component,
   defaultSize = 96,
+  scale = 1,
 }: CreateUnitOpts): React.FC<UnitProps> {
   const Unit: React.FC<UnitProps> = ({
     state,
@@ -37,6 +46,11 @@ export function createUnit({
     size = defaultSize,
     onTransientComplete,
   }) => {
+    // Per-unit scale compensates for non-uniform PixelLab source
+    // crops so a `size={SPRITE_SIZE}` caller still gets visually
+    // consistent unit sizes. Round to an integer px to keep the
+    // pixel grid aligned under `image-rendering: pixelated`.
+    const displaySize = Math.round(size * scale);
     const dir = FACING_TO_DIR[facing];
     // Precedence: transient (one-shot) > isMoving (walk) > state (persistent).
     const anim = transient
@@ -92,8 +106,8 @@ export function createUnit({
       <img
         src={url}
         alt={`${displayName} ${anim} facing ${facing}`}
-        width={size}
-        height={size}
+        width={displaySize}
+        height={displaySize}
         // `maxWidth: none` overrides Tailwind preflight's
         // `img { max-width: 100% }` rule — without it, an img
         // placed inside an overflow-hidden container smaller than
@@ -104,8 +118,8 @@ export function createUnit({
           display: "block",
           maxWidth: "none",
           maxHeight: "none",
-          width: size,
-          height: size,
+          width: displaySize,
+          height: displaySize,
         }}
         draggable={false}
       />

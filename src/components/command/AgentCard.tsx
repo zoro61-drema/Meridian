@@ -86,15 +86,21 @@ export const AgentCard = memo(function AgentCard({ unitId }: AgentCardProps) {
             clipping the excess, so the character looks bigger
             without making the card layout shift. */}
         <div
-          className="shrink-0 overflow-hidden"
+          className="relative shrink-0 overflow-hidden"
           style={{ width: CARD_SPRITE_SIZE, height: CARD_SPRITE_SIZE }}
         >
+          {/* Absolute-positioned sprite wrapper. `translate(-50%, -50%)`
+              before the scale parks the sprite's centre at the box's
+              centre regardless of the sprite's own dimensions (Medic
+              and Engineer are smaller than the box because their
+              per-unit scale shrinks them to match Marine's per-pixel
+              size). The 1.5× zoom then expands around that same
+              centre via the chained transform. */}
           <div
+            className="absolute left-1/2 top-1/2"
             style={{
-              transform: "scale(1.5)",
+              transform: "translate(-50%, -50%) scale(1.5)",
               transformOrigin: "center center",
-              width: CARD_SPRITE_SIZE,
-              height: CARD_SPRITE_SIZE,
             }}
           >
             <Sprite

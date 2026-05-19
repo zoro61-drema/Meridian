@@ -298,6 +298,15 @@ interface CommandState {
   /** Currently-visible signal arcs. Cleared on TTL expiry by a
    *  periodic sweep kicked off when an arc is registered. */
   signalArcs: SignalArc[];
+  /** Current logical bounds of the tactical field, in px. Set by
+   *  the active non-compact TacticalField via `setFieldBounds`
+   *  (i.e. ExpandedField). Used by tickWander's clamp + scales
+   *  unit anchors/positions proportionally when changed so units
+   *  spread across the larger expanded area instead of staying
+   *  bunched in the original 800×420 top-left region. Defaults to
+   *  the MiniField logical size. */
+  fieldBoundsW: number;
+  fieldBoundsH: number;
   /** Selected terrain id for the tactical field. Hydrated from the
    *  `command_terrain` preference on Command screen mount; setter
    *  is fire-and-forget (caller persists to prefs separately). */
@@ -408,6 +417,12 @@ interface CommandState {
    *  in-flight moves, picks new destinations on schedule, and
    *  cancels wander when state isn't `idle`. */
   tickWander: (nowMs: number) => void;
+  /** Set the current field bounds and proportionally rescale every
+   *  unit's position + anchor to the new dimensions. Called by
+   *  TacticalField when it measures its container in non-compact
+   *  mode; reset to defaults when the non-compact view unmounts so
+   *  units come back into MiniField's logical 800×420 space. */
+  setFieldBounds: (w: number, h: number) => void;
   /** Debug-only: set a unit's 8-direction facing immediately
    *  (without playing a walk animation). */
   debugSetFacing: (sessionId: string, facing: Facing) => void;
@@ -576,19 +591,28 @@ const walkVelocities = new Map<string, { vx: number; vy: number }>();
 
 /** Logical field dimensions. Mirrors the FIELD_W/FIELD_H constants
  *  in MiniField — the TacticalField always renders at this logical
- *  size and is scaled to fit by ResizeObserver. */
-const FIELD_W = 800;
-const FIELD_H = 420;
+ *  size and is scaled to fit by ResizeObserver. Used as the initial
+ *  bounds in the store's `fieldBoundsW/H` state, which TacticalField
+ *  overrides to its actual container size when running in non-
+ *  compact (expanded) mode so wandering + clamping use the full
+ *  available area. */
+export const DEFAULT_FIELD_W = 800;
+export const DEFAULT_FIELD_H = 420;
 /** Buffer from the field edge to the unit's center, in px — keeps
  *  the full sprite visible (half-sprite worth of padding, with a
  *  little extra for the selection ring). Roughly half of the field
  *  SPRITE_SIZE (120) in UnitInstance. */
 const FIELD_PADDING = 60;
 
-function clampToField(x: number, y: number): { x: number; y: number } {
+function clampToField(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): { x: number; y: number } {
   return {
-    x: Math.max(FIELD_PADDING, Math.min(FIELD_W - FIELD_PADDING, x)),
-    y: Math.max(FIELD_PADDING, Math.min(FIELD_H - FIELD_PADDING, y)),
+    x: Math.max(FIELD_PADDING, Math.min(w - FIELD_PADDING, x)),
+    y: Math.max(FIELD_PADDING, Math.min(h - FIELD_PADDING, y)),
   };
 }
 
@@ -603,6 +627,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
   unitOrder: [],
   selectedUnitId: null,
   signalArcs: [],
+  fieldBoundsW: DEFAULT_FIELD_W,
+  fieldBoundsH: DEFAULT_FIELD_H,
   terrain: DEFAULT_TERRAIN,
   tileSize: DEFAULT_TILE_SIZE,
   statuslineSegments: DEFAULT_STATUSLINE_SEGMENTS,
@@ -1228,6 +1254,56 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       };
     }),
 
+  setFieldBounds: (w, h) =>
+    set((s) => {
+      const safeW = Math.max(DEFAULT_FIELD_W * 0.5, w);
+      const safeH = Math.max(DEFAULT_FIELD_H * 0.5, h);
+      if (s.fieldBoundsW === safeW && s.fieldBoundsH === safeH) return s;
+      // Rescale every unit's position + anchor proportionally so a
+      // unit that was at the centre of the previous bounds stays
+      // at the centre of the new ones — units fan out across the
+      // expanded field instead of staying bunched in the original
+      // 800×420 region. The ratio is symmetric, so closing the
+      // expanded view scales positions right back to their previous
+      // logical coordinates within rounding.
+      const scaleX = safeW / s.fieldBoundsW;
+      const scaleY = safeH / s.fieldBoundsH;
+      const nextUnits: Record<string, CommandUnit> = { ...s.units };
+      for (const id of s.unitOrder) {
+        const u = s.units[id];
+        if (!u) continue;
+        nextUnits[id] = {
+          ...u,
+          positionX: u.positionX * scaleX,
+          positionY: u.positionY * scaleY,
+          anchorX: u.anchorX * scaleX,
+          anchorY: u.anchorY * scaleY,
+        };
+      }
+      // Rescale any in-flight cosmetic-wander moves too. Without
+      // this, `easedPosition` keeps interpolating between the OLD
+      // bounds' from/to coords — so on exit from expanded view the
+      // next tick snaps the unit back to an off-MiniField position,
+      // and the only thing that pulls it back into view is the
+      // velocity-walk path (arrow keys), which runs clampToField.
+      for (const sched of wanderSchedules.values()) {
+        if (!sched.active) continue;
+        sched.active = {
+          ...sched.active,
+          fromX: sched.active.fromX * scaleX,
+          fromY: sched.active.fromY * scaleY,
+          toX: sched.active.toX * scaleX,
+          toY: sched.active.toY * scaleY,
+        };
+      }
+      return {
+        ...s,
+        units: nextUnits,
+        fieldBoundsW: safeW,
+        fieldBoundsH: safeH,
+      };
+    }),
+
   tickWander: (nowMs) =>
     set((s) => {
       // Snapshot positions of all units once so candidate-collision
@@ -1240,6 +1316,12 @@ export const useCommandStore = create<CommandState>((set, get) => ({
 
       let changed = false;
       const next: Record<string, CommandUnit> = { ...s.units };
+      // Current bounds (set by TacticalField via setFieldBounds when
+      // running in expanded mode). Defaults to the MiniField logical
+      // size so the very first tick before any measurement still
+      // produces sane clamps.
+      const fieldW = s.fieldBoundsW;
+      const fieldH = s.fieldBoundsH;
 
       // Velocity-driven walks (arrow-key hold). Apply first and
       // skip the cosmetic-wander logic for any unit under user
@@ -1258,6 +1340,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
         const { x: newX, y: newY } = clampToField(
           u.positionX + vel.vx * dt,
           u.positionY + vel.vy * dt,
+          fieldW,
+          fieldH,
         );
         const facing = pickFacing(vel.vx, vel.vy) ?? u.facing8;
         if (

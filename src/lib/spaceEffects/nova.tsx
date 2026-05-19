@@ -1,5 +1,5 @@
 import React from "react";
-import { r, uid, useBHGravity, SUCK_DUR } from "./_shared";
+import { r, uid } from "./_shared";
 
 // ── 1. Supernova ───────────────────────────────────────────────────────────────
 
@@ -12,20 +12,12 @@ const CLOUD_DUR  = 6000;  // cloud collapse duration (ms)
 export function NovaEl({ nova, onDone, onNearDone }: { nova: Nova; onDone: () => void; onNearDone?: () => void }) {
   const [phase, setPhase] = React.useState<"blast" | "cloud">("blast");
   const [vanishing, setVanishing] = React.useState(false);
-  const { captured, gravRef, suckStyle } = useBHGravity(nova.x, nova.y);
 
   // Mount cloud elements while the blast is still fading out
   React.useEffect(() => {
     const t = setTimeout(() => setPhase("cloud"), CLOUD_START);
     return () => clearTimeout(t);
   }, []);
-
-  // When captured by a black hole, skip normal lifecycle and call onDone after suck completes
-  React.useEffect(() => {
-    if (!captured) return;
-    const t = setTimeout(onDone, SUCK_DUR + 100);
-    return () => clearTimeout(t);
-  }, [captured, onDone]);
 
   // Auto-dismiss after cloud collapses; vanish exits early.
   // onNearDone fires at 65% through the collapse so callers can overlap
@@ -54,10 +46,10 @@ export function NovaEl({ nova, onDone, onNearDone }: { nova: Nova; onDone: () =>
   };
 
   return (
-    <div ref={gravRef} data-space-dismissable="true" onClick={() => !captured && !vanishing && setVanishing(true)} style={{
+    <div data-space-dismissable="true" onClick={() => !vanishing && setVanishing(true)} style={{
       position: "absolute", left: `${nova.x}%`, top: `${nova.y}%`,
       cursor: "pointer", pointerEvents: "auto",
-      ...(captured ? suckStyle : vanishing ? { animation: "m-se-vanish 0.4s ease-in forwards" } : {}),
+      ...(vanishing ? { animation: "m-se-vanish 0.4s ease-in forwards" } : {}),
     } as React.CSSProperties}>
 
       {/* ── Blast phase ── */}

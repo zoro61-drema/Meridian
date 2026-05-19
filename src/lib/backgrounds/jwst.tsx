@@ -1,8 +1,6 @@
 import { useMemo, type CSSProperties } from "react";
 import { W, H } from "./_shared";
 import {
-  bgCarinaRidges,
-  bgCosmicCliffs,
   bgDeepField,
   bgDiffraction,
   bgNursery,
@@ -45,10 +43,8 @@ function JWSTBackground({ generator, seed }: { generator: Generator; seed: numbe
 // Per-design seeds match the registry the user authored alongside the
 // generators — kept as named exports so each background remains an independent
 // React component the registry can map by id.
-export const JWSTCosmicCliffsBg = () => <JWSTBackground generator={bgCosmicCliffs} seed={1} />;
 export const JWSTDeepFieldBg     = () => <JWSTBackground generator={bgDeepField}     seed={3} />;
 export const JWSTDiffractionBg   = () => <JWSTBackground generator={bgDiffraction}   seed={4} />;
 export const JWSTStellarNurseryBg= () => <JWSTBackground generator={bgNursery}       seed={6} />;
 export const JWSTGalacticWispsBg = () => <JWSTBackground generator={bgWisps}         seed={7} />;
 export const JWSTTwilightCliffsBg= () => <JWSTBackground generator={bgTwilight}      seed={8} />;
-export const JWSTCarinaRidgesBg  = () => <JWSTBackground generator={bgCarinaRidges}  seed={9} />;

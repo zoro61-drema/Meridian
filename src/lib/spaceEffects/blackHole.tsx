@@ -24,7 +24,7 @@ export interface BH { id: number; x: number; y: number; duration: number; rotati
 
 const BH_DUR = 5 * 60_000; // 5 minutes on-screen, then vanish
 
-export function BHEl({ bh, onDone, onVanishing }: { bh: BH; onDone: () => void; onVanishing: () => void }) {
+export function BHEl({ bh, onDone }: { bh: BH; onDone: () => void }) {
   const APPEAR = 3500;
   const VANISH = 2800;
   const [vanishing, setVanishing] = React.useState(false);
@@ -33,13 +33,8 @@ export function BHEl({ bh, onDone, onVanishing }: { bh: BH; onDone: () => void; 
   // or the 5 min auto-vanish keeps resetting (same issue as PulsarEl).
   const onDoneRef = React.useRef(onDone);
   onDoneRef.current = onDone;
-  const onVanishingRef = React.useRef(onVanishing);
-  onVanishingRef.current = onVanishing;
 
-  const startVanish = React.useCallback(() => {
-    setVanishing(true);
-    onVanishingRef.current();
-  }, []);
+  const startVanish = React.useCallback(() => setVanishing(true), []);
 
   React.useEffect(() => {
     if (vanishing) {

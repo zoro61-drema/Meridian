@@ -7,12 +7,10 @@ It provides engineering leadership tooling: sprint dashboard, retrospectives, sp
 trends, workload balancer, ticket grooming/quality assessment, PR review assistant,
 address-PR-comments workflow, meeting transcription, and time tracking. Built on
 Tauri + React + TypeScript with a TypeScript sidecar that owns all LLM provider
-integration via LangChain.js + LangGraph.js. Data sources: JIRA API and Bitbucket
-API. Built for individual use — not distributed.
-
-The implementation pipeline (an end-to-end ticket-to-PR workflow) was removed
-2026-05-10 — Claude Code does that job better; Meridian focuses on the engineering
-leadership surfaces that no general AI tool covers.
+integration via hand-rolled adapters over each vendor's official SDK or CLI.
+Data sources: JIRA API and Bitbucket API. Built for individual use — not
+distributed. Meridian focuses on engineering-leadership surfaces no general AI
+tool covers; the **Commander** screen is the home for code-level agent work.
 
 ---
 
@@ -34,11 +32,16 @@ leadership surfaces that no general AI tool covers.
 - **Tauri** — desktop shell (Rust backend, no browser tab required)
 - **React + TypeScript** — frontend
 - **shadcn/ui + Tailwind CSS** — component library and styling
-- **TypeScript sidecar (Node) + LangGraph.js** — owns all workflow orchestration and
-  LLM provider integration; the Rust backend never makes LLM HTTP calls directly and
-  holds no workflow state
-- **LangChain.js model adapters** — `@langchain/anthropic`, `@langchain/google-genai`,
-  `@langchain/ollama`
+- **TypeScript sidecar (Node)** — owns all workflow orchestration and LLM provider
+  integration as plain async runners (no LangGraph / LangChain — both removed
+  2026-04); the Rust backend never makes LLM HTTP calls directly and holds no
+  workflow state
+- **LLM provider adapters** — hand-rolled per-provider clients in
+  `src-sidecar/src/models/` using each vendor's official SDK or CLI:
+  `@anthropic-ai/sdk`, `@google/generative-ai`, `openai`, plus CLI-delegation
+  wrappers (`claude -p`, `gemini -p`, `codex exec`, `copilot -p`) and an
+  Ollama HTTP client. Every adapter implements the same minimal `ChatModel`
+  interface (single `stream(messages, options)` method).
 - **Zod** — schema validation for every structured-output handoff
 - **JIRA API + Bitbucket API** — data sources
 
@@ -51,8 +54,12 @@ src/                    React frontend
   screens/              one file per top-level workflow screen
   stores/               Zustand stores; one per long-running screen
   components/           shadcn/ui-based shared components
-  lib/tauri.ts          single source of truth for Tauri command wrappers + types
-  lib/preferences.ts    typed wrapper around the prefs store
+  lib/tauri/            typed Tauri command wrappers — one file per domain
+                        (core, jira, bitbucket, meetings, pr-review, …)
+  lib/preferences.ts    typed wrapper around the prefs store; per-feature
+                        keys live alongside in lib/appPreferences.ts
+  lib/ideLauncher.ts    spawns the user's configured IDE on a file path
+                        (used from Commander's bug + PR-review tabs)
 
 src-tauri/              Rust backend (Tauri host process)
   src/commands/         Tauri command modules — one file per domain
@@ -63,10 +70,12 @@ src-tauri/              Rust backend (Tauri host process)
   target/debug/bundle.cjs  ← runtime sidecar bundle (copied from src-sidecar/dist)
 
 src-sidecar/            TypeScript sidecar (Node, supervised by Rust)
-  src/workflows/        one file per workflow + registry/ (the entrypoint)
-  src/models/           LangChain model adapters
-  src/tools/            repo-tools.ts (LangGraph tools) + bridge.ts (IPC promise registry)
-  src/protocol.ts       inbound/outbound message shapes — mirror in src-tauri/src/integrations/sidecar.rs
+  src/workflows/        one file per workflow + registry/ (the dispatch table)
+  src/models/           hand-rolled provider adapters (Anthropic, Google, OpenAI,
+                        Ollama direct; claude/gemini/codex/copilot CLI delegations)
+  src/lib/              shared utilities (partial-JSON parser, etc.)
+  src/protocol.ts       inbound/outbound message shapes — mirror in
+                        src-tauri/src/integrations/sidecar.rs
 
 docs/                   supplementary architecture docs
 ```
@@ -84,9 +93,9 @@ docs/                   supplementary architecture docs
   inside `src-sidecar/` for sidecar units. **New code should land with tests.**
   Default to writing unit tests for: pure functions (op application,
   classifiers, reducers), schema validators (Zod parsing edge cases including
-  rejection paths), routing logic (LangGraph conditional edges), and any code
-  with non-obvious branching. Tests live next to the source as `*.test.ts` /
-  `*.test.tsx`.
+  rejection paths), routing logic (chunk-vs-single-pass selection, registry
+  dispatch), and any code with non-obvious branching. Tests live next to the
+  source as `*.test.ts` / `*.test.tsx`.
 - **Mid-session sidecar refresh**: when you edit `src-sidecar/` source while
   `tauri dev` is already running, the in-memory sidecar process won't pick up
   the change on its own. Run `pnpm sidecar:rebuild` from the repo root — it
@@ -117,7 +126,7 @@ Renders against the real Tauri WKWebView window, so Tauri commands
 (`invoke()` for JIRA, Bitbucket, etc.) run for real and native chrome
 is included. Valid screen ids: `landing`, `onboarding`, `settings`,
 `agent-skills`, `review-pr`, `sprint-dashboard`, `retrospectives`,
-`ticket-quality`, `meetings`, `time-tracking`.
+`ticket-quality`, `meetings`, `time-tracking`, `command`.
 
 ### chrome-devtools (npm `chrome-devtools-mcp`)
 Full Chromium devtools surface: DOM, computed CSS, console, network
@@ -236,16 +245,24 @@ Three layers, with strict boundaries:
 - Triggers workflow runs over IPC and surfaces sidecar progress and final
   results to the frontend.
 - Does **not** own prompt assembly or workflow logic — those live in the sidecar.
-- Sandboxes all filesystem operations to the configured worktree path.
-- Executes tool callbacks invoked by the sidecar (read/write file, glob, grep,
-  exec) — the sidecar never touches the filesystem directly.
+- Sandboxes filesystem operations (frontend-invoked repo commands) to the
+  configured worktree path. The sidecar itself no longer makes filesystem
+  callbacks — tool use happens inside the CLI when delegated providers
+  (Claude Code, Gemini CLI, Copilot CLI, Codex CLI) are spawned with
+  `cwd=worktreePath`.
 
 ### TypeScript sidecar (`src-sidecar/`)
-- Owns: workflow orchestration. Most workflows are one-shot (a thin runner
-  around the shared scaffold); PR Review uses a chunk-aware `StateGraph`.
-- Owns: all LLM provider integration via LangChain.js model adapters; tool-call
-  loops; structured-output validation (Zod); streaming; per-call token-usage
-  tracking.
+- Owns: workflow orchestration as plain async runners. Most workflows are
+  one-shot; PR Review is a chunk-aware async function (single-pass for small
+  PRs, multi-chunk + synthesis for large ones). Workflow IDs are routed to
+  runners by `src-sidecar/src/workflows/registry/runners/index.ts` — adding
+  a new workflow means writing the runner and adding one line there.
+- Owns: all LLM provider integration via hand-rolled adapters in `src/models/`;
+  structured-output validation (Zod); streaming; per-call token-usage tracking.
+- Tool use is not bound at the sidecar level — CLI-delegation providers carry
+  their own built-in tools (file read/glob/grep, etc.) and run them inside the
+  user's worktree via `cwd=worktreePath`; API-key providers get tool-less chats
+  with codebase context pre-baked into the prompt.
 - Receives credentials per-request from Rust over stdio IPC; never caches them
   across calls, never logs them.
 - A single Node process supervised by Rust; restarted on crash.
@@ -258,17 +275,18 @@ Three layers, with strict boundaries:
 
 | Provider | Auth |
 |---|---|
-| **Anthropic** (Claude) | API key, or delegate to locally-installed Claude Code CLI |
-| **Google** (Gemini) | API key, or delegate to locally-installed `@google/gemini-cli` |
+| **Anthropic** (Claude) | API key, or delegate to locally-installed `claude` CLI |
+| **Google** (Gemini) | API key, or delegate to locally-installed `gemini` CLI |
+| **OpenAI** (Codex/ChatGPT) | API key, or delegate to locally-installed `codex` CLI |
+| **GitHub Copilot** | Delegate to locally-installed `copilot` CLI (no direct-API path) |
 | **Ollama** (local, e.g. Qwen3) | None (local) |
 
-LangChain.js model adapters normalise structured tool-calling across providers,
-so the architecture is uniform regardless of which provider/model the user
-picks. For Anthropic and Gemini the "delegate to CLI" path spawns the user's
-locally-installed `claude -p` or `gemini -p` per call — the CLI owns its own
-auth and Meridian never sees credentials. This is the auth model since the
-2026-05-10 pivot; the previous OAuth-impersonation paths were removed because
-they violated Anthropic's and Gemini's TOS for third-party clients.
+Every adapter implements the same minimal `ChatModel` interface (a single
+`stream(messages, options)` method), so the architecture is uniform regardless
+of which provider/model the user picks. For Anthropic, Gemini, Codex, and
+Copilot the "delegate to CLI" path spawns the user's locally-installed
+`claude -p` / `gemini -p` / `codex exec` / `copilot -p` per call — the CLI
+owns its own auth and Meridian never sees credentials.
 
 ### Default and model-quality variance
 
@@ -285,54 +303,69 @@ capability. As a rule of thumb:
 
 The per-panel provider/model picker exposes all providers for all workflows.
 Each panel's selection is hard-bound — there's no automatic fallback chain.
-
-### Auth posture (TOS)
-
-The CLI delegation paths (Claude Code, gemini-cli) are the sanctioned headless-
-mode patterns documented by each vendor — Meridian shells out to the user's
-own install and never sees credentials. API-key auth (Anthropic Console
-`sk-ant-api…`, Google AI Studio `AIza…`) is the distribution-safe fallback.
-Both are clean from a TOS perspective. The previous OAuth-impersonation paths
-(Anthropic Claude Code billing-header envelope, Gemini CodeAssist v1internal
-endpoint) were deleted 2026-05-10 — see
-`/Users/isaac/.claude/projects/-Users-isaac-REPOS-Meridian/memory/project_oauth_tos_and_alternatives.md`
-for the verified TOS picture per provider. GitHub Copilot support was dropped
-in the same pivot (no third-party path exists; the user uses Copilot directly
-in VS Code at work).
+The cloud model list comes from the [models.dev](https://models.dev) catalog
+(the same source `opencode` uses) so it stays in sync with vendor offerings
+without a hand-maintained table; Ollama enumerates locally instead.
 
 ---
 
 ## Workflows
 
-1. **PR Review Assistant** — AI-assisted review of assigned PRs across 5 lenses
-   (see below). Chunk-aware StateGraph with single-pass and multi-chunk paths.
-2. **Sprint Dashboard** — real-time sprint health, blockers, team performance,
+1. **Commander** — multi-agent tactical field. Launch Claude, Gemini, Codex,
+   Copilot, or Qwen units, watch them work, and let them message each other.
+   Each unit has a focused role (groomer, PR reviewer, bug-report writer,
+   implementer, etc.) and the field aggregates "needs review" attention across
+   units onto the landing page.
+2. **PR Review Assistant** — AI-assisted review of assigned PRs across 5 lenses
+   (see below). Chunk-aware async function with single-pass and multi-chunk paths.
+3. **Sprint Dashboard** — real-time sprint health, blockers, team performance,
    and team workload with AI rebalancing suggestions. Also the launch point for
    standup recordings (header record button auto-tags the meeting `standup`).
-3. **Sprint Retrospectives** — completed sprint analysis, trend charts, AI summary.
-4. **Multi-Sprint Trends** — analysis across multiple completed sprints;
+4. **Sprint Retrospectives** — completed sprint analysis, trend charts, AI summary.
+5. **Multi-Sprint Trends** — analysis across multiple completed sprints;
    pre-computed stats table + AI-driven pattern analysis.
-5. **Groom Ticket** — runs the grooming workflow against any chosen ticket to
+6. **Groom Ticket** — runs the grooming workflow against any chosen ticket to
    surface blockers (missing AC, story points, ambiguity, scope clarity, vague
    titles). Useful in sprint planning and backlog triage.
-4. **Meetings** — local whisper transcription _or_ freeform notes (when
+7. **Meetings** — local whisper transcription _or_ freeform notes (when
    recording is not allowed); both are tagged, timestamped, and AI-summarisable,
    and feed into Sprint Retrospectives. Start a recording from any screen via
    the header record button (auto-tags `standup` from Sprint Dashboard, `retro`
    from Retrospectives); notes are created from the Meetings screen via the
-   split-button dropdown, which remembers the last mode chosen.
-5. **Time Tracking** — automatic work-hours tracker; pauses on screen lock or
+   split-button dropdown, which remembers the last mode chosen. Cross-meetings
+   chat lets the user ask questions across multiple past meetings.
+8. **Time Tracking** — automatic work-hours tracker; pauses on screen lock or
    idle, banks overtime for later in the week.
+
+---
+
+## Commander
+
+A "tactical field" for running multiple AI agents in parallel. Each unit is
+backed by a CLI-delegation provider (`claude`, `gemini`, `codex`, `copilot`,
+or local Ollama via `qwen`) running in a per-unit git worktree. Units have a
+**role** (groomer, implementer, PR reviewer, bug-report writer, …) — the role
+selects the system prompt, the toolset, and the default skill set. Roles and
+their skill bundles are user-editable in Settings.
+
+Each role can be configured with its own **MCP server set** — when the unit
+spawns, Meridian writes a temporary MCP config that lists only the servers
+that role has enabled. This keeps tool surface area small and per-role.
+
+Units run in the background; the landing-page badge aggregates "needs review"
+attention (grooming proposals pending, bug reports unpushed, PR reviews
+awaiting verdict) across every unit so the user knows when to look. Bug- and
+PR-review tabs use `lib/ideLauncher.ts` to open the relevant file in the
+user's configured IDE on click.
 
 ---
 
 ## PR Review: Analysis Lenses
 
-**Architecture**: chunk-aware. Small PRs go through a single `single_pass`
-synthesis node; large PRs are split by the `prepare` node into chunks and
-reviewed sequentially in `chunk_review`, then the `synthesis` node combines
-per-chunk findings into the final report. Both paths are nodes in the same
-`StateGraph` chosen by a conditional edge.
+**Architecture**: chunk-aware async function. Small PRs go through a single
+synthesis call; large PRs are split into chunks (at `diff --git` boundaries)
+and reviewed sequentially, then a synthesis call combines per-chunk findings
+into the final report. The path is chosen by chunk count, not a state graph.
 
 The PR Review Assistant analyses every diff across five lenses. Each finding
 must be categorised as Blocking / Non-blocking / Nitpick. Security and logic
@@ -360,8 +393,10 @@ safety-critical or tests were explicitly promised.
    inconsistency.
 
 A separate **PR Review chat** workflow (`pr_review_chat`) supports interactive
-follow-up after the report — the chat agent can re-read the worktree via the
-same tool callbacks and stream replies token-by-token to the frontend.
+follow-up after the report — under CLI-delegation providers the chat agent
+re-reads the worktree via the CLI's built-in tools; under API-key providers it
+answers from the already-baked-in diff + report. Replies stream token-by-token
+to the frontend either way.
 
 ---
 
@@ -376,17 +411,18 @@ operate against a **local git worktree**, not the Bitbucket API.
 - `repo_base_branch` — branch the worktree tracks (default: `develop`)
 - `pr_review_worktree_path` — separate worktree for PR review (optional)
 
-**Agent tools** — defined as LangGraph tools in the sidecar, executed by
-callback into the Rust backend over IPC, sandboxed to the active worktree:
-- `glob_repo_files(pattern)`
-- `grep_repo_files(pattern, path?)`
-- `read_repo_file(path)`
-- `write_repo_file(path, content)`
-- `get_repo_diff()` — used by the PR Review workflow. Diffs against
-  `repo_base_branch` configured in settings.
+**Tool use** — handled by the chosen provider, not by sidecar-bound tools:
+- **CLI-delegation providers** (Claude Code, Gemini CLI, Copilot CLI, Codex
+  CLI) are spawned with `cwd=worktreePath` and use their own built-in file
+  tools (read, glob, grep, edit) inside the user's repo.
+- **API-key providers** get tool-less chats; the relevant codebase context is
+  pre-baked into the prompt (PR diff, grooming file-probe results, etc.).
 
-A separate `exec_in_worktree(command, timeoutSecs?)` IPC callback runs an
-arbitrary shell command inside the worktree.
+The Rust backend still exposes worktree-scoped repo commands in
+`src-tauri/src/commands/repo/` — `glob`, `grep`, `read`, `write`, `exec`,
+`get_repo_diff` — but these are invoked directly by the React frontend (e.g.
+the Grooming file probe), not as sidecar tool callbacks. All commands are
+sandboxed to the active worktree path.
 
 ---
 
@@ -403,20 +439,19 @@ arbitrary shell command inside the worktree.
   settings screen.
 - Never expose raw credential values in logs or error messages.
 
-**Credentials in use**: Anthropic API key (or Claude Code CLI delegation —
-no credential stored), JIRA Base URL + Email + API Token, Bitbucket Workspace
-+ Username + App Password, Google AI Studio API key (or gemini-cli delegation
-— no credential stored), Ollama base URL (no auth).
+**Credentials in use**: Anthropic API key (or `claude` CLI delegation — no
+credential stored), Google AI Studio API key (or `gemini` CLI delegation —
+no credential stored), OpenAI API key (or `codex` CLI delegation — no
+credential stored), GitHub Copilot via `copilot` CLI delegation only (no
+credential stored), Ollama base URL (no auth), JIRA Base URL + Email + API
+Token, Bitbucket Workspace + Username + App Password.
 
-**Claude.ai subscription support is preserved via CLI delegation**. Users sign
-in once with `claude /login` against their Claude Code install; Meridian's
-`ClaudeCodeChatModel` adapter spawns `claude -p` per call and the CLI handles
-the subscription auth locally. Same shape for Gemini Code Assist (free
-personal tier) — users sign in once via `gemini` and Meridian's
-`GeminiCliChatModel` adapter spawns `gemini -p` per call. The previous custom
-OAuth adapters (`anthropic-oauth.ts`, `gemini-codeassist.ts`) that rewrote
-request bodies into first-party billing-header envelopes were deleted
-2026-05-10 in favour of these delegation adapters.
+**Claude.ai / Gemini Code Assist subscriptions are preserved via CLI
+delegation**. Users sign in once with `claude /login` (or `gemini`,
+`codex login`, `copilot login`) against their local CLI; Meridian's
+`ClaudeCodeChatModel` / `GeminiCliChatModel` / `CodexCliChatModel` /
+`CopilotCliChatModel` adapters spawn the binary per call and the CLI handles
+subscription auth locally.
 
 ---
 
@@ -430,9 +465,10 @@ request bodies into first-party billing-header envelopes were deleted
   shadcn/ui has a suitable option.
 - **Consistent Tailwind theme** via CSS variables — do not hardcode colours.
 - **LLM-neutral UI copy** — say "AI", not "Claude". The app supports multiple providers.
-- **Token-usage tracking** — LangChain.js model calls return usage metadata per
-  invocation; the sidecar emits `{ inputTokens, outputTokens }` alongside each
-  workflow result.
+- **Token-usage tracking** — each adapter surfaces
+  `{ inputTokens, outputTokens }` (plus Anthropic's `cacheCreation` /
+  `cacheRead`) on the terminal stream chunk; the sidecar emits the totals
+  alongside each workflow result.
 - **No LLM calls from the frontend or Rust backend** — every model call goes
   through the sidecar.
 - **Workflow logic lives in the sidecar** — Rust orchestration is reduced to

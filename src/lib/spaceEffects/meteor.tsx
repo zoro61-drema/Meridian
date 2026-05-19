@@ -1,5 +1,5 @@
 import React from "react";
-import { r, uid, useBHGravity, SUCK_DUR } from "./_shared";
+import { r, uid } from "./_shared";
 
 // ── 5. Meteor Shower ───────────────────────────────────────────────────────────
 
@@ -11,7 +11,6 @@ export function MeteorEl({ meteor, onDone }: { meteor: Meteor; onDone: () => voi
   const tx = Math.cos(rad) * travel;
   const ty = Math.sin(rad) * travel;
   const [vanishing, setVanishing] = React.useState(false);
-  const { captured, gravRef, suckStyle } = useBHGravity(x, y, { moving: true });
 
   React.useEffect(() => {
     if (vanishing) {
@@ -22,16 +21,10 @@ export function MeteorEl({ meteor, onDone }: { meteor: Meteor; onDone: () => voi
     return () => clearTimeout(t);
   }, [duration, delay, onDone, vanishing]);
 
-  React.useEffect(() => {
-    if (!captured) return;
-    const t = setTimeout(onDone, SUCK_DUR + 100);
-    return () => clearTimeout(t);
-  }, [captured, onDone]);
-
   return (
-    <div ref={gravRef} data-space-dismissable="true" onClick={() => !captured && !vanishing && setVanishing(true)} style={{
+    <div data-space-dismissable="true" onClick={() => !vanishing && setVanishing(true)} style={{
       position: "absolute", left: `${x}%`, top: `${y}%`,
-      ...(captured ? suckStyle : vanishing ? {
+      ...(vanishing ? {
         animation: "m-se-vanish 0.3s ease-in forwards"
       } : {
         animationName: "m-meteor", animationDuration: `${duration}ms`,

@@ -1,5 +1,5 @@
 import React from "react";
-import { r, uid, useBHGravity, SUCK_DUR } from "./_shared";
+import { r, uid } from "./_shared";
 import { NovaEl } from "./nova";
 
 // ── 4. Pulsar ──────────────────────────────────────────────────────────────────
@@ -12,7 +12,6 @@ export function PulsarEl({ pulsar, onDone }: { pulsar: Pulsar; onDone: () => voi
   const [vanishing, setVanishing] = React.useState(false);
   const { x, y, duration, period } = pulsar;
   const BEAM_LEN = 600;
-  const { captured, gravRef, suckStyle } = useBHGravity(x, y);
 
   // Parent passes `() => rmPulsar(id)` — new ref every overlay render. Timer
   // effects must not depend on that identity or the 30s timeout keeps resetting.
@@ -26,8 +25,6 @@ export function PulsarEl({ pulsar, onDone }: { pulsar: Pulsar; onDone: () => voi
   const handleNovaDone     = React.useCallback(() => setNovaDone(true), []);
 
   // Pulsar emerges after the gas cloud finishes collapsing (novaDone fires).
-  // Also serves as a fallback when the nova is cut short by the black hole —
-  // onNearDone is never called in that path, so we catch it here instead.
   React.useEffect(() => {
     if (novaDone) setShowPulsar(true);
   }, [novaDone]);
@@ -42,13 +39,6 @@ export function PulsarEl({ pulsar, onDone }: { pulsar: Pulsar; onDone: () => voi
     const t = setTimeout(() => setVanishing(true), duration + 200);
     return () => clearTimeout(t);
   }, [duration, showPulsar, vanishing]);
-
-  // When captured, skip normal lifecycle for the pulsar phase
-  React.useEffect(() => {
-    if (!captured || !showPulsar) return;
-    const t = setTimeout(() => onDoneRef.current(), SUCK_DUR + 100);
-    return () => clearTimeout(t);
-  }, [captured, showPulsar]);
 
   const beamStyle = (delay: string): React.CSSProperties => ({
     position: "absolute",
@@ -68,10 +58,10 @@ export function PulsarEl({ pulsar, onDone }: { pulsar: Pulsar; onDone: () => voi
     <>
       {!novaDone && <NovaEl nova={{ id: pulsar.id, x, y }} onNearDone={handleNovaNearDone} onDone={handleNovaDone} />}
       {showPulsar && (
-        <div ref={gravRef} data-space-dismissable="true" onClick={() => !captured && !vanishing && setVanishing(true)} style={{
+        <div data-space-dismissable="true" onClick={() => !vanishing && setVanishing(true)} style={{
           position: "absolute", left: `${x}%`, top: `${y}%`,
           transform: `rotate(${pulsar.id * 47}deg)`,
-          ...(captured ? suckStyle : { animation: vanishing ? "m-se-vanish 0.3s ease-in forwards" : "m-pulsar-fade-in 3s ease-out forwards" }),
+          animation: vanishing ? "m-se-vanish 0.3s ease-in forwards" : "m-pulsar-fade-in 3s ease-out forwards",
           cursor: "pointer", pointerEvents: "auto",
         } as React.CSSProperties}>
           {/* Single light beam */}

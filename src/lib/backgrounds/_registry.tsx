@@ -2,7 +2,7 @@ import React from "react";
 import { MeridianBg, DuskBg, AuroraBg, ForestBg } from "./meridian";
 import { NebulaBg, CosmosBg, StarfieldBg, DeepSpaceBg } from "./space";
 import {
-  JWSTCarinaRidgesBg, JWSTCosmicCliffsBg, JWSTDeepFieldBg, JWSTDiffractionBg,
+  JWSTDeepFieldBg, JWSTDiffractionBg,
   JWSTGalacticWispsBg, JWSTStellarNurseryBg, JWSTTwilightCliffsBg,
 } from "./jwst";
 import { WatercolorBg, NeonBg, PrismBg, GeometricBg, MeshBg } from "./abstract";
@@ -27,8 +27,10 @@ const BG_ID_MIGRATIONS: Record<string, string> = {
   //    favour of the deterministic-generator set. Mapping each retired id to
   //    the closest visual analogue in the new set so users keep something
   //    similar instead of snapping back to Deep Space.
-  "jwst-carina":        "jwst-cosmic-cliffs",   // Carina cliffs → Cosmic Cliffs
-  "jwst-pillars":       "jwst-cosmic-cliffs",   // no direct analogue → cliffs
+  "jwst-carina":        "jwst-twilight-cliffs", // Carina cliffs → Twilight Cliffs
+  "jwst-pillars":       "jwst-twilight-cliffs", // no direct analogue → Twilight Cliffs
+  "jwst-cosmic-cliffs": "jwst-twilight-cliffs", // retired 2026-05-19 → Twilight Cliffs
+  "jwst-carina-ridges": "jwst-twilight-cliffs", // retired 2026-05-19 → Twilight Cliffs
   "jwst-southern-ring": "jwst-deep-field",      // ring nebula not in new set
   "jwst-phantom":       "jwst-diffraction",     // face-on spiral retired → Diffraction
   "jwst-tarantula":     "jwst-stellar-nursery", // Tarantula-style → Stellar Nursery
@@ -86,13 +88,11 @@ export const BACKGROUNDS: BackgroundDef[] = [
   { id: "aurora",      name: "Aurora",      category: "meridian" },
   { id: "forest",      name: "Forest",      category: "meridian" },
   // James Webb
-  { id: "jwst-cosmic-cliffs",   name: "Cosmic Cliffs",   category: "jwst" },
   { id: "jwst-deep-field",      name: "Deep Field",      category: "jwst" },
   { id: "jwst-diffraction",     name: "Diffraction",     category: "jwst" },
   { id: "jwst-stellar-nursery", name: "Stellar Nursery", category: "jwst" },
   { id: "jwst-galactic-wisps",  name: "Galactic Wisps",  category: "jwst" },
   { id: "jwst-twilight-cliffs", name: "Twilight Cliffs", category: "jwst" },
-  { id: "jwst-carina-ridges",   name: "Carina Ridges",   category: "jwst" },
   // Abstract
   { id: "watercolor",  name: "Watercolor",  category: "abstract" },
   { id: "neon",        name: "Neon",        category: "abstract" },
@@ -120,13 +120,11 @@ const COMPONENTS: Record<string, React.FC> = {
   "cosmos":      CosmosBg,
   "starfield":   StarfieldBg,
   "deep-space":  DeepSpaceBg,
-  "jwst-cosmic-cliffs":   JWSTCosmicCliffsBg,
   "jwst-deep-field":      JWSTDeepFieldBg,
   "jwst-diffraction":     JWSTDiffractionBg,
   "jwst-stellar-nursery": JWSTStellarNurseryBg,
   "jwst-galactic-wisps":  JWSTGalacticWispsBg,
   "jwst-twilight-cliffs": JWSTTwilightCliffsBg,
-  "jwst-carina-ridges":   JWSTCarinaRidgesBg,
   "watercolor":  WatercolorBg,
   "neon":        NeonBg,
   "prism":       PrismBg,

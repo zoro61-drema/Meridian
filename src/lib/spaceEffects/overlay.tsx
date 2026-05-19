@@ -7,24 +7,19 @@ import {
   EV_COMET,
   EV_PULSAR,
   EV_METEORS,
-  EV_WORMHOLE,
   EV_SHOOTING_STAR,
   EV_CLEAR,
   EV_ENABLED,
   SPACE_FX_TOGGLES_EVENT,
-  SPACE_FX_BH_GRAVITY_EVENT,
   type SpaceEffectKind,
   loadKindToggles,
-  loadBhGravityPreference,
   ensureKF,
-  BHContext,
 } from "./_shared";
 import { type Nova, NovaEl, mkNova } from "./nova";
 import { type BH, BHEl, mkBH } from "./blackHole";
 import { type Comet, CometEl, mkComet } from "./comet";
 import { type Pulsar, PulsarEl, mkPulsar } from "./pulsar";
 import { type Meteor, MeteorEl, mkMeteors } from "./meteor";
-import { type WH, WormholeEl, mkWH } from "./wormhole";
 import { type SStar, ShootingStarEl, mkShootingStars } from "./shootingStar";
 import { isAppActive } from "@/lib/windowFocus";
 
@@ -36,11 +31,10 @@ interface State {
   comets: Comet[];
   pulsars: Pulsar[];
   meteors: Meteor[];
-  wormholes: WH[];
   shootingStars: SStar[];
 }
 
-const EMPTY: State = { novas: [], bh: null, comets: [], pulsars: [], meteors: [], wormholes: [], shootingStars: [] };
+const EMPTY: State = { novas: [], bh: null, comets: [], pulsars: [], meteors: [], shootingStars: [] };
 
 export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
   const space = isSpaceBg(bgId);
@@ -49,20 +43,11 @@ export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
   const [kinds, setKinds] = React.useState<Record<SpaceEffectKind, boolean>>(() =>
     loadKindToggles()
   );
-  // Gravity turns off the moment the BH starts vanishing, even though the
-  // visual fade-out continues for another ~2.8 s.
-  const [bhGravityActive, setBhGravityActive] = React.useState(false);
-  /** User toggle from FX drawer — when false, BH still renders but does not pull other effects */
-  const [bhGravityUserEnabled, setBhGravityUserEnabled] = React.useState(() =>
-    loadBhGravityPreference()
-  );
 
   const kindsRef = React.useRef(kinds);
   kindsRef.current = kinds;
   const enabledRef = React.useRef(enabled);
   enabledRef.current = enabled;
-
-  const onBHVanishing = React.useCallback(() => setBhGravityActive(false), []);
 
   React.useEffect(() => {
     const h = (e: Event) => {
@@ -76,35 +61,23 @@ export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
         comets:        detail.comets ? p.comets : [],
         pulsars:       detail.pulsars ? p.pulsars : [],
         meteors:       detail.meteors ? p.meteors : [],
-        wormholes:     detail.wormholes ? p.wormholes : [],
         shootingStars: detail.shootingStars ? p.shootingStars : [],
         bh:            detail.blackHole ? p.bh : null,
       }));
-      if (!detail.blackHole) setBhGravityActive(false);
     };
     window.addEventListener(SPACE_FX_TOGGLES_EVENT, h);
     return () => window.removeEventListener(SPACE_FX_TOGGLES_EVENT, h);
   }, []);
 
-  React.useEffect(() => {
-    const h = (e: Event) =>
-      setBhGravityUserEnabled((e as CustomEvent<boolean>).detail);
-    window.addEventListener(SPACE_FX_BH_GRAVITY_EVENT, h);
-    return () => window.removeEventListener(SPACE_FX_BH_GRAVITY_EVENT, h);
-  }, []);
-
   const addNova    = React.useCallback(() => setSt(p => ({ ...p, novas:    [...p.novas, mkNova()] })), []);
   const addBH      = React.useCallback((x?: number, y?: number) => setSt(p => {
     if (p.bh) return p;
-    setBhGravityActive(true);
     return { ...p, bh: mkBH(x, y) };
   }), []);
   const addComet   = React.useCallback(() => setSt(p => ({ ...p, comets:   [...p.comets, mkComet()] })), []);
   const addPulsar     = React.useCallback(() => setSt(p => p.pulsars.length > 0 ? p : ({ ...p, pulsars: [mkPulsar()] })), []);
   const replacePulsar = React.useCallback(() => setSt(p => ({ ...p, pulsars: [mkPulsar()] })), []);
   const addMeteors = React.useCallback(() => setSt(p => ({ ...p, meteors:  [...p.meteors, ...mkMeteors()] })), []);
-  const addWH      = React.useCallback(() => setSt(p => ({ ...p, wormholes:[...p.wormholes, mkWH()] })), []);
-  const replaceWH  = React.useCallback(() => setSt(p => ({ ...p, wormholes: [mkWH()] })), []);
   const addShootingStars = React.useCallback((count: number) => setSt(p => ({ ...p, shootingStars: [...p.shootingStars, ...mkShootingStars(count)] })), []);
 
   // Forward clicks through the UI layer to animation elements underneath.
@@ -171,9 +144,6 @@ export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
       [EV_METEORS, () => {
         if (enabledRef.current && kindsRef.current.meteors) addMeteors();
       }],
-      [EV_WORMHOLE, () => {
-        if (enabledRef.current && kindsRef.current.wormholes) replaceWH();
-      }],
       [EV_SHOOTING_STAR, () => {
         if (enabledRef.current && kindsRef.current.shootingStars) {
           addShootingStars(1 + Math.floor(Math.random() * 3));
@@ -188,7 +158,7 @@ export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
       window.removeEventListener(EV_CLEAR, clearAll);
       window.removeEventListener(EV_ENABLED, onEnabled);
     };
-  }, [addNova, addBH, addComet, replacePulsar, addMeteors, replaceWH, addShootingStars]);
+  }, [addNova, addBH, addComet, replacePulsar, addMeteors, addShootingStars]);
 
   // Auto-schedule random effects when on a space background and effects are enabled
   React.useEffect(() => {
@@ -213,7 +183,6 @@ export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
     sched(() => { if (ok() && kindsRef.current.comets) addComet(); }, 18_000, 55_000);
     sched(() => { if (ok() && kindsRef.current.pulsars) addPulsar(); }, 55_000, 160_000);
     sched(() => { if (ok() && kindsRef.current.meteors) addMeteors(); }, 80_000, 220_000);
-    sched(() => { if (ok() && kindsRef.current.wormholes) addWH(); }, 3_600_000, 7_200_000);
     // Shooting stars: every 2.5–8 s, occasionally 2 at once
     sched(() => {
       if (!ok() || !kindsRef.current.shootingStars) return;
@@ -226,49 +195,37 @@ export function SpaceEffectsOverlay({ bgId }: { bgId: string }) {
     }, 5 * 60_000, 18 * 60_000);
 
     return () => timers.forEach(clearTimeout);
-  }, [space, enabled, addComet, addPulsar, addMeteors, addWH, addBH, addShootingStars]);
+  }, [space, enabled, addComet, addPulsar, addMeteors, addBH, addShootingStars]);
 
   const rmNova    = (id: number) => setSt(p => ({ ...p, novas:         p.novas.filter(x => x.id !== id) }));
   const rmComet   = (id: number) => setSt(p => ({ ...p, comets:        p.comets.filter(x => x.id !== id) }));
   const rmPulsar  = (id: number) => setSt(p => ({ ...p, pulsars:       p.pulsars.filter(x => x.id !== id) }));
   const rmMeteor  = (id: number) => setSt(p => ({ ...p, meteors:       p.meteors.filter(x => x.id !== id) }));
-  const rmWH      = (id: number) => setSt(p => ({ ...p, wormholes:     p.wormholes.filter(x => x.id !== id) }));
   const rmStar    = (id: number) => setSt(p => ({ ...p, shootingStars: p.shootingStars.filter(x => x.id !== id) }));
 
-  const empty = !st.bh && !st.novas.length && !st.comets.length && !st.pulsars.length && !st.meteors.length && !st.wormholes.length && !st.shootingStars.length;
+  const empty = !st.bh && !st.novas.length && !st.comets.length && !st.pulsars.length && !st.meteors.length && !st.shootingStars.length;
   if (!space && empty) return null;
 
   return (
-    <BHContext.Provider
-      value={
-        st.bh && bhGravityActive && bhGravityUserEnabled
-          ? { x: st.bh.x, y: st.bh.y }
-          : null
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+      {st.novas.map(n =>
+        <NovaEl key={n.id} nova={n} onDone={() => rmNova(n.id)} />
+      )}
+      {st.bh &&
+        <BHEl bh={st.bh} onDone={() => setSt(p => ({ ...p, bh: null }))} />
       }
-    >
-      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-        {st.novas.map(n =>
-          <NovaEl key={n.id} nova={n} onDone={() => rmNova(n.id)} />
-        )}
-        {st.bh &&
-          <BHEl bh={st.bh} onVanishing={onBHVanishing} onDone={() => { setSt(p => ({ ...p, bh: null })); setBhGravityActive(false); }} />
-        }
-        {st.comets.map(c =>
-          <CometEl key={c.id} comet={c} onDone={() => rmComet(c.id)} />
-        )}
-        {st.pulsars.map(p =>
-          <PulsarEl key={p.id} pulsar={p} onDone={() => rmPulsar(p.id)} />
-        )}
-        {st.meteors.map(m =>
-          <MeteorEl key={m.id} meteor={m} onDone={() => rmMeteor(m.id)} />
-        )}
-        {st.wormholes.map(w =>
-          <WormholeEl key={w.id} wh={w} onDone={() => rmWH(w.id)} />
-        )}
-        {st.shootingStars.map(s =>
-          <ShootingStarEl key={s.id} star={s} onDone={() => rmStar(s.id)} />
-        )}
-      </div>
-    </BHContext.Provider>
+      {st.comets.map(c =>
+        <CometEl key={c.id} comet={c} onDone={() => rmComet(c.id)} />
+      )}
+      {st.pulsars.map(p =>
+        <PulsarEl key={p.id} pulsar={p} onDone={() => rmPulsar(p.id)} />
+      )}
+      {st.meteors.map(m =>
+        <MeteorEl key={m.id} meteor={m} onDone={() => rmMeteor(m.id)} />
+      )}
+      {st.shootingStars.map(s =>
+        <ShootingStarEl key={s.id} star={s} onDone={() => rmStar(s.id)} />
+      )}
+    </div>
   );
 }

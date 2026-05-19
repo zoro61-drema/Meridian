@@ -121,13 +121,13 @@ A picker in Settings → Theme. The choice is persisted in `localStorage` and an
 
 - **Meridian** (4) — Meridian, Dusk, Aurora, Forest.
 - **Space** (4) — Deep Space (default), Nebula, Cosmos, Starfield.
-- **James Webb** (7) — Cosmic Cliffs, Deep Field, Diffraction, Stellar Nursery, Galactic Wisps, Twilight Cliffs, Carina Ridges. Procedural SVG generators authored via [claude.ai/design](https://claude.ai/design) — turbulence-warped masks for ragged dust silhouettes, displacement-mapped gas filters, multi-octave fractalNoise tinted to each scene's spectral palette, JWST-spec 6-spike diffraction patterns on hero stars.
+- **James Webb** (5) — Deep Field, Diffraction, Stellar Nursery, Galactic Wisps, Twilight Cliffs. Procedural SVG generators authored via [claude.ai/design](https://claude.ai/design) — turbulence-warped masks for ragged dust silhouettes, displacement-mapped gas filters, multi-octave fractalNoise tinted to each scene's spectral palette, JWST-spec 6-spike diffraction patterns on hero stars.
 - **Abstract** (5) — Watercolor, Neon, Prism, Geometric, Mesh.
 - **Patterns** (5) — Honeycomb, Waves, Circuit, Blueprint, Topographic.
 - **Minimal** (2) — Dots, None.
 
 #### Space Effects
-Eight ambient flourishes that can be triggered from the developer keyboard shortcuts or surface randomly: pulsar, nova, black hole (with optional gravity well that tugs at neighbouring elements), comet, meteor shower, wormhole, shooting star, and a layered overlay system for composing them.
+Six ambient flourishes that can be triggered from the developer keyboard shortcuts or surface randomly: pulsar, nova, black hole, comet, meteor shower, shooting star, and a layered overlay system for composing them.
 
 #### Accent Colours
 Six CSS-variable-driven accent colours: slate, blue, violet, green, orange, rose. Switching is instant — no rebuild required.

@@ -3,24 +3,20 @@ import { HeaderSettingsButton } from "@/components/HeaderSettingsButton";
 import { HeaderTasksButton } from "@/components/HeaderTasksButton";
 import { HeaderTimeTracker } from "@/components/HeaderTimeTracker";
 import { APP_HEADER_BAR } from "@/components/appHeaderLayout";
-import { BentoLayout } from "@/components/landing/BentoLayout";
-import { ConstellationLayout } from "@/components/landing/ConstellationLayout";
 import { OrbitalLayout } from "@/components/landing/OrbitalLayout";
-import { ShapedLayout } from "@/components/landing/ShapedLayout";
 import { Button } from "@/components/ui/button";
 import { useOpenSettings } from "@/context/OpenSettingsContext";
-import {
-    type RenderableCard,
-    useLandingLayoutId,
-} from "@/lib/landingLayouts";
+import type { RenderableCard } from "@/lib/landingLayouts";
 import { type BitbucketPr, getOpenPrs, getPrsForReview } from "@/lib/tauri/bitbucket";
 import { type CredentialStatus, aiProviderComplete, bitbucketComplete, getNonSecretConfig, jiraComplete } from "@/lib/tauri/credentials";
 import { type JiraIssue, type JiraSprint, getAllActiveSprintIssues } from "@/lib/tauri/jira";
 import { WORKFLOW_ICONS } from "@/lib/workflowIcons";
 import type { WorkflowId } from "@/screens/WorkflowScreen";
+import { useCommandStore } from "@/stores/command/store";
 import { useMeetingsStore } from "@/stores/meetings/store";
 import { usePrReviewStore } from "@/stores/prReview/store";
 import { useWorkloadAlertStore } from "@/stores/workloadAlertStore";
+import { aggregateAttention } from "@/lib/commandAttention";
 import { AlertTriangle, CheckSquare, GitPullRequest, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -355,12 +351,20 @@ export function LandingScreen({ credStatus, onNavigate }: LandingScreenProps) {
   const underutilisedDevs = useWorkloadAlertStore((s) => s.underutilisedDevs);
   const workloadNeedsAttention = overloadedDevs.length > 0 || underutilisedDevs.length > 0;
 
+  // Aggregate "needs review" count across every Commander unit —
+  // grooming proposals pending, bug reports not yet pushed to JIRA,
+  // addressed PRs awaiting review, PR reviews awaiting verdict.
+  // Drives the badge on the Commander landing card so the user
+  // knows there's something to look at without opening the panel.
+  const commandUnits = useCommandStore((s) => s.units);
+  const commanderAttention = useMemo(
+    () => aggregateAttention(commandUnits).total,
+    [commandUnits],
+  );
+
   // When transcription is off in Settings, drop "Transcribe" from the
   // Meetings tile copy — leave only the freeform-notes framing.
   const transcriptionDisabled = useMeetingsStore((s) => s.transcriptionDisabled);
-
-  const layoutId = useLandingLayoutId();
-  const isOrbital = layoutId === "orbital";
 
   return (
     <div className="h-full flex flex-col">
@@ -387,16 +391,10 @@ export function LandingScreen({ credStatus, onNavigate }: LandingScreenProps) {
         </div>
       </div>
 
-      <main className={`flex-1 flex ${isOrbital ? "flex-col min-h-0" : "items-center"}`}>
-          <div
-            className={
-              isOrbital
-                ? "flex-1 w-full flex flex-col gap-3 px-3 sm:px-4 py-3 min-h-0"
-                : "w-full max-w-5xl mx-auto px-6 py-6 space-y-6 bg-background/60 rounded-xl"
-            }
-          >
+      <main className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 w-full flex flex-col gap-3 px-3 sm:px-4 py-3 min-h-0">
             {!allComplete && (
-              <div className={isOrbital ? "max-w-6xl mx-auto w-full" : undefined}>
+              <div className="max-w-6xl mx-auto w-full">
                 <MissingCredentialsBanner credStatus={credStatus} />
               </div>
             )}
@@ -415,6 +413,11 @@ export function LandingScreen({ credStatus, onNavigate }: LandingScreenProps) {
                   if (overloadedDevs.length > 0) parts.push(`${overloadedDevs.length} overloaded`);
                   if (underutilisedDevs.length > 0) parts.push(`${underutilisedDevs.length} under-utilised`);
                   badge = { kind: "attention", label: parts.join(", ") };
+                } else if (card.id === "command" && commanderAttention > 0) {
+                  badge = {
+                    kind: "attention",
+                    label: `${commanderAttention} to review`,
+                  };
                 }
                 return {
                   id: card.id,
@@ -424,12 +427,7 @@ export function LandingScreen({ credStatus, onNavigate }: LandingScreenProps) {
                   badge,
                 };
               });
-              switch (layoutId) {
-                case "bento":   return <BentoLayout      cards={renderable} onNavigate={onNavigate} />;
-                case "shaped":  return <ShapedLayout     cards={renderable} onNavigate={onNavigate} />;
-                case "orbital": return <OrbitalLayout    cards={renderable} onNavigate={onNavigate} />;
-                default:        return <ConstellationLayout cards={renderable} onNavigate={onNavigate} />;
-              }
+              return <OrbitalLayout cards={renderable} onNavigate={onNavigate} />;
             })()}
           </div>
         </main>

@@ -14,7 +14,7 @@ import { emit } from "@tauri-apps/api/event";
 import { APP_PREFERENCE_DEFAULTS, getAppPreferences } from "@/lib/appPreferences";
 import { BackgroundRenderer, getBackgroundId, useBgChangeListener } from "@/lib/backgrounds/_registry";
 import { startRateLimitListener } from "@/lib/rateLimitListener";
-import { clearAllEffects, fireBlackHole, fireComet, fireMeteorShower, firePulsar, fireShootingStar, fireWormhole, getBhGravityEnabled, getSpaceEffectKindToggles, setEffectsEnabled, SPACE_FX_BH_GRAVITY_EVENT, SPACE_FX_TOGGLES_EVENT, toggleBhGravityEnabled, toggleSpaceEffectKind, type SpaceEffectKind } from "@/lib/spaceEffects/_shared";
+import { clearAllEffects, fireBlackHole, fireComet, fireMeteorShower, firePulsar, fireShootingStar, getSpaceEffectKindToggles, setEffectsEnabled, SPACE_FX_TOGGLES_EVENT, toggleSpaceEffectKind, type SpaceEffectKind } from "@/lib/spaceEffects/_shared";
 import { SpaceEffectsOverlay } from "@/lib/spaceEffects/overlay";
 import { isMockMode, setJiraBaseUrlCache, setLocalLlmUrlCache, setMockClaudeMode, setMockMode } from "@/lib/tauri/core";
 import { bitbucketComplete, credentialStatusComplete, getCredentialStatus, getNonSecretConfig, jiraComplete, type CredentialStatus } from "@/lib/tauri/credentials";
@@ -492,21 +492,16 @@ function GlobalFxDrawer({ hideUI, onToggleHideUI }: { hideUI: boolean; onToggleH
   const [open, setOpen] = useState(false);
   const [on, setOn] = useState(true);
   const [kinds, setKinds] = useState<Record<SpaceEffectKind, boolean>>(getSpaceEffectKindToggles);
-  const [bhGravityOn, setBhGravityOn] = useState(() => getBhGravityEnabled());
 
   useEffect(() => {
     const syncEnabled = (e: Event) => setOn((e as CustomEvent<boolean>).detail);
     const syncKinds = (e: Event) =>
       setKinds({ ...(e as CustomEvent<Record<SpaceEffectKind, boolean>>).detail });
-    const syncGrav = (e: Event) =>
-      setBhGravityOn((e as CustomEvent<boolean>).detail);
     window.addEventListener(FX_ENABLED_EVENT, syncEnabled);
     window.addEventListener(SPACE_FX_TOGGLES_EVENT, syncKinds);
-    window.addEventListener(SPACE_FX_BH_GRAVITY_EVENT, syncGrav);
     return () => {
       window.removeEventListener(FX_ENABLED_EVENT, syncEnabled);
       window.removeEventListener(SPACE_FX_TOGGLES_EVENT, syncKinds);
-      window.removeEventListener(SPACE_FX_BH_GRAVITY_EVENT, syncGrav);
     };
   }, []);
 
@@ -522,14 +517,10 @@ function GlobalFxDrawer({ hideUI, onToggleHideUI }: { hideUI: boolean; onToggleH
     { kind: "meteors", icon: "⁂", label: "meteor shower", fn: fireMeteorShower },
     { kind: "blackHole", icon: "◉", label: "black hole", fn: fireBlackHole },
     { kind: "pulsars", icon: "※", label: "supernova", fn: firePulsar },
-    { kind: "wormholes", icon: "⊕", label: "wormhole", fn: fireWormhole },
   ];
 
   const chk =
     "h-3.5 w-3.5 shrink-0 rounded border border-white/25 bg-black/50 accent-zinc-500 focus:ring-1 focus:ring-white/20 focus:ring-offset-0";
-
-  const gravityFootnote =
-    "When on, comets, stars, and other effects drift toward an active black hole. The hole still appears if enabled above; this only toggles the pull.";
 
   return (
     <div
@@ -610,24 +601,6 @@ function GlobalFxDrawer({ hideUI, onToggleHideUI }: { hideUI: boolean; onToggleH
             >
               {hideUI ? "◨ show ui" : "◧ hide ui"}
             </button>
-            <div className="h-5 w-px shrink-0 bg-white/15" />
-            <label
-              className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md py-0.5 hover:bg-white/[0.04]"
-              title={gravityFootnote}
-            >
-              <input
-                type="checkbox"
-                checked={bhGravityOn}
-                onChange={() => toggleBhGravityEnabled()}
-                className={chk}
-                aria-label="gravity"
-                aria-describedby="fx-gravity-footnote"
-              />
-              <span id="fx-gravity-footnote" className="sr-only">
-                {gravityFootnote}
-              </span>
-              <span className="whitespace-nowrap text-xs font-medium text-white/80">gravity</span>
-            </label>
             <div className="h-5 w-px shrink-0 bg-white/15" />
             {spawnRows.map(({ kind, icon, label, fn }) => {
               const enabledKind = kinds[kind];

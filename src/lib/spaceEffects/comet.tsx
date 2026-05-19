@@ -1,5 +1,5 @@
 import React from "react";
-import { r, uid, useBHGravity, SUCK_DUR } from "./_shared";
+import { r, uid } from "./_shared";
 
 // ── 3. Comet ───────────────────────────────────────────────────────────────────
 
@@ -10,8 +10,6 @@ export function CometEl({ comet, onDone }: { comet: Comet; onDone: () => void })
   const HEAD = 3;
   const coneHalf = tail * 0.30;
   const [vanishing, setVanishing] = React.useState(false);
-  const nucleusRef = React.useRef<HTMLDivElement>(null);
-  const { captured, gravRef, suckStyle } = useBHGravity(x, y, { moving: true, trackRef: nucleusRef });
 
   React.useEffect(() => {
     if (vanishing) {
@@ -22,17 +20,11 @@ export function CometEl({ comet, onDone }: { comet: Comet; onDone: () => void })
     return () => clearTimeout(t);
   }, [duration, onDone, vanishing]);
 
-  React.useEffect(() => {
-    if (!captured) return;
-    const t = setTimeout(onDone, SUCK_DUR + 100);
-    return () => clearTimeout(t);
-  }, [captured, onDone]);
-
   return (
-    <div ref={gravRef} data-space-dismissable="true" onClick={() => !captured && !vanishing && setVanishing(true)} style={{
+    <div data-space-dismissable="true" onClick={() => !vanishing && setVanishing(true)} style={{
       position: "absolute", left: `${x}%`, top: `${y}%`,
       willChange: "transform, opacity",
-      ...(captured ? suckStyle : vanishing ? {
+      ...(vanishing ? {
         animation: "m-se-vanish 0.3s ease-in forwards"
       } : {
         animationName: "m-comet", animationDuration: `${duration}ms`,
@@ -58,7 +50,7 @@ export function CometEl({ comet, onDone }: { comet: Comet; onDone: () => void })
           clipPath: "polygon(100% 50%, 0% 0%, 0% 100%)",
         }} />
         {/* Nucleus */}
-        <div ref={nucleusRef} style={{
+        <div style={{
           position: "absolute",
           width: `${HEAD * 2}px`, height: `${HEAD * 2}px`,
           left: `${tail - HEAD}px`, top: `${-HEAD}px`,

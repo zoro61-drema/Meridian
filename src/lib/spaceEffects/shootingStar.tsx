@@ -1,5 +1,5 @@
 import React from "react";
-import { useBHGravity, SUCK_DUR } from "./_shared";
+
 
 // ── 7. Shooting Star ──────────────────────────────────────────────────────────
 
@@ -22,8 +22,6 @@ export function ShootingStarEl({ star, onDone }: { star: SStar; onDone: () => vo
   const tx = Math.cos(rad) * travel;
   const ty = Math.sin(rad) * travel;
   const [vanishing, setVanishing] = React.useState(false);
-  const headRef = React.useRef<HTMLDivElement>(null);
-  const { captured, gravRef, suckStyle } = useBHGravity(x, y, { moving: true, trackRef: headRef });
 
   React.useEffect(() => {
     if (vanishing) {
@@ -34,26 +32,15 @@ export function ShootingStarEl({ star, onDone }: { star: SStar; onDone: () => vo
     return () => clearTimeout(t);
   }, [duration, delay, onDone, vanishing]);
 
-  React.useEffect(() => {
-    if (!captured) return;
-    const t = setTimeout(onDone, SUCK_DUR + 100);
-    return () => clearTimeout(t);
-  }, [captured, onDone]);
-
-  // Leading-edge offset from the outer div's origin (tail end)
-  const headX = Math.cos(rad) * length;
-  const headY = Math.sin(rad) * length;
-
   return (
     <div
-      ref={gravRef}
       data-space-dismissable="true"
-      onClick={() => !captured && !vanishing && setVanishing(true)}
+      onClick={() => !vanishing && setVanishing(true)}
       style={{
         position: "absolute",
         left: `${x}%`,
         top: `${y}%`,
-        ...(captured ? suckStyle : vanishing ? {
+        ...(vanishing ? {
           animation: "m-se-vanish 0.3s ease-in forwards",
         } : {
           animationName: "meridian-ss",
@@ -76,14 +63,6 @@ export function ShootingStarEl({ star, onDone }: { star: SStar; onDone: () => vo
         transform: `rotate(${angle}deg)`,
         transformOrigin: "left center",
         boxShadow: "0 0 4px 1px rgba(180,210,255,0.25)",
-      }} />
-      {/* Zero-size anchor at the bright leading tip for BH proximity detection */}
-      <div ref={headRef} style={{
-        position: "absolute",
-        width: 0, height: 0,
-        left: `${headX}px`,
-        top: `${headY}px`,
-        pointerEvents: "none",
       }} />
     </div>
   );
